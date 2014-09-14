@@ -1,0 +1,213 @@
+--- backends/bluez/Makefile.in	Fri Sep 12 23:21:35 2014
++++ backends/bluez/Makefile.in	Sun Sep 14 20:55:41 2014
+@@ -466,6 +466,7 @@
+ 	-fPIC \
+ 	-module \
+ 	-avoid-version \
++	-no-undefined \
+ 	$(NULL)
+ 
+ BACKEND_NAME = "bluez"
+--- backends/dummy/lib/Makefile.in	Fri Sep 12 23:21:35 2014
++++ backends/dummy/lib/Makefile.in	Sun Sep 14 20:55:20 2014
+@@ -539,7 +539,7 @@
+ 
+ backend_library_ldflags = \
+ 	$(backend_library_ldflags_generic) \
+-	-version-info $(BACKEND_LT_VERSION) \
++	-no-undefined -version-info $(BACKEND_LT_VERSION) \
+ 	-export-symbols-regex $(BACKEND_SYMBOLS_REGEX) \
+ 	$(NULL)
+ 
+--- backends/dummy/Makefile.in	Fri Sep 12 23:21:35 2014
++++ backends/dummy/Makefile.in	Sun Sep 14 20:55:34 2014
+@@ -444,7 +444,7 @@
+ 	$(NULL)
+ 
+ dummy_la_LDFLAGS = \
+-	-module -avoid-version \
++	-no-undefined -module -avoid-version \
+ 	$(backend_ldflags) \
+ 	$(NULL)
+ 
+--- backends/eds/lib/edsf-persona-store.c	Fri Sep 12 18:58:58 2014
++++ backends/eds/lib/edsf-persona-store.c	Sun Sep 14 22:29:17 2014
+@@ -10968,7 +10968,8 @@
+ 	_edsf_persona_store_notify_if_default (self);
+ }
+ 
+-
++void folks_persona_store_set_is_user_set_default (FolksPersonaStore* self,
++    gboolean value);
+ static void _edsf_persona_store_notify_if_default (EdsfPersonaStore* self) {
+ 	gboolean is_default = FALSE;
+ 	ESourceRegistry* _tmp0_ = NULL;
+--- backends/eds/lib/Makefile.in	Fri Sep 12 23:21:35 2014
++++ backends/eds/lib/Makefile.in	Sun Sep 14 20:55:53 2014
+@@ -541,7 +541,7 @@
+ 
+ backend_library_ldflags = \
+ 	$(backend_library_ldflags_generic) \
+-	-version-info $(BACKEND_LT_VERSION) \
++	-no-undefined -version-info $(BACKEND_LT_VERSION) \
+ 	-export-symbols-regex $(BACKEND_SYMBOLS_REGEX) \
+ 	$(NULL)
+ 
+--- backends/eds/Makefile.in	Fri Sep 12 23:21:35 2014
++++ backends/eds/Makefile.in	Sun Sep 14 20:57:40 2014
+@@ -546,7 +546,7 @@
+ 	$(NULL)
+ 
+ eds_la_LDFLAGS = \
+-	-module -avoid-version \
++	-no-undefined -module -avoid-version \
+ 	$(backend_ldflags) \
+ 	$(NULL)
+ 
+--- backends/key-file/Makefile.in	Fri Sep 12 23:21:35 2014
++++ backends/key-file/Makefile.in	Sun Sep 14 20:56:00 2014
+@@ -496,6 +496,7 @@
+ 	$(NULL)
+ 
+ key_file_la_LDFLAGS = \
++	-no-undefined \
+ 	-module -avoid-version \
+ 	$(backend_ldflags) \
+ 	$(NULL)
+--- backends/libsocialweb/lib/Makefile.in	Fri Sep 12 23:21:35 2014
++++ backends/libsocialweb/lib/Makefile.in	Sun Sep 14 22:14:58 2014
+@@ -537,7 +537,7 @@
+ 
+ backend_library_ldflags = \
+ 	$(backend_library_ldflags_generic) \
+-	-version-info $(BACKEND_LT_VERSION) \
++	-no-undefined -version-info $(BACKEND_LT_VERSION) \
+ 	-export-symbols-regex $(BACKEND_SYMBOLS_REGEX) \
+ 	$(NULL)
+ 
+@@ -610,7 +610,7 @@
+ 	$(NULL)
+ 
+ libfolks_libsocialweb_la_LIBADD = \
+-	$(backend_library_LIBADD) \
++	$(backend_library_libadd) \
+ 	$(SW_CLIENT_LIBS) \
+ 	$(NULL)
+ 
+--- backends/libsocialweb/Makefile.in	Fri Sep 12 23:21:35 2014
++++ backends/libsocialweb/Makefile.in	Sun Sep 14 20:56:09 2014
+@@ -542,6 +542,7 @@
+ 	$(NULL)
+ 
+ libsocialweb_la_LDFLAGS = \
++	-no-undefined \
+ 	-module -avoid-version \
+ 	$(backend_ldflags) \
+ 	$(NULL)
+--- backends/ofono/Makefile.in	Fri Sep 12 23:21:35 2014
++++ backends/ofono/Makefile.in	Sun Sep 14 20:56:44 2014
+@@ -505,6 +505,7 @@
+ 	$(NULL)
+ 
+ ofono_la_LDFLAGS = \
++	-no-undefined \
+ 	-module -avoid-version \
+ 	$(backend_ldflags) \
+ 	$(NULL)
+--- backends/telepathy/lib/Makefile.in	Fri Sep 12 23:21:36 2014
++++ backends/telepathy/lib/Makefile.in	Sun Sep 14 20:57:13 2014
+@@ -600,7 +600,7 @@
+ 
+ backend_library_ldflags = \
+ 	$(backend_library_ldflags_generic) \
+-	-version-info $(BACKEND_LT_VERSION) \
++	-no-undefined -version-info $(BACKEND_LT_VERSION) \
+ 	-export-symbols-regex $(BACKEND_SYMBOLS_REGEX) \
+ 	$(NULL)
+ 
+@@ -687,6 +687,7 @@
+ 	-shared \
+ 	-rpath $(libdir) \
+ 	-avoid-version \
++	-no-undefined \
+ 	$(GIO_LIBS) \
+ 	$(GLIB_LIBS) \
+ 	$(TP_GLIB_LIBS) \
+--- backends/telepathy/Makefile.in	Fri Sep 12 23:21:36 2014
++++ backends/telepathy/Makefile.in	Sun Sep 14 20:56:52 2014
+@@ -541,6 +541,7 @@
+ 	$(NULL)
+ 
+ telepathy_la_LDFLAGS = \
++	-no-undefined \
+ 	-module -avoid-version \
+ 	$(backend_ldflags) \
+ 	$(NULL)
+--- folks/backend-store.c	Fri Sep 12 18:58:38 2014
++++ folks/backend-store.c	Sun Sep 14 20:51:06 2014
+@@ -37,6 +37,20 @@
+ #include <config.h>
+ #include <glib/gi18n-lib.h>
+ 
++#ifdef G_OS_WIN32
++#include <shlobj.h>
++HMODULE folks_dll = NULL;
++BOOL WINAPI
++DllMain (HINSTANCE hinstDLL,
++	 DWORD     fdwReason,
++	 LPVOID    lpvReserved)
++{
++  if (fdwReason == DLL_PROCESS_ATTACH)
++      folks_dll = hinstDLL;
++
++  return TRUE;
++}
++#endif
+ 
+ #define FOLKS_TYPE_BACKEND_STORE (folks_backend_store_get_type ())
+ #define FOLKS_BACKEND_STORE(obj) (G_TYPE_CHECK_INSTANCE_CAST ((obj), FOLKS_TYPE_BACKEND_STORE, FolksBackendStore))
+@@ -1624,7 +1638,13 @@
+ 	_data_->_tmp14_ = _data_->_path;
+ 	if (_data_->_tmp14_ == NULL) {
+ 		_data_->_tmp15_ = NULL;
++#ifdef G_OS_WIN32
++		_data_->_tmp15_ = g_build_filename \
++		(g_win32_get_package_installation_directory_of_module (folks_dll), \
++		"lib","folks","42","backends", NULL);
++#else
+ 		_data_->_tmp15_ = g_strdup (BACKEND_DIR);
++#endif
+ 		_g_free0 (_data_->path);
+ 		_data_->path = _data_->_tmp15_;
+ 		_data_->_tmp16_ = NULL;
+@@ -1648,7 +1668,7 @@
+ 	_data_->_tmp21_ = _data_->path;
+ 	_data_->_tmp22_ = NULL;
+ 	_data_->_tmp23_ = NULL;
+-	_data_->_tmp23_ = _data_->_tmp22_ = g_strsplit (_data_->_tmp21_, ":", 0);
++	_data_->_tmp23_ = _data_->_tmp22_ = g_strsplit (_data_->_tmp21_, G_SEARCHPATH_SEPARATOR_S, 0);
+ 	_data_->path_split_length1 = 0;
+ 	_data_->_path_split_size_ = 0;
+ 	_data_->path_split = _data_->_tmp23_;
+--- folks/Makefile.in	Fri Sep 12 23:21:36 2014
++++ folks/Makefile.in	Sun Sep 14 20:45:50 2014
+@@ -576,7 +576,7 @@
+ libfolks_la_LDFLAGS = \
+ 	$(AM_LDFLAGS) \
+ 	$(CODE_COVERAGE_LDFLAGS) \
+-	-version-info "$(LT_CURRENT)":"$(LT_REVISION)":"$(LT_AGE)"
++	-no-undefined -version-info "$(LT_CURRENT)":"$(LT_REVISION)":"$(LT_AGE)"
+ 
+ folksdir = $(includedir)/folks
+ folks_HEADERS = folks.h
+--- configure	Fri Sep 12 23:21:34 2014
++++ configure	Sun Sep 14 21:01:24 2014
+@@ -14793,7 +14793,7 @@
+         ! -e ${sd}folks/libfolks_la_vala.stamp \
+       ; then :
+ 
+-        enable_vala=yes
++        enable_vala=no
+         echo "Vala source needs to be re-compiled; requiring Vala..."
+ 
+ fi
