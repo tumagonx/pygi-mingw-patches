@@ -1,0 +1,99 @@
+You may not need this, but if you experience error during gir generation 
+and there is garbled path involved then try this
+
+--- giscanner/dumper.py	Sun Aug 31 21:31:38 2014
++++ giscanner/dumper.py	Tue Sep 30 13:38:16 2014
+@@ -20,6 +20,7 @@
+ #
+ 
+ import os
++import re
+ import sys
+ import subprocess
+ import shutil
+@@ -185,6 +186,16 @@
+ 
+     # Private API
+ 
++    # there still other ways such -include _path_ -I _path_ and so on
++    # but below is the most commonly used by autotools
++    flagpat = re.compile(r'(?<=\B-I|\B-L)(/\S*?)(?=\s|$)')
++    flagpat2 = re.compile(r'\B-([I|L]\S;\S*?)(?=\s|$)')
++    def _winpath_from_msys(self, m):
++        shell = os.environ.get('SHELL', 'sh.exe')
++        proc = subprocess.Popen([shell,'-c','\'$COMSPEC','//c','echo',
++                                m.group(1),'\''],stdout=subprocess.PIPE)
++        return proc.communicate()[0].strip()
++
+     def _generate_tempfile(self, tmpdir, suffix=''):
+         tmpl = '%s-%s%s' % (self._options.namespace_name,
+                             self._options.namespace_version, suffix)
+@@ -218,9 +229,15 @@
+         pkgconfig_flags = self._run_pkgconfig('--cflags')
+         args.extend([utils.cflag_real_include_path(f) for f in pkgconfig_flags])
+         cppflags = os.environ.get('CPPFLAGS', '')
++        if os.environ.get('MSYSTEM') == 'MINGW32':
++            cppflags = re.sub(self.flagpat, self._winpath_from_msys, cppflags)
++            cppflags = re.sub(self.flagpat2,'',cppflags)
+         for cppflag in cppflags.split():
+             args.append(cppflag)
+         cflags = os.environ.get('CFLAGS', '')
++        if os.environ.get('MSYSTEM') == 'MINGW32':
++            cflags = re.sub(self.flagpat, self._winpath_from_msys, cflags)
++            cflags = re.sub(self.flagpat2,'',cflags)
+         for cflag in cflags.split():
+             args.append(cflag)
+         for include in self._options.cpp_includes:
+@@ -269,12 +286,21 @@
+                 args.append('-export-dynamic')
+ 
+         cppflags = os.environ.get('CPPFLAGS', '')
++        if os.environ.get('MSYSTEM') == 'MINGW32':
++            cppflags = re.sub(self.flagpat, self._winpath_from_msys, cppflags)
++            cppflags = re.sub(self.flagpat2, '', cppflags)
+         for cppflag in cppflags.split():
+             args.append(cppflag)
+         cflags = os.environ.get('CFLAGS', '')
++        if os.environ.get('MSYSTEM') == 'MINGW32':
++            cflags = re.sub(self.flagpat, self._winpath_from_msys, cflags)
++            cflags = re.sub(self.flagpat2, '', cflags)
+         for cflag in cflags.split():
+             args.append(cflag)
+         ldflags = os.environ.get('LDFLAGS', '')
++        if os.environ.get('MSYSTEM') == 'MINGW32':
++            ldflags = re.sub(self.flagpat,self._winpath_from_msys,ldflags)
++            ldflags = re.sub(self.flagpat2, '', ldflags)
+         for ldflag in ldflags.split():
+             args.append(ldflag)
+ 
+--- giscanner/scannermain.py	Tue Sep 23 10:40:35 2014
++++ giscanner/scannermain.py	Tue Sep 30 13:40:23 2014
+@@ -23,6 +23,7 @@
+ import errno
+ import optparse
+ import os
++import re
+ import shutil
+ import subprocess
+ import sys
+@@ -57,10 +58,19 @@
+ def process_cflags_end(option, opt, value, parser):
+     pass
+ 
++flagpat = re.compile(r'^(/\S*?)(?=\s|$)')
++def _winpath_from_msys(m):
++    shell = os.environ.get('SHELL', 'sh.exe')
++    proc = subprocess.Popen([shell,'-c','\'$COMSPEC','//c','echo',
++                            m.group(1),'\''],stdout=subprocess.PIPE)
++    return proc.communicate()[0].strip()
+ 
+ def process_cpp_includes(option, opt, value, parser):
+     cpp_includes = getattr(parser.values, option.dest)
+-    cpp_includes.append(os.path.realpath(value))
++    if os.environ.get('MSYSTEM') == 'MINGW32':
++        cpp_includes.append(os.path.realpath(re.sub(flagpat,_winpath_from_msys,value)))
++    else:
++        cpp_includes.append(os.path.realpath(value))
+ 
+ 
+ def get_preprocessor_option_group(parser):

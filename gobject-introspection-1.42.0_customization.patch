@@ -1,0 +1,28 @@
+--- giscanner/ccompiler.py	Tue Sep 23 10:40:35 2014
++++ giscanner/ccompiler.py	Sat Sep 27 10:15:40 2014
+@@ -195,8 +195,9 @@
+                                 break
+             if not found:
+                 not_resolved.append(lib)
+-        if len(not_resolved) > 0:
+-            raise SystemExit(
+-                "ERROR: can't resolve libraries to shared libraries: " +
+-                ", ".join(not_resolved))
++        #in some case this is too much
++        #if len(not_resolved) > 0:
++        #    raise SystemExit(
++        #        "ERROR: can't resolve libraries to shared libraries: " +
++        #        ", ".join(not_resolved))
+         return shlibs
+--- tools/g-ir-scanner.in	Fri Jul 18 00:32:46 2014
++++ tools/g-ir-scanner.in	Sat Sep 27 10:16:23 2014
+@@ -23,6 +23,9 @@
+ import sys
+ import __builtin__
+ 
++# override CC
++os.environ['CC'] = "gcc.exe"
++
+ if os.name == 'nt':
+     datadir = os.path.join(os.path.dirname(__file__), '..', 'share')
+ else:
