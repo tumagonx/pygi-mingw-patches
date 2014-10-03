@@ -1,0 +1,26 @@
+--- gtk/gtksettings.c	Tue Jan 28 05:40:16 2014
++++ gtk/gtksettings.c	Sun Mar 02 13:51:39 2014
+@@ -562,7 +562,11 @@
+                                              g_param_spec_string ("gtk-xft-hintstyle",
+                                                                   P_("Xft Hint Style"),
+                                                                   P_("What degree of hinting to use; hintnone, hintslight, hintmedium, or hintfull"),
++#ifdef G_OS_WIN32
++                                                                  "hintfull",
++#else
+                                                                   NULL,
++#endif
+                                                                   GTK_PARAM_READWRITE),
+                                               NULL);
+ 
+@@ -572,7 +576,11 @@
+                                              g_param_spec_string ("gtk-xft-rgba",
+                                                                   P_("Xft RGBA"),
+                                                                   P_("Type of subpixel antialiasing; none, rgb, bgr, vrgb, vbgr"),
++#ifdef G_OS_WIN32
++                                                                  "rgb",
++#else
+                                                                   NULL,
++#endif
+                                                                   GTK_PARAM_READWRITE),
+                                              NULL);
+ 
