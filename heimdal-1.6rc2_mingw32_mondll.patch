@@ -1,0 +1,5265 @@
+--- include/config.h.in	Tue Feb 18 23:37:14 2014
++++ include/config.h.in	Fri Sep 26 15:12:47 2014
+@@ -9,11 +9,22 @@
+ #define MaxHostNameLen (64+4)
+ #define MaxPathLen (1024+4)
+ 
+-
++#ifdef __MINGW32__
++#define _WIN32_ 1
++#define HAVE_WINSOCK 1
++#define NO_LOCALNAME 1
++#define NO_UNIX_SOCKETS 1
++#define NO_SIGXCPU 1
++#define NO_SIGPIPE 1
++#define MKDIR_DOES_NOT_HAVE_MODE
++#ifndef MAXHOSTNAMELEN
++#define MAXHOSTNAMELEN (64+4)
++#endif
++#endif
+ 
+ #ifdef BUILD_KRB5_LIB
+ #ifndef KRB5_LIB
+-#ifdef _WIN32_
++#if defined (_WIN32_) && !defined (__MINGW32__)
+ #define KRB5_LIB_FUNCTION __declspec(dllexport)
+ #define KRB5_LIB_CALL __stdcall
+ #define KRB5_LIB_VARIABLE __declspec(dllexport)
+@@ -28,7 +39,7 @@
+ 
+ #ifdef BUILD_ROKEN_LIB
+ #ifndef ROKEN_LIB
+-#ifdef _WIN32_
++#if defined (_WIN32_) && !defined (__MINGW32__)
+ #define ROKEN_LIB_FUNCTION __declspec(dllexport)
+ #define ROKEN_LIB_CALL __stdcall
+ #define ROKEN_LIB_VARIABLE __declspec(dllexport)
+@@ -38,12 +49,16 @@
+ #define ROKEN_LIB_VARIABLE
+ #endif
+ #endif
++#else
++#define ROKEN_LIB_FUNCTION
++#define ROKEN_LIB_CALL
++#define ROKEN_LIB_VARIABLE
+ #endif
+ 
+ 
+ #ifdef BUILD_GSSAPI_LIB
+ #ifndef GSSAPI_LIB
+-#ifdef _WIN32_
++#if defined (_WIN32_) && !defined (__MINGW32__)
+ #define GSSAPI_LIB_FUNCTION __declspec(dllexport)
+ #define GSSAPI_LIB_CALL __stdcall
+ #define GSSAPI_LIB_VARIABLE __declspec(dllexport)
+@@ -1503,7 +1518,9 @@
+ #undef STRERROR_R_PROTO_COMPATIBLE
+ 
+ /* Define if os support want to detach is daemonens. */
++#ifndef __MINGW32__
+ #undef SUPPORT_DETACH
++#endif
+ 
+ /* Enable use of inetd style startup. */
+ #undef SUPPORT_INETD
+--- lib/asn1/asn1-common.h	Tue Feb 18 23:33:47 2014
++++ lib/asn1/asn1-common.h	Fri Sep 26 14:46:46 2014
+@@ -69,7 +69,7 @@
+     }                                                          \
+   } while (0)
+ 
+-#ifdef _WIN32
++#if defined (_WIN32) && !defined (__MINGW32__)
+ #ifndef ASN1_LIB
+ #define ASN1EXP  __declspec(dllimport)
+ #else
+--- lib/asn1/gen.c	Tue Feb 18 23:33:47 2014
++++ lib/asn1/gen.c	Fri Sep 26 14:46:46 2014
+@@ -232,7 +232,7 @@
+ 	  "    }                                                          \\\n"
+ 	  "  } while (0)\n\n",
+ 	  headerfile);
+-    fputs("#ifdef _WIN32\n"
++    fputs("#if defined (_WIN32_) && !defined (__MINGW32__)\n"
+ 	  "#ifndef ASN1_LIB\n"
+ 	  "#define ASN1EXP  __declspec(dllimport)\n"
+ 	  "#else\n"
+--- lib/base/db.c	Tue Feb 18 23:33:47 2014
++++ lib/base/db.c	Fri Sep 26 14:57:36 2014
+@@ -55,6 +55,10 @@
+ #include <sys/stat.h>
+ #ifdef WIN32
+ #include <io.h>
++int fsync(int fd) 
++{
++  return _commit(fd);
++}
+ #else
+ #include <sys/file.h>
+ #endif
+--- lib/base/Makefile.in	Tue Feb 18 23:37:19 2014
++++ lib/base/Makefile.in	Wed Oct 01 09:08:50 2014
+@@ -171,7 +171,7 @@
+   }
+ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(includedir)"
+ LTLIBRARIES = $(lib_LTLIBRARIES)
+-libheimbase_la_LIBADD =
++libheimbase_la_LIBADD = $(LIBADD_roken)
+ dist_libheimbase_la_OBJECTS = array.lo bsearch.lo bool.lo data.lo \
+ 	db.lo dict.lo error.lo heimbase.lo json.lo null.lo number.lo \
+ 	string.lo
+--- lib/base/roken_rename.h	Tue Feb 18 23:33:47 2014
++++ lib/base/roken_rename.h	Fri Sep 26 15:23:10 2014
+@@ -36,6 +36,7 @@
+ #ifndef __heimbase_roken_rename_h__
+ #define __heimbase_roken_rename_h__
+ 
++#define HAVE_VSNPRINTF
+ #ifndef HAVE_VSNPRINTF
+ #define rk_vsnprintf heimbase_vsnprintf
+ #endif
+@@ -45,6 +46,7 @@
+ #ifndef HAVE_ASNPRINTF
+ #define rk_asnprintf heimbase_asnprintf
+ #endif
++#define HAVE_VASPRINTF
+ #ifndef HAVE_VASPRINTF
+ #define rk_vasprintf heimbase_vasprintf
+ #endif
+--- lib/com_err/com_right.h	Tue Feb 18 23:33:47 2014
++++ lib/com_err/com_right.h	Fri Sep 26 14:46:46 2014
+@@ -38,7 +38,7 @@
+ 
+ #ifndef KRB5_LIB
+ #ifndef KRB5_LIB_FUNCTION
+-#if defined(_WIN32)
++#if defined (_WIN32) && !defined (__MINGW32__)
+ #define KRB5_LIB_FUNCTION __declspec(dllimport)
+ #define KRB5_LIB_CALL __stdcall
+ #define KRB5_LIB_VARIABLE __declspec(dllimport)
+@@ -50,7 +50,7 @@
+ #endif
+ #endif
+ 
+-#ifdef _WIN32
++#if defined (_WIN32) && !defined (__MINGW32__)
+ #define KRB5_CALLCONV __stdcall
+ #else
+ #define KRB5_CALLCONV
+--- lib/gssapi/gssapi/gssapi.h	Tue Feb 18 23:33:47 2014
++++ lib/gssapi/gssapi/gssapi.h	Tue Sep 30 09:00:55 2014
+@@ -42,7 +42,7 @@
+ #include <krb5-types.h>
+ 
+ #ifndef BUILD_GSSAPI_LIB
+-#if defined(_WIN32)
++#if defined (_WIN32) && !defined (__MINGW32__)
+ #define GSSAPI_LIB_FUNCTION __declspec(dllimport)
+ #define GSSAPI_LIB_CALL     __stdcall
+ #define GSSAPI_LIB_VARIABLE __declspec(dllimport)
+@@ -74,7 +74,7 @@
+ #define GSSAPI_CPP_END
+ #endif
+ 
+-#ifdef _WIN32
++#if defined (_WIN32) && !defined (__MINGW32__)
+ #define GSSAPI_CALLCONV __stdcall
+ #else
+ #define GSSAPI_CALLCONV
+@@ -83,6 +83,8 @@
+ /*
+  * Now define the three implementation-dependent types.
+  */
++
++#define uid_t int
+ 
+ typedef uint32_t OM_uint32;
+ typedef uint64_t OM_uint64;
+--- lib/gssapi/heimdal.def	Wed Oct 01 12:49:55 2014
++++ lib/gssapi/heimdal.def	Wed Oct 01 09:41:00 2014
+@@ -0,0 +1,945 @@
++EXPORTS
++    add_to_error_table
++    com_err
++    com_err_va
++    com_right
++    com_right_r
++    error_message
++    error_table_name
++    _et_list
++    free_error_table
++    init_error_table
++    initialize_error_table_r
++    reset_com_err_hook
++    set_com_err_hook
++    gss_accept_sec_context
++    gss_acquire_cred
++    gss_acquire_cred_with_password
++    gss_add_buffer_set_member
++    gss_add_cred
++    gss_add_cred_with_password
++    gss_add_oid_set_member
++    gss_authorize_localname
++    __gss_c_attr_local_login_user
++    __gss_c_attr_stream_sizes_oid_desc
++    __gss_c_cred_certificate_oid_desc
++    __gss_c_cred_password_oid_desc
++    __gss_c_ma_auth_init_anon_oid_desc
++    __gss_c_ma_auth_init_init_oid_desc
++    __gss_c_ma_auth_init_oid_desc
++    __gss_c_ma_auth_targ_anon_oid_desc
++    __gss_c_ma_auth_targ_init_oid_desc
++    __gss_c_ma_auth_targ_oid_desc
++    __gss_c_ma_cbindings_oid_desc
++    __gss_c_ma_compress_oid_desc
++    __gss_c_ma_conf_prot_oid_desc
++    __gss_c_ma_ctx_trans_oid_desc
++    __gss_c_ma_deleg_cred_oid_desc
++    __gss_c_ma_deprecated_oid_desc
++    __gss_c_ma_integ_prot_oid_desc
++    __gss_c_ma_itok_framed_oid_desc
++    __gss_c_ma_mech_composite_oid_desc
++    __gss_c_ma_mech_concrete_oid_desc
++    __gss_c_ma_mech_description_oid_desc
++    __gss_c_ma_mech_glue_oid_desc
++    __gss_c_ma_mech_name_oid_desc
++    __gss_c_ma_mech_nego_oid_desc
++    __gss_c_ma_mech_pseudo_oid_desc
++    __gss_c_ma_mic_oid_desc
++    __gss_c_ma_not_dflt_mech_oid_desc
++    __gss_c_ma_not_mech_oid_desc
++    __gss_c_ma_oos_det_oid_desc
++    __gss_c_ma_pfs_oid_desc
++    __gss_c_ma_prot_ready_oid_desc
++    __gss_c_ma_replay_det_oid_desc
++    __gss_c_ma_sasl_mech_name_oid_desc
++    __gss_c_ma_wrap_oid_desc
++    __gss_c_nt_anonymous_oid_desc
++    __gss_c_nt_dn_oid_desc
++    __gss_c_nt_export_name_oid_desc
++    __gss_c_nt_hostbased_service_oid_desc
++    __gss_c_nt_hostbased_service_x_oid_desc
++    __gss_c_nt_machine_uid_name_oid_desc
++    __gss_c_nt_ntlm_oid_desc
++    __gss_c_nt_string_uid_name_oid_desc
++    __gss_c_nt_user_name_oid_desc
++    __gss_c_ntlm_avguest_oid_desc
++    __gss_c_ntlm_force_v1_oid_desc
++    __gss_c_ntlm_session_key_oid_desc
++    __gss_c_ntlm_v1_oid_desc
++    __gss_c_ntlm_v2_oid_desc
++    __gss_c_peer_has_updated_spnego_oid_desc
++    gss_canonicalize_name
++    gss_compare_name
++    gss_context_query_attributes
++    gss_context_time
++    gss_create_empty_buffer_set
++    gss_create_empty_oid_set
++    gss_decapsulate_token
++    gss_delete_name_attribute
++    gss_delete_sec_context
++    gss_display_mech_attr
++    gss_display_name
++    gss_display_name_ext
++    gss_display_status
++    gss_duplicate_name
++    gss_duplicate_oid
++    gss_encapsulate_token
++    gss_export_cred
++    gss_export_name
++    gss_export_name_composite
++    gss_export_sec_context
++    gss_get_mic
++    gss_get_name_attribute
++    gss_import_cred
++    gss_import_name
++    gss_import_sec_context
++    gss_indicate_mechs
++    gss_indicate_mechs_by_attrs
++    gss_init_sec_context
++    gss_inquire_attrs_for_mech
++    gss_inquire_context
++    gss_inquire_cred
++    gss_inquire_cred_by_mech
++    gss_inquire_cred_by_oid
++    gss_inquire_mech_for_saslname
++    gss_inquire_mechs_for_name
++    gss_inquire_name
++    gss_inquire_names_for_mech
++    gss_inquire_saslname_for_mech
++    gss_inquire_sec_context_by_oid
++    gss_krb5_ccache_name
++    __gss_krb5_ccache_name_x_oid_desc
++    __gss_krb5_compat_des3_mic_x_oid_desc
++    gss_krb5_copy_ccache
++    __gss_krb5_copy_ccache_x_oid_desc
++    __gss_krb5_cred_no_ci_flags_x_oid_desc
++    __gss_krb5_export_lucid_context_v1_x_oid_desc
++    __gss_krb5_export_lucid_context_x_oid_desc
++    gss_krb5_export_lucid_sec_context
++    __gss_krb5_extract_authz_data_from_sec_context_x_oid_desc
++    gss_krb5_free_lucid_sec_context
++    __gss_krb5_get_acceptor_subkey_x_oid_desc
++    __gss_krb5_get_authtime_x_oid_desc
++    __gss_krb5_get_initiator_subkey_x_oid_desc
++    __gss_krb5_get_service_keyblock_x_oid_desc
++    __gss_krb5_get_subkey_x_oid_desc
++    __gss_krb5_get_time_offset_x_oid_desc
++    gss_krb5_get_tkt_flags
++    __gss_krb5_get_tkt_flags_x_oid_desc
++    gss_krb5_import_cred
++    __gss_krb5_import_cred_x_oid_desc
++    __gss_krb5_mechanism_oid_desc
++    __gss_krb5_nt_principal_name_oid_desc
++    __gss_krb5_nt_principal_name_referral_oid_desc
++    __gss_krb5_plugin_register_x_oid_desc
++    __gss_krb5_register_acceptor_identity_x_oid_desc
++    __gss_krb5_send_to_kdc_x_oid_desc
++    gss_krb5_set_allowable_enctypes
++    __gss_krb5_set_allowable_enctypes_x_oid_desc
++    __gss_krb5_set_default_realm_x_oid_desc
++    __gss_krb5_set_dns_canonicalize_x_oid_desc
++    __gss_krb5_set_time_offset_x_oid_desc
++    gss_localname
++    gss_mg_collect_error
++    gss_mo_get
++    gss_mo_list
++    gss_mo_name
++    gss_mo_set
++    gss_name_to_oid
++    __gss_ntlm_get_session_key_x_oid_desc
++    __gss_ntlm_mechanism_oid_desc
++    gss_oid_equal
++    gss_oid_to_name
++    gss_oid_to_str
++    gss_pname_to_uid
++    gss_process_context_token
++    gss_pseudo_random
++    gss_release_buffer
++    gss_release_buffer_set
++    gss_release_cred
++    gss_release_iov_buffer
++    gss_release_name
++    gss_release_oid
++    gss_release_oid_set
++    __gss_sasl_digest_md5_mechanism_oid_desc
++    gss_seal
++    gss_set_cred_option
++    gss_set_name_attribute
++    gss_set_sec_context_option
++    gss_sign
++    __gss_spnego_mechanism_oid_desc
++    gss_store_cred
++    gss_test_oid_set_member
++    gss_unseal
++    gss_unwrap
++    gss_unwrap_iov
++    gss_userok
++    gss_verify
++    gss_verify_mic
++    gss_wrap
++    gss_wrap_iov
++    gss_wrap_iov_length
++    gss_wrap_size_limit
++    _gssapi_wrap_size_cfx
++    gsskrb5_extract_authtime_from_sec_context
++    gsskrb5_extract_authz_data_from_sec_context
++    gsskrb5_extract_service_keyblock
++    gsskrb5_get_initiator_subkey
++    gsskrb5_get_subkey
++    gsskrb5_get_time_offset
++    gsskrb5_register_acceptor_identity
++    gsskrb5_set_default_realm
++    gsskrb5_set_dns_canonicalize
++    gsskrb5_set_send_to_kdc
++    gsskrb5_set_time_offset
++    _gsskrb5cfx_wrap_length_cfx
++    initialize_gk5_error_table_r
++    krb5_gss_register_acceptor_identity
++    krb524_convert_creds_kdc
++    krb524_convert_creds_kdc_ccache
++    krb5_abort
++    krb5_abortx
++    krb5_acc_ops
++    krb5_acl_match_file
++    krb5_acl_match_string
++    krb5_add_et_list
++    krb5_add_extra_addresses
++    krb5_add_ignore_addresses
++    krb5_addlog_dest
++    krb5_addlog_func
++    krb5_addr2sockaddr
++    krb5_address_compare
++    krb5_address_order
++    krb5_address_prefixlen_boundary
++    krb5_address_search
++    _krb5_AES_string_to_default_iterator
++    krb5_akf_ops
++    krb5_allow_weak_crypto
++    krb5_aname_to_localname
++    krb5_any_ops
++    krb5_anyaddr
++    krb5_appdefault_boolean
++    krb5_appdefault_string
++    krb5_appdefault_time
++    krb5_append_addresses
++    krb5_auth_con_addflags
++    krb5_auth_con_free
++    krb5_auth_con_genaddrs
++    krb5_auth_con_generatelocalsubkey
++    krb5_auth_con_getaddrs
++    krb5_auth_con_getauthenticator
++    krb5_auth_con_getcksumtype
++    krb5_auth_con_getflags
++    krb5_auth_con_getkey
++    krb5_auth_con_getkeytype
++    krb5_auth_con_getlocalseqnumber
++    krb5_auth_con_getlocalsubkey
++    krb5_auth_con_getrcache
++    krb5_auth_con_getremoteseqnumber
++    krb5_auth_con_getremotesubkey
++    krb5_auth_con_getsendsubkey
++    krb5_auth_con_init
++    krb5_auth_con_removeflags
++    krb5_auth_con_setaddrs
++    krb5_auth_con_setaddrs_from_fd
++    krb5_auth_con_setcksumtype
++    krb5_auth_con_setflags
++    krb5_auth_con_setkey
++    krb5_auth_con_setkeytype
++    krb5_auth_con_setlocalseqnumber
++    krb5_auth_con_setlocalsubkey
++    krb5_auth_con_setrcache
++    krb5_auth_con_setremoteseqnumber
++    krb5_auth_con_setremotesubkey
++    krb5_auth_con_setuserkey
++    krb5_auth_getremoteseqnumber
++    krb5_build_ap_req
++    _krb5_build_authenticator
++    krb5_build_principal
++    krb5_build_principal_ext
++    krb5_build_principal_va
++    krb5_build_principal_va_ext
++    krb5_c_block_size
++    krb5_c_checksum_length
++    krb5_c_decrypt
++    krb5_c_encrypt
++    krb5_c_encrypt_length
++    krb5_c_enctype_compare
++    krb5_c_get_checksum
++    krb5_c_is_coll_proof_cksum
++    krb5_c_is_keyed_cksum
++    krb5_c_keylengths
++    krb5_c_make_checksum
++    krb5_c_make_random_key
++    krb5_c_prf
++    krb5_c_prf_length
++    krb5_c_random_make_octets
++    krb5_c_set_checksum
++    krb5_c_valid_cksumtype
++    krb5_c_valid_enctype
++    krb5_c_verify_checksum
++    krb5_cc_cache_end_seq_get
++    krb5_cc_cache_get_first
++    krb5_cc_cache_match
++    krb5_cc_cache_next
++    krb5_cc_clear_mcred
++    krb5_cc_close
++    krb5_cc_copy_cache
++    krb5_cc_copy_creds
++    krb5_cc_copy_match_f
++    krb5_cc_default
++    krb5_cc_default_name
++    krb5_cc_destroy
++    krb5_cc_end_seq_get
++    krb5_cc_gen_new
++    krb5_cc_get_config
++    krb5_cc_get_friendly_name
++    krb5_cc_get_full_name
++    krb5_cc_get_kdc_offset
++    krb5_cc_get_lifetime
++    krb5_cc_get_name
++    krb5_cc_get_ops
++    krb5_cc_get_prefix_ops
++    krb5_cc_get_principal
++    krb5_cc_get_type
++    krb5_cc_get_version
++    krb5_cc_initialize
++    krb5_cc_last_change_time
++    krb5_cc_move
++    krb5_cc_new_unique
++    krb5_cc_next_cred
++    krb5_cc_register
++    krb5_cc_remove_cred
++    krb5_cc_resolve
++    krb5_cc_retrieve_cred
++    krb5_cc_set_config
++    krb5_cc_set_default_name
++    krb5_cc_set_flags
++    krb5_cc_set_friendly_name
++    krb5_cc_set_kdc_offset
++    krb5_cc_start_seq_get
++    krb5_cc_store_cred
++    krb5_cc_support_switch
++    krb5_cc_switch
++    krb5_cc_type_api
++    krb5_cc_type_dcc
++    krb5_cc_type_file
++    krb5_cc_type_kcm
++    krb5_cc_type_memory
++    krb5_cc_type_scc
++    krb5_cccol_cursor_free
++    krb5_cccol_cursor_new
++    krb5_cccol_cursor_next
++    krb5_cccol_last_change_time
++    krb5_change_password
++    krb5_check_transited
++    krb5_check_transited_realms
++    krb5_checksum_disable
++    krb5_checksum_free
++    krb5_checksum_is_collision_proof
++    krb5_checksum_is_keyed
++    krb5_checksumsize
++    krb5_cksumtype_to_enctype
++    krb5_cksumtype_valid
++    krb5_clear_error_message
++    krb5_clear_error_string
++    krb5_closelog
++    krb5_compare_creds
++    krb5_config_file
++    krb5_config_file_free
++    krb5_config_free_strings
++    krb5_config_get_bool
++    krb5_config_get_bool_default
++    krb5_config_get_int
++    krb5_config_get_int_default
++    krb5_config_get_list
++    krb5_config_get_string
++    krb5_config_get_string_default
++    krb5_config_get_strings
++    krb5_config_get_time
++    krb5_config_get_time_default
++    krb5_config_parse_file
++    krb5_config_parse_file_multi
++    krb5_config_parse_string_multi
++    krb5_config_vget_bool
++    krb5_config_vget_bool_default
++    krb5_config_vget_int
++    krb5_config_vget_int_default
++    krb5_config_vget_list
++    krb5_config_vget_string
++    krb5_config_vget_string_default
++    krb5_config_vget_strings
++    krb5_config_vget_time
++    krb5_config_vget_time_default
++    krb5_copy_address
++    krb5_copy_addresses
++    krb5_copy_checksum
++    krb5_copy_context
++    krb5_copy_creds
++    krb5_copy_creds_contents
++    krb5_copy_data
++    krb5_copy_host_realm
++    krb5_copy_keyblock
++    krb5_copy_keyblock_contents
++    krb5_copy_principal
++    krb5_copy_ticket
++    _krb5_crc_init_table
++    _krb5_crc_update
++    krb5_create_checksum
++    krb5_create_checksum_iov
++    krb5_crypto_destroy
++    krb5_crypto_fx_cf2
++    krb5_crypto_get_checksum_type
++    krb5_crypto_getblocksize
++    krb5_crypto_getconfoundersize
++    krb5_crypto_getenctype
++    krb5_crypto_getpadsize
++    krb5_crypto_init
++    krb5_crypto_length
++    krb5_crypto_length_iov
++    krb5_crypto_overhead
++    krb5_crypto_prf
++    krb5_crypto_prf_length
++    krb5_data_alloc
++    krb5_data_cmp
++    krb5_data_copy
++    krb5_data_ct_cmp
++    krb5_data_free
++    krb5_data_realloc
++    krb5_data_zero
++    krb5_dcc_ops
++    krb5_decode_ap_req
++    krb5_decode_Authenticator
++    krb5_decode_EncAPRepPart
++    krb5_decode_EncASRepPart
++    krb5_decode_EncKrbCredPart
++    krb5_decode_EncTGSRepPart
++    krb5_decode_EncTicketPart
++    krb5_decode_ETYPE_INFO
++    krb5_decode_ETYPE_INFO2
++    krb5_decrypt
++    krb5_decrypt_EncryptedData
++    krb5_decrypt_iov_ivec
++    krb5_decrypt_ivec
++    krb5_decrypt_ticket
++    krb5_defkeyname
++    krb5_derive_key
++    _krb5_dh_group_ok
++    krb5_digest_alloc
++    krb5_digest_free
++    krb5_digest_get_client_binding
++    krb5_digest_get_identifier
++    krb5_digest_get_opaque
++    krb5_digest_get_rsp
++    krb5_digest_get_server_nonce
++    krb5_digest_get_session_key
++    krb5_digest_get_tickets
++    krb5_digest_init_request
++    krb5_digest_probe
++    krb5_digest_rep_get_status
++    krb5_digest_request
++    krb5_digest_set_authentication_user
++    krb5_digest_set_authid
++    krb5_digest_set_client_nonce
++    krb5_digest_set_digest
++    krb5_digest_set_hostname
++    krb5_digest_set_identifier
++    krb5_digest_set_method
++    krb5_digest_set_nonceCount
++    krb5_digest_set_opaque
++    krb5_digest_set_qop
++    krb5_digest_set_realm
++    krb5_digest_set_responseData
++    krb5_digest_set_server_cb
++    krb5_digest_set_server_nonce
++    krb5_digest_set_type
++    krb5_digest_set_uri
++    krb5_digest_set_username
++    krb5_domain_x500_decode
++    krb5_domain_x500_encode
++    krb5_eai_to_heim_errno
++    krb5_encode_Authenticator
++    krb5_encode_EncAPRepPart
++    krb5_encode_EncASRepPart
++    krb5_encode_EncKrbCredPart
++    krb5_encode_EncTGSRepPart
++    krb5_encode_EncTicketPart
++    krb5_encode_ETYPE_INFO
++    krb5_encode_ETYPE_INFO2
++    krb5_encrypt
++    krb5_encrypt_EncryptedData
++    krb5_encrypt_iov_ivec
++    krb5_encrypt_ivec
++    krb5_enctype_disable
++    krb5_enctype_enable
++    krb5_enctype_keybits
++    krb5_enctype_keysize
++    krb5_enctype_to_keytype
++    krb5_enctype_to_string
++    krb5_enctype_valid
++    krb5_enctypes_compatible_keys
++    krb5_enomem
++    krb5_err
++    krb5_error_from_rd_error
++    krb5_errx
++    _krb5_expand_default_cc_name
++    krb5_expand_hostname
++    krb5_expand_hostname_realms
++    _krb5_expand_path_tokens
++    _krb5_expand_path_tokensv
++    _krb5_fast_armor_key
++    _krb5_fast_cf2
++    krb5_fcc_ops
++    krb5_find_padata
++    krb5_format_time
++    krb5_free_address
++    krb5_free_addresses
++    krb5_free_ap_rep_enc_part
++    krb5_free_authenticator
++    krb5_free_checksum
++    krb5_free_checksum_contents
++    krb5_free_config_files
++    krb5_free_context
++    krb5_free_cred_contents
++    krb5_free_creds
++    krb5_free_creds_contents
++    krb5_free_data
++    krb5_free_data_contents
++    krb5_free_default_realm
++    krb5_free_error
++    krb5_free_error_contents
++    krb5_free_error_message
++    krb5_free_error_string
++    krb5_free_host_realm
++    krb5_free_kdc_rep
++    krb5_free_keyblock
++    krb5_free_keyblock_contents
++    krb5_free_krbhst
++    krb5_free_principal
++    krb5_free_salt
++    krb5_free_ticket
++    krb5_free_unparsed_name
++    krb5_fwd_tgt_creds
++    krb5_generate_random_block
++    krb5_generate_random_keyblock
++    krb5_generate_seq_number
++    krb5_generate_subkey
++    krb5_generate_subkey_extended
++    krb5_get_all_client_addrs
++    krb5_get_all_server_addrs
++    krb5_get_cred_from_kdc
++    krb5_get_cred_from_kdc_opt
++    krb5_get_credentials
++    krb5_get_credentials_with_flags
++    krb5_get_creds
++    krb5_get_creds_opt_add_options
++    krb5_get_creds_opt_alloc
++    krb5_get_creds_opt_free
++    krb5_get_creds_opt_set_enctype
++    krb5_get_creds_opt_set_impersonate
++    krb5_get_creds_opt_set_options
++    krb5_get_creds_opt_set_ticket
++    krb5_get_default_config_files
++    krb5_get_default_in_tkt_etypes
++    krb5_get_default_principal
++    krb5_get_default_realm
++    krb5_get_default_realms
++    krb5_get_dns_canonicalize_hostname
++    krb5_get_err_text
++    krb5_get_error_message
++    krb5_get_error_string
++    krb5_get_extra_addresses
++    krb5_get_fcache_version
++    krb5_get_forwarded_creds
++    krb5_get_host_realm
++    _krb5_get_host_realm_int
++    krb5_get_ignore_addresses
++    krb5_get_in_cred
++    krb5_get_in_tkt
++    krb5_get_in_tkt_with_keytab
++    krb5_get_in_tkt_with_password
++    krb5_get_in_tkt_with_skey
++    krb5_get_init_creds_keyblock
++    krb5_get_init_creds_keytab
++    krb5_get_init_creds_opt_alloc
++    krb5_get_init_creds_opt_free
++    krb5_get_init_creds_opt_get_error
++    krb5_get_init_creds_opt_init
++    krb5_get_init_creds_opt_set_address_list
++    krb5_get_init_creds_opt_set_addressless
++    krb5_get_init_creds_opt_set_anonymous
++    krb5_get_init_creds_opt_set_canonicalize
++    krb5_get_init_creds_opt_set_default_flags
++    krb5_get_init_creds_opt_set_etype_list
++    krb5_get_init_creds_opt_set_forwardable
++    krb5_get_init_creds_opt_set_pa_password
++    krb5_get_init_creds_opt_set_pac_request
++    krb5_get_init_creds_opt_set_pkinit
++    krb5_get_init_creds_opt_set_pkinit_user_certs
++    krb5_get_init_creds_opt_set_preauth_list
++    krb5_get_init_creds_opt_set_process_last_req
++    krb5_get_init_creds_opt_set_proxiable
++    krb5_get_init_creds_opt_set_renew_life
++    krb5_get_init_creds_opt_set_salt
++    krb5_get_init_creds_opt_set_tkt_life
++    krb5_get_init_creds_opt_set_win2k
++    krb5_get_init_creds_password
++    _krb5_get_int
++    krb5_get_kdc_cred
++    krb5_get_kdc_sec_offset
++    krb5_get_krb524hst
++    krb5_get_krb_admin_hst
++    krb5_get_krb_changepw_hst
++    krb5_get_krbhst
++    _krb5_get_krbtgt
++    krb5_get_max_time_skew
++    krb5_get_permitted_enctypes
++    krb5_get_pw_salt
++    krb5_get_renewed_creds
++    krb5_get_server_rcache
++    krb5_get_use_admin_kdc
++    krb5_get_validated_creds
++    krb5_get_warn_dest
++    krb5_get_wrapped_length
++    krb5_getportbyname
++    krb5_h_addr2addr
++    krb5_h_addr2sockaddr
++    krb5_h_errno_to_heim_errno
++    krb5_have_error_string
++    krb5_hmac
++    krb5_init_context
++    krb5_init_creds_free
++    krb5_init_creds_get
++    krb5_init_creds_get_creds
++    krb5_init_creds_get_error
++    krb5_init_creds_init
++    krb5_init_creds_set_fast_ccache
++    krb5_init_creds_set_keytab
++    krb5_init_creds_set_password
++    krb5_init_creds_set_service
++    krb5_init_creds_store
++    krb5_init_ets
++    krb5_initlog
++    krb5_is_config_principal
++    krb5_is_enctype_weak
++    krb5_is_thread_safe
++    krb5_kerberos_enctypes
++    krb5_keyblock_get_enctype
++    krb5_keyblock_init
++    krb5_keyblock_key_proc
++    krb5_keyblock_zero
++    krb5_keytab_key_proc
++    krb5_keytype_to_enctypes
++    krb5_keytype_to_enctypes_default
++    krb5_keytype_to_string
++    krb5_krbhst_format_string
++    krb5_krbhst_free
++    krb5_krbhst_get_addrinfo
++    krb5_krbhst_init
++    krb5_krbhst_init_flags
++    krb5_krbhst_next
++    krb5_krbhst_next_as_string
++    krb5_krbhst_reset
++    krb5_kt_add_entry
++    krb5_kt_close
++    krb5_kt_compare
++    krb5_kt_copy_entry_contents
++    krb5_kt_default
++    krb5_kt_default_modify_name
++    krb5_kt_default_name
++    krb5_kt_destroy
++    krb5_kt_end_seq_get
++    krb5_kt_free_entry
++    krb5_kt_get_entry
++    krb5_kt_get_full_name
++    krb5_kt_get_name
++    krb5_kt_get_type
++    krb5_kt_have_content
++    krb5_kt_next_entry
++    krb5_kt_read_service_key
++    krb5_kt_register
++    krb5_kt_remove_entry
++    krb5_kt_resolve
++    krb5_kt_start_seq_get
++    krb5_kuserok
++    krb5_log
++    krb5_log_msg
++    krb5_make_addrport
++    krb5_make_principal
++    krb5_max_sockaddr_size
++    krb5_mcc_ops
++    krb5_mk_error
++    krb5_mk_priv
++    krb5_mk_rep
++    krb5_mk_req
++    krb5_mk_req_exact
++    krb5_mk_req_extended
++    krb5_mk_safe
++    krb5_mkt_ops
++    _krb5_n_fold
++    krb5_net_read
++    krb5_net_write
++    krb5_net_write_block
++    krb5_ntlm_alloc
++    krb5_ntlm_free
++    krb5_ntlm_init_get_challenge
++    krb5_ntlm_init_get_flags
++    krb5_ntlm_init_get_opaque
++    krb5_ntlm_init_get_targetinfo
++    krb5_ntlm_init_get_targetname
++    krb5_ntlm_init_request
++    krb5_ntlm_rep_get_sessionkey
++    krb5_ntlm_rep_get_status
++    krb5_ntlm_req_set_flags
++    krb5_ntlm_req_set_lm
++    krb5_ntlm_req_set_ntlm
++    krb5_ntlm_req_set_opaque
++    krb5_ntlm_req_set_session
++    krb5_ntlm_req_set_targetname
++    krb5_ntlm_req_set_username
++    krb5_ntlm_request
++    krb5_openlog
++    krb5_pac_add_buffer
++    krb5_pac_free
++    krb5_pac_get_buffer
++    krb5_pac_get_types
++    krb5_pac_init
++    krb5_pac_parse
++    _krb5_pac_sign
++    krb5_pac_verify
++    krb5_padata_add
++    krb5_parse_address
++    _krb5_parse_moduli
++    krb5_parse_name
++    krb5_parse_name_flags
++    krb5_parse_nametype
++    krb5_passwd_result_to_string
++    krb5_password_key_proc
++    krb5_pk_enterprise_cert
++    _krb5_pk_kdf
++    _krb5_pk_load_id
++    _krb5_pk_mk_ContentInfo
++    _krb5_pk_octetstring2key
++    _krb5_plugin_find
++    _krb5_plugin_free
++    krb5_plugin_register
++    _krb5_plugin_run_f
++    krb5_prepend_config_files
++    krb5_prepend_config_files_default
++    krb5_prepend_error_message
++    krb5_princ_realm
++    krb5_princ_set_realm
++    _krb5_principal2principalname
++    krb5_principal_compare
++    krb5_principal_compare_any_realm
++    krb5_principal_get_comp_string
++    krb5_principal_get_num_comp
++    krb5_principal_get_realm
++    krb5_principal_get_type
++    krb5_principal_is_krbtgt
++    krb5_principal_match
++    krb5_principal_set_realm
++    krb5_principal_set_type
++    _krb5_principalname2krb5_principal
++    krb5_print_address
++    krb5_process_last_request
++    krb5_program_setup
++    krb5_prompter_posix
++    _krb5_put_int
++    krb5_random_to_key
++    krb5_rc_close
++    krb5_rc_default
++    krb5_rc_default_name
++    krb5_rc_default_type
++    krb5_rc_destroy
++    krb5_rc_expunge
++    krb5_rc_get_lifespan
++    krb5_rc_get_name
++    krb5_rc_get_type
++    krb5_rc_initialize
++    krb5_rc_recover
++    krb5_rc_resolve
++    krb5_rc_resolve_full
++    krb5_rc_resolve_type
++    krb5_rc_store
++    krb5_rd_cred
++    krb5_rd_cred2
++    krb5_rd_error
++    krb5_rd_priv
++    krb5_rd_rep
++    krb5_rd_req
++    krb5_rd_req_ctx
++    krb5_rd_req_in_ctx_alloc
++    krb5_rd_req_in_ctx_free
++    krb5_rd_req_in_set_keyblock
++    krb5_rd_req_in_set_keytab
++    krb5_rd_req_in_set_pac_check
++    krb5_rd_req_out_ctx_free
++    krb5_rd_req_out_get_ap_req_options
++    krb5_rd_req_out_get_keyblock
++    krb5_rd_req_out_get_ticket
++    krb5_rd_req_with_keyblock
++    krb5_rd_safe
++    krb5_read_message
++    krb5_read_priv_message
++    krb5_read_safe_message
++    krb5_realm_compare
++    krb5_recvauth
++    krb5_recvauth_match_version
++    krb5_ret_address
++    krb5_ret_addrs
++    krb5_ret_authdata
++    krb5_ret_creds
++    krb5_ret_creds_tag
++    krb5_ret_data
++    krb5_ret_int16
++    krb5_ret_int32
++    krb5_ret_int8
++    krb5_ret_keyblock
++    krb5_ret_principal
++    krb5_ret_string
++    krb5_ret_stringnl
++    krb5_ret_stringz
++    krb5_ret_times
++    krb5_ret_uint16
++    krb5_ret_uint32
++    krb5_ret_uint8
++    _krb5_s4u2self_to_checksumdata
++    krb5_salttype_to_string
++    krb5_scc_ops
++    krb5_sendauth
++    krb5_sendto
++    krb5_sendto_context
++    krb5_sendto_ctx_add_flags
++    krb5_sendto_ctx_alloc
++    krb5_sendto_ctx_free
++    krb5_sendto_ctx_get_flags
++    krb5_sendto_ctx_set_func
++    krb5_sendto_ctx_set_type
++    krb5_sendto_kdc
++    krb5_sendto_kdc_flags
++    krb5_set_config_files
++    krb5_set_default_in_tkt_etypes
++    krb5_set_default_realm
++    krb5_set_dns_canonicalize_hostname
++    krb5_set_error_message
++    krb5_set_error_string
++    krb5_set_extra_addresses
++    krb5_set_fcache_version
++    krb5_set_home_dir_access
++    krb5_set_ignore_addresses
++    krb5_set_kdc_sec_offset
++    krb5_set_max_time_skew
++    krb5_set_password
++    krb5_set_password_using_ccache
++    krb5_set_real_time
++    krb5_set_send_to_kdc_func
++    krb5_set_use_admin_kdc
++    krb5_set_warn_dest
++    krb5_sname_to_principal
++    krb5_sock_to_principal
++    krb5_sockaddr2address
++    krb5_sockaddr2port
++    krb5_sockaddr_uninteresting
++    krb5_std_usage
++    krb5_storage_clear_flags
++    krb5_storage_emem
++    krb5_storage_free
++    krb5_storage_from_data
++    krb5_storage_from_fd
++    krb5_storage_from_mem
++    krb5_storage_from_readonly_mem
++    krb5_storage_from_socket
++    krb5_storage_fsync
++    krb5_storage_get_byteorder
++    krb5_storage_get_eof_code
++    krb5_storage_is_flags
++    krb5_storage_read
++    krb5_storage_seek
++    krb5_storage_set_byteorder
++    krb5_storage_set_eof_code
++    krb5_storage_set_flags
++    krb5_storage_set_max_alloc
++    krb5_storage_to_data
++    krb5_storage_truncate
++    krb5_storage_write
++    krb5_store_address
++    krb5_store_addrs
++    krb5_store_authdata
++    krb5_store_creds
++    krb5_store_creds_tag
++    krb5_store_data
++    krb5_store_int16
++    krb5_store_int32
++    krb5_store_int8
++    krb5_store_keyblock
++    krb5_store_principal
++    krb5_store_string
++    krb5_store_stringnl
++    krb5_store_stringz
++    krb5_store_times
++    krb5_store_uint16
++    krb5_store_uint32
++    krb5_store_uint8
++    krb5_string_to_deltat
++    krb5_string_to_enctype
++    krb5_string_to_key
++    krb5_string_to_key_data
++    krb5_string_to_key_data_salt
++    krb5_string_to_key_data_salt_opaque
++    krb5_string_to_key_derived
++    krb5_string_to_key_salt
++    krb5_string_to_key_salt_opaque
++    krb5_string_to_keytype
++    krb5_string_to_salttype
++    krb5_ticket_get_authorization_data_type
++    krb5_ticket_get_client
++    krb5_ticket_get_endtime
++    krb5_ticket_get_server
++    krb5_timeofday
++    krb5_unparse_name
++    krb5_unparse_name_fixed
++    krb5_unparse_name_fixed_flags
++    krb5_unparse_name_fixed_short
++    krb5_unparse_name_flags
++    krb5_unparse_name_short
++    krb5_us_timeofday
++    krb5_vabort
++    krb5_vabortx
++    krb5_verify_ap_req
++    krb5_verify_ap_req2
++    krb5_verify_authenticator_checksum
++    krb5_verify_checksum
++    krb5_verify_checksum_iov
++    krb5_verify_init_creds
++    krb5_verify_init_creds_opt_init
++    krb5_verify_init_creds_opt_set_ap_req_nofail
++    krb5_verify_opt_alloc
++    krb5_verify_opt_free
++    krb5_verify_opt_init
++    krb5_verify_opt_set_ccache
++    krb5_verify_opt_set_flags
++    krb5_verify_opt_set_keytab
++    krb5_verify_opt_set_secure
++    krb5_verify_opt_set_service
++    krb5_verify_user
++    krb5_verify_user_lrealm
++    krb5_verify_user_opt
++    krb5_verr
++    krb5_verrx
++    krb5_vlog
++    krb5_vlog_msg
++    krb5_vprepend_error_message
++    krb5_vset_error_message
++    krb5_vset_error_string
++    krb5_vwarn
++    krb5_vwarnx
++    krb5_warn
++    krb5_warnx
++    krb5_wrfkt_ops
++    krb5_write_message
++    krb5_write_priv_message
++    krb5_write_safe_message
++    krb5_xfree
++
+--- lib/gssapi/Makefile.in	Tue Feb 18 23:37:19 2014
++++ lib/gssapi/Makefile.in	Wed Oct 01 10:51:50 2014
+@@ -1030,11 +1030,14 @@
+ 	$(BUILT_SOURCES)
+ 
+ libgssapi_la_DEPENDENCIES = version-script.map
+-libgssapi_la_LDFLAGS = -version-info 3:0:0 $(am__append_1)
++libgssapi_la_LDFLAGS = -no-undefined -version-info 3:0:0 -export-symbols $(srcdir)/heimdal.def $(am__append_1)
+ libgssapi_la_LIBADD = \
+ 	$(top_builddir)/lib/ntlm/libheimntlm.la \
+ 	$(top_builddir)/lib/krb5/libkrb5.la \
++	$(top_builddir)/lib/hx509/libhx509.la \
+ 	$(top_builddir)/lib/asn1/libasn1.la \
++	$(top_builddir)/lib/wind/libwind.la \
++	$(top_builddir)/lib/base/libheimbase.la \
+ 	$(LIB_com_err) \
+ 	$(LIB_hcrypto) \
+ 	$(LIBADD_roken)
+@@ -1090,7 +1093,13 @@
+ 	$(LDADD)
+ 
+ LDADD = libgssapi.la \
++	$(top_builddir)/lib/ntlm/libheimntlm.la \
+ 	$(top_builddir)/lib/krb5/libkrb5.la \
++	$(top_builddir)/lib/hx509/libhx509.la \
++	$(top_builddir)/lib/asn1/libasn1.la \
++	$(top_builddir)/lib/wind/libwind.la \
++	$(top_builddir)/lib/com_err/libcom_err.la \
++	$(top_builddir)/lib/base/libheimbase.la \
+ 	$(LIB_roken)
+ 
+ 
+@@ -1098,8 +1107,14 @@
+ dist_gsstool_SOURCES = gsstool.c
+ nodist_gsstool_SOURCES = gss-commands.c gss-commands.h
+ gsstool_LDADD = libgssapi.la \
++	$(top_builddir)/lib/ntlm/libheimntlm.la \
+ 	$(top_builddir)/lib/sl/libsl.la \
+ 	$(top_builddir)/lib/krb5/libkrb5.la \
++	$(top_builddir)/lib/hx509/libhx509.la \
++	$(top_builddir)/lib/asn1/libasn1.la \
++	$(top_builddir)/lib/wind/libwind.la \
++	$(top_builddir)/lib/com_err/libcom_err.la \
++	$(top_builddir)/lib/base/libheimbase.la \
+ 	$(LIB_readline) \
+ 	$(LIB_roken)
+ 
+--- lib/hdb/Makefile.in	Tue Feb 18 23:37:20 2014
++++ lib/hdb/Makefile.in	Fri Sep 26 14:46:46 2014
+@@ -601,12 +601,12 @@
+ 
+ @OPENLDAP_MODULE_TRUE@ldap_so = hdb_ldap.la
+ @OPENLDAP_MODULE_TRUE@hdb_ldap_la_SOURCES = hdb-ldap.c
+-@OPENLDAP_MODULE_TRUE@hdb_ldap_la_LDFLAGS = -module -avoid-version
++@OPENLDAP_MODULE_TRUE@hdb_ldap_la_LDFLAGS = -module -avoid-version  -no-undefined
+ @OPENLDAP_MODULE_TRUE@hdb_ldap_la_LIBADD = $(LIB_openldap) libhdb.la
+ @OPENLDAP_MODULE_FALSE@ldap = hdb-ldap.c
+ @OPENLDAP_MODULE_FALSE@ldap_lib = $(LIB_openldap)
+ lib_LTLIBRARIES = libhdb.la $(ldap_so)
+-libhdb_la_LDFLAGS = -version-info 11:0:2 $(am__append_2)
++libhdb_la_LDFLAGS = -no-undefined -version-info 11:0:2 $(am__append_2)
+ dist_libhdb_la_SOURCES = \
+ 	common.c				\
+ 	db.c					\
+@@ -636,6 +636,7 @@
+ 	../krb5/libkrb5.la \
+ 	../asn1/libasn1.la \
+ 	$(LIB_sqlite3) \
++	$(LIB_heimbase) \
+ 	$(LIBADD_roken) \
+ 	$(ldap_lib) \
+ 	$(LIB_dlopen) \
+--- lib/hx509/ref/pkcs11.h	Tue Feb 18 23:33:47 2014
++++ lib/hx509/ref/pkcs11.h	Fri Sep 26 14:46:46 2014
+@@ -78,7 +78,7 @@
+ 
+ /* System dependencies.  */
+ 
+-#if defined(_WIN32) || defined(CRYPTOKI_FORCE_WIN32)
++#if (defined (_WIN32_) && !defined (__MINGW32__)) || defined(CRYPTOKI_FORCE_WIN32)
+ 
+ /* There is a matching pop below.  */
+ #pragma pack(push, cryptoki, 1)
+--- lib/hx509/hx509-protos.h	Tue Feb 18 23:38:06 2014
++++ lib/hx509/hx509-protos.h	Fri Sep 26 14:46:46 2014
+@@ -10,7 +10,7 @@
+ 
+ #ifndef HX509_LIB
+ #ifndef HX509_LIB_FUNCTION
+-#if defined(_WIN32)
++#if defined (_WIN32) && !defined (__MINGW32__)
+ #define HX509_LIB_FUNCTION __declspec(dllimport)
+ #define HX509_LIB_CALL __stdcall
+ #define HX509_LIB_VARIABLE __declspec(dllimport)
+--- lib/hx509/Makefile.in	Tue Feb 18 23:37:20 2014
++++ lib/hx509/Makefile.in	Fri Sep 26 14:46:46 2014
+@@ -866,7 +866,11 @@
+ 	$(top_builddir)/lib/asn1/libasn1.la \
+ 	$(LIB_hcrypto) \
+ 	$(LIB_roken) \
+-	$(top_builddir)/lib/sl/libsl.la
++	$(top_builddir)/lib/sl/libsl.la \
++	$(top_builddir)/lib/com_err/libcom_err.la \
++	$(top_builddir)/lib/wind/libwind.la \
++	$(top_builddir)/lib/base/libheimbase.la \
++	$(top_builddir)/lib/roken/libroken.la
+ 
+ CLEANFILES = $(BUILT_SOURCES) sel-gram.c sel-lex.c \
+ 	$(gen_files_ocsp) ocsp_asn1_files ocsp_asn1{,-priv}.h* \
+--- lib/kadm5/ipropd_master.c	Tue Feb 18 23:33:47 2014
++++ lib/kadm5/ipropd_master.c	Fri Sep 26 14:46:46 2014
+@@ -1015,8 +1015,8 @@
+ 	    krb5_err(context, 1, aret, "failed to daemon(3)ise");
+ 	}
+     }
+-#endif
+     pidfile (NULL);
++#endif
+     krb5_openlog (context, "ipropd-master", &log_facility);
+     krb5_set_warn_dest(context, log_facility);
+ 
+@@ -1183,4 +1183,51 @@
+     write_master_down(context);
+ 
+     return 0;
++}
++
++#define SIGNAL_SOCKET_HOST "127.0.0.1"
++#define SIGNAL_SOCKET_PORT "12701"
++kadm5_ret_t
++kadm5_log_signal_socket_info(krb5_context context,
++			     int server_end,
++			     struct addrinfo **ret_addrs)
++{
++    struct addrinfo hints;
++    struct addrinfo *addrs = NULL;
++    kadm5_ret_t ret = KADM5_FAILURE;
++    int wsret;
++
++    memset(&hints, 0, sizeof(hints));
++
++    hints.ai_flags = AI_NUMERICHOST;
++    if (server_end)
++	hints.ai_flags |= AI_PASSIVE;
++    hints.ai_family = AF_INET;
++    hints.ai_socktype = SOCK_STREAM;
++    hints.ai_protocol = IPPROTO_TCP;
++
++    wsret = getaddrinfo(SIGNAL_SOCKET_HOST,
++			SIGNAL_SOCKET_PORT,
++			&hints, &addrs);
++
++    if (wsret != 0) {
++	krb5_set_error_message(context, KADM5_FAILURE,
++			       "%s", gai_strerror(wsret));
++	goto done;
++    }
++
++    if (addrs == NULL) {
++	krb5_set_error_message(context, KADM5_FAILURE,
++			       "getaddrinfo() failed to return address list");
++	goto done;
++    }
++
++    *ret_addrs = addrs;
++    addrs = NULL;
++    ret = 0;
++
++ done:
++    if (addrs)
++	freeaddrinfo(addrs);
++    return ret;
+ }
+--- lib/kadm5/ipropd_slave.c	Tue Feb 18 23:33:47 2014
++++ lib/kadm5/ipropd_slave.c	Fri Sep 26 15:54:56 2014
+@@ -32,6 +32,12 @@
+  */
+ 
+ #include "iprop.h"
++#include <io.h>
++
++int fsync(int fd) 
++{
++  return _commit(fd);
++}
+ 
+ RCSID("$Id$");
+ 
+@@ -624,8 +630,8 @@
+ 	    krb5_err(context, 1, aret, "failed to daemon(3)ise");
+ 	}
+     }
+-#endif
+     pidfile (NULL);
++#endif
+     krb5_openlog (context, "ipropd-slave", &log_facility);
+     krb5_set_warn_dest(context, log_facility);
+ 
+--- lib/kadm5/Makefile.in	Tue Feb 18 23:37:20 2014
++++ lib/kadm5/Makefile.in	Fri Sep 26 14:46:46 2014
+@@ -90,7 +90,7 @@
+ 	$(top_srcdir)/cf/Makefile.am.common $(srcdir)/Makefile.in \
+ 	$(srcdir)/Makefile.am $(top_srcdir)/depcomp \
+ 	$(dist_kadm5include_HEADERS) ChangeLog
+-@versionscript_TRUE@am__append_1 = $(LDFLAGS_VERSION_SCRIPT)$(srcdir)/version-script-client.map
++@versionscript_TRUE@am__append_1 = $(LDFLAGS_VERSION_SCRIPT)$(srcdir)/version-script.map
+ @versionscript_TRUE@am__append_2 = $(LDFLAGS_VERSION_SCRIPT)$(srcdir)/version-script.map
+ sbin_PROGRAMS = iprop-log$(EXEEXT)
+ check_PROGRAMS = default_keys$(EXEEXT)
+@@ -182,7 +182,7 @@
+ LTLIBRARIES = $(lib_LTLIBRARIES) $(noinst_LTLIBRARIES)
+ am__DEPENDENCIES_1 =
+ libkadm5clnt_la_DEPENDENCIES = $(am__DEPENDENCIES_1) \
+-	../krb5/libkrb5.la $(am__DEPENDENCIES_1)
++	../krb5/libkrb5.la $(LIB_heimbase) $(am__DEPENDENCIES_1)
+ dist_libkadm5clnt_la_OBJECTS = ad.lo chpass_c.lo client_glue.lo \
+ 	common_glue.lo create_c.lo delete_c.lo destroy_c.lo flush_c.lo \
+ 	free.lo get_c.lo get_princs_c.lo init_c.lo marshall.lo \
+@@ -597,13 +597,13 @@
+ heim_verbose_ = $(heim_verbose_$(AM_DEFAULT_VERBOSITY))
+ heim_verbose_0 = @echo "  GEN    "$@;
+ lib_LTLIBRARIES = libkadm5srv.la libkadm5clnt.la
+-libkadm5srv_la_LDFLAGS = -version-info 8:1:0 $(am__append_2)
+-libkadm5clnt_la_LDFLAGS = -version-info 7:1:0 $(am__append_1)
++libkadm5srv_la_LDFLAGS = -no-undefined -version-info 8:1:0 $(am__append_2)
++libkadm5clnt_la_LDFLAGS = -no-undefined -version-info 7:1:0 $(am__append_1)
+ noinst_LTLIBRARIES = sample_passwd_check.la
+ sample_passwd_check_la_SOURCES = sample_passwd_check.c
+ sample_passwd_check_la_LDFLAGS = -module
+ libkadm5srv_la_LIBADD = \
+-	$(LIB_com_err) ../krb5/libkrb5.la \
++	$(LIB_com_err) ../krb5/libkrb5.la $(LIB_heimbase) \
+ 	../hdb/libhdb.la $(LIBADD_roken)
+ 
+ libkadm5clnt_la_LIBADD = \
+--- lib/krb5/context.c	Tue Feb 18 23:33:47 2014
++++ lib/krb5/context.c	Fri Sep 26 14:46:46 2014
+@@ -52,6 +52,626 @@
+  * Set the list of etypes `ret_etypes' from the configuration variable
+  * `name'
+  */
++#ifdef _WIN32
++
++#include <shlwapi.h>
++
++#ifndef MAX_DWORD
++#define MAX_DWORD 0xFFFFFFFF
++#endif
++
++#define REGPATH_KERBEROS "SOFTWARE\\Kerberos"
++#define REGPATH_HEIMDAL  "SOFTWARE\\Heimdal"
++char * _krb5_parse_reg_value_as_multi_string(krb5_context,
++                                      HKEY, const char *,
++                                      DWORD, DWORD, char *);
++/**
++ * Store a string as a registry value of the specified type
++ *
++ * The following registry types are handled:
++ *
++ * - REG_DWORD: The string is converted to a number.
++ *
++ * - REG_SZ: The string is stored as is.
++ *
++ * - REG_EXPAND_SZ: The string is stored as is.
++ *
++ * - REG_MULTI_SZ:
++ *
++ *   . If a separator is specified, the input string is broken
++ *     up into multiple strings and stored as a multi-sz.
++ *
++ *   . If no separator is provided, the input string is stored
++ *     as a multi-sz.
++ *
++ * - REG_NONE:
++ *
++ *   . If the string is all numeric, it will be stored as a
++ *     REG_DWORD.
++ *
++ *   . Otherwise, the string is stored as a REG_SZ.
++ *
++ * Other types are rejected.
++ *
++ * If cb_data is MAX_DWORD, the string pointed to by data must be nul-terminated
++ * otherwise a buffer overrun will occur.
++ *
++ * @param [in]valuename Name of the registry value to be modified or created
++ * @param [in]type      Type of the value. REG_NONE if unknown
++ * @param [in]data      The input string to be stored in the registry.
++ * @param [in]cb_data   Size of the input string in bytes. MAX_DWORD if unknown.
++ * @param [in]separator Separator character for parsing strings.
++ *
++ * @retval 0 if success or non-zero on error.
++ * If non-zero is returned, an error message has been set using
++ * krb5_set_error_message().
++ *
++ */
++int
++_krb5_store_string_to_reg_value(krb5_context context,
++                                HKEY key, const char * valuename,
++                                DWORD type, const char *data, DWORD cb_data,
++                                const char * separator)
++{
++    LONG        rcode;
++    DWORD       dwData;
++    BYTE        static_buffer[16384];
++    BYTE        *pbuffer = &static_buffer[0];
++
++    if (data == NULL)
++    {
++        if (context)
++            krb5_set_error_message(context, 0,
++                                   "'data' must not be NULL");
++        return -1;
++    }
++
++    if (cb_data == MAX_DWORD)
++    {
++        cb_data = (DWORD)strlen(data) + 1;
++    }
++    else if ((type == REG_MULTI_SZ && cb_data >= sizeof(static_buffer) - 1) ||
++             cb_data >= sizeof(static_buffer))
++    {
++        if (context)
++            krb5_set_error_message(context, 0, "cb_data too big");
++        return -1;
++    }
++    else if (data[cb_data-1] != '\0')
++    {
++        memcpy(static_buffer, data, cb_data);
++        static_buffer[cb_data++] = '\0';
++        if (type == REG_MULTI_SZ)
++            static_buffer[cb_data++] = '\0';
++        data = static_buffer;
++    }
++
++    if (type == REG_NONE)
++    {
++        /*
++         * If input is all numeric, convert to DWORD and save as REG_DWORD.
++         * Otherwise, store as REG_SZ.
++         */
++        if ( StrToIntExA( data, STIF_SUPPORT_HEX, &dwData) )
++        {
++            type = REG_DWORD;
++        } else {
++            type = REG_SZ;
++        }
++    }
++
++    switch (type) {
++    case REG_SZ:
++    case REG_EXPAND_SZ:
++        rcode = RegSetValueEx(key, valuename, 0, type, data, cb_data);
++        if (rcode)
++        {
++            if (context)
++                krb5_set_error_message(context, 0,
++                                       "Unexpected error when setting registry value %s gle 0x%x",
++                                       valuename,
++                                       GetLastError());
++            return -1;
++        }
++        break;
++    case REG_MULTI_SZ:
++        if (separator && *separator)
++        {
++            int i;
++            char *cp;
++
++            if (data != static_buffer)
++                static_buffer[cb_data++] = '\0';
++
++            for ( cp = static_buffer; cp < static_buffer+cb_data; cp++)
++            {
++                if (*cp == *separator)
++                    *cp = '\0';
++            }
++
++            rcode = RegSetValueEx(key, valuename, 0, type, data, cb_data);
++            if (rcode)
++            {
++                if (context)
++                    krb5_set_error_message(context, 0,
++                                           "Unexpected error when setting registry value %s gle 0x%x",
++                                           valuename,
++                                           GetLastError());
++                return -1;
++            }
++        }
++        break;
++    case REG_DWORD:
++        if ( !StrToIntExA( data, STIF_SUPPORT_HEX, &dwData) )
++        {
++            if (context)
++                krb5_set_error_message(context, 0,
++                                       "Unexpected error when parsing %s as number gle 0x%x",
++                                       data,
++                                       GetLastError());
++        }
++
++        rcode = RegSetValueEx(key, valuename, 0, type, dwData, sizeof(DWORD));
++        if (rcode)
++        {
++            if (context)
++                krb5_set_error_message(context, 0,
++                                       "Unexpected error when setting registry value %s gle 0x%x",
++                                       valuename,
++                                       GetLastError());
++            return -1;
++        }
++        break;
++    default:
++        return -1;
++    }
++
++    return 0;
++}
++
++/**
++ * Parse a registry value as a string
++ *
++ * @see _krb5_parse_reg_value_as_multi_string()
++ */
++char *
++_krb5_parse_reg_value_as_string(krb5_context context,
++                                HKEY key, const char * valuename,
++                                DWORD type, DWORD cb_data)
++{
++    return _krb5_parse_reg_value_as_multi_string(context, key, valuename,
++                                                 type, cb_data, " ");
++}
++
++/**
++ * Parse a registry value as a multi string
++ *
++ * The following registry value types are handled:
++ *
++ * - REG_DWORD: The decimal string representation is used as the
++ *   value.
++ *
++ * - REG_SZ: The string is used as-is.
++ *
++ * - REG_EXPAND_SZ: Environment variables in the string are expanded
++ *   and the result is used as the value.
++ *
++ * - REG_MULTI_SZ: The list of strings is concatenated using the
++ *   separator.  No quoting is performed.
++ *
++ * Any other value type is rejected.
++ *
++ * @param [in]valuename Name of the registry value to be queried
++ * @param [in]type      Type of the value. REG_NONE if unknown
++ * @param [in]cbdata    Size of value. 0 if unknown.
++ * @param [in]separator Separator character for concatenating strings.
++ *
++ * @a type and @a cbdata are only considered valid if both are
++ * specified.
++ *
++ * @retval The registry value string, or NULL if there was an error.
++ * If NULL is returned, an error message has been set using
++ * krb5_set_error_message().
++ */
++char *
++_krb5_parse_reg_value_as_multi_string(krb5_context context,
++                                      HKEY key, const char * valuename,
++                                      DWORD type, DWORD cb_data, char *separator)
++{
++    LONG                rcode = ERROR_MORE_DATA;
++
++    BYTE                static_buffer[16384];
++    BYTE                *pbuffer = &static_buffer[0];
++    DWORD               cb_alloc = sizeof(static_buffer);
++    char                *ret_string = NULL;
++
++    /* If we know a type and cb_data from a previous call to
++     * RegEnumValue(), we use it.  Otherwise we use the
++     * static_buffer[] and query directly.  We do this to minimize the
++     * number of queries. */
++
++    if (type == REG_NONE || cb_data == 0) {
++
++        pbuffer = &static_buffer[0];
++        cb_alloc = cb_data = sizeof(static_buffer);
++        rcode = RegQueryValueExA(key, valuename, NULL, &type, pbuffer, &cb_data);
++
++        if (rcode == ERROR_SUCCESS &&
++
++            ((type != REG_SZ &&
++              type != REG_EXPAND_SZ) || cb_data + 1 <= sizeof(static_buffer)) &&
++
++            (type != REG_MULTI_SZ || cb_data + 2 <= sizeof(static_buffer)))
++            goto have_data;
++
++        if (rcode != ERROR_MORE_DATA && rcode != ERROR_SUCCESS)
++            return NULL;
++    }
++
++    /* Either we don't have the data or we aren't sure of the size
++     * (due to potentially missing terminating NULs). */
++
++    switch (type) {
++    case REG_DWORD:
++        if (cb_data != sizeof(DWORD)) {
++            if (context)
++                krb5_set_error_message(context, 0,
++                                       "Unexpected size while reading registry value %s",
++                                       valuename);
++            return NULL;
++        }
++        break;
++
++    case REG_SZ:
++    case REG_EXPAND_SZ:
++
++        if (rcode == ERROR_SUCCESS && cb_data > 0 && pbuffer[cb_data - 1] == '\0')
++            goto have_data;
++
++        cb_data += sizeof(char); /* Accout for potential missing NUL
++                                  * terminator. */
++        break;
++
++    case REG_MULTI_SZ:
++
++        if (rcode == ERROR_SUCCESS && cb_data > 0 && pbuffer[cb_data - 1] == '\0' &&
++            (cb_data == 1 || pbuffer[cb_data - 2] == '\0'))
++            goto have_data;
++
++        cb_data += sizeof(char) * 2; /* Potential missing double NUL
++                                      * terminator. */
++        break;
++
++    default:
++        if (context)
++            krb5_set_error_message(context, 0,
++                                   "Unexpected type while reading registry value %s",
++                                   valuename);
++        return NULL;
++    }
++
++    if (cb_data <= sizeof(static_buffer))
++        pbuffer = &static_buffer[0];
++    else {
++        pbuffer = malloc(cb_data);
++        if (pbuffer == NULL)
++            return NULL;
++    }
++
++    cb_alloc = cb_data;
++    rcode = RegQueryValueExA(key, valuename, NULL, NULL, pbuffer, &cb_data);
++
++    if (rcode != ERROR_SUCCESS) {
++
++        /* This can potentially be from a race condition. I.e. some
++         * other process or thread went and modified the registry
++         * value between the time we queried its size and queried for
++         * its value.  Ideally we would retry the query in a loop. */
++
++        if (context)
++            krb5_set_error_message(context, 0,
++                                   "Unexpected error while reading registry value %s",
++                                   valuename);
++        goto done;
++    }
++
++    if (cb_data > cb_alloc || cb_data == 0) {
++        if (context)
++            krb5_set_error_message(context, 0,
++                                   "Unexpected size while reading registry value %s",
++                                   valuename);
++        goto done;
++    }
++
++have_data:
++    switch (type) {
++    case REG_DWORD:
++        asprintf(&ret_string, "%d", *((DWORD *) pbuffer));
++        break;
++
++    case REG_SZ:
++    {
++        char * str = (char *) pbuffer;
++
++        if (str[cb_data - 1] != '\0') {
++            if (cb_data < cb_alloc)
++                str[cb_data] = '\0';
++            else
++                break;
++        }
++
++        if (pbuffer != static_buffer) {
++            ret_string = (char *) pbuffer;
++            pbuffer = NULL;
++        } else {
++            ret_string = strdup((char *) pbuffer);
++        }
++    }
++    break;
++
++    case REG_EXPAND_SZ:
++    {
++        char    *str = (char *) pbuffer;
++        char    expsz[32768];   /* Size of output buffer for
++                                 * ExpandEnvironmentStrings() is
++                                 * limited to 32K. */
++
++        if (str[cb_data - 1] != '\0') {
++            if (cb_data < cb_alloc)
++                str[cb_data] = '\0';
++            else
++                break;
++        }
++
++        if (ExpandEnvironmentStrings(str, expsz, sizeof(expsz)/sizeof(char)) != 0) {
++            ret_string = strdup(expsz);
++        } else {
++            if (context)
++                krb5_set_error_message(context, 0,
++                                       "Overflow while expanding environment strings "
++                                       "for registry value %s", valuename);
++        }
++    }
++    break;
++
++    case REG_MULTI_SZ:
++    {
++        char * str = (char *) pbuffer;
++        char * iter;
++
++        str[cb_alloc - 1] = '\0';
++        str[cb_alloc - 2] = '\0';
++
++        for (iter = str; *iter;) {
++            size_t len = strlen(iter);
++
++            iter += len;
++            if (iter[1] != '\0')
++                *iter++ = *separator;
++            else
++                break;
++        }
++
++        if (pbuffer != static_buffer) {
++            ret_string = str;
++            pbuffer = NULL;
++        } else {
++            ret_string = strdup(str);
++        }
++    }
++    break;
++
++    default:
++        if (context)
++            krb5_set_error_message(context, 0,
++                                   "Unexpected type while reading registry value %s",
++                                   valuename);
++    }
++
++done:
++    if (pbuffer != static_buffer && pbuffer != NULL)
++        free(pbuffer);
++
++    return ret_string;
++}
++
++/**
++ * Parse a registry value as a configuration value
++ *
++ * @see parse_reg_value_as_string()
++ */
++static krb5_error_code
++parse_reg_value(krb5_context context,
++                HKEY key, const char * valuename,
++                DWORD type, DWORD cbdata, krb5_config_section ** parent)
++{
++    char                *reg_string = NULL;
++    krb5_config_section *value;
++    krb5_error_code     code = 0;
++
++    reg_string = _krb5_parse_reg_value_as_string(context, key, valuename, type, cbdata);
++
++    if (reg_string == NULL)
++        return KRB5_CONFIG_BADFORMAT;
++
++    value = _krb5_config_get_entry(parent, valuename, krb5_config_string);
++    if (value == NULL) {
++        code = ENOMEM;
++        goto done;
++    }
++
++    if (value->u.string != NULL)
++        free(value->u.string);
++
++    value->u.string = reg_string;
++    reg_string = NULL;
++
++done:
++    if (reg_string != NULL)
++        free(reg_string);
++
++    return code;
++}
++
++static krb5_error_code
++parse_reg_values(krb5_context context,
++                 HKEY key,
++                 krb5_config_section ** parent)
++{
++    DWORD index;
++    LONG  rcode;
++
++    for (index = 0; ; index ++) {
++        char    name[16385];
++        DWORD   cch = sizeof(name)/sizeof(name[0]);
++        DWORD   type;
++        DWORD   cbdata = 0;
++        krb5_error_code code;
++
++        rcode = RegEnumValue(key, index, name, &cch, NULL,
++                             &type, NULL, &cbdata);
++        if (rcode != ERROR_SUCCESS)
++            break;
++
++        if (cbdata == 0)
++            continue;
++
++        code = parse_reg_value(context, key, name, type, cbdata, parent);
++        if (code != 0)
++            return code;
++    }
++
++    return 0;
++}
++
++static krb5_error_code
++parse_reg_subkeys(krb5_context context,
++                  HKEY key,
++                  krb5_config_section ** parent)
++{
++    DWORD index;
++    LONG  rcode;
++
++    for (index = 0; ; index ++) {
++        HKEY    subkey = NULL;
++        char    name[256];
++        DWORD   cch = sizeof(name)/sizeof(name[0]);
++        krb5_config_section     *section = NULL;
++        krb5_error_code         code;
++
++        rcode = RegEnumKeyEx(key, index, name, &cch, NULL, NULL, NULL, NULL);
++        if (rcode != ERROR_SUCCESS)
++            break;
++
++        rcode = RegOpenKeyEx(key, name, 0, KEY_READ, &subkey);
++        if (rcode != ERROR_SUCCESS)
++            continue;
++
++        section = _krb5_config_get_entry(parent, name, krb5_config_list);
++        if (section == NULL) {
++            RegCloseKey(subkey);
++            return ENOMEM;
++        }
++
++        code = parse_reg_values(context, subkey, &section->u.list);
++        if (code) {
++            RegCloseKey(subkey);
++            return code;
++        }
++
++        code = parse_reg_subkeys(context, subkey, &section->u.list);
++        if (code) {
++            RegCloseKey(subkey);
++            return code;
++        }
++
++        RegCloseKey(subkey);
++    }
++
++    return 0;
++}
++
++static krb5_error_code
++parse_reg_root(krb5_context context,
++               HKEY key,
++               krb5_config_section ** parent)
++{
++    krb5_config_section *libdefaults = NULL;
++    krb5_error_code     code = 0;
++
++    libdefaults = _krb5_config_get_entry(parent, "libdefaults", krb5_config_list);
++    if (libdefaults == NULL) {
++        krb5_set_error_message(context, ENOMEM, "Out of memory while parsing configuration");
++        return ENOMEM;
++    }
++
++    code = parse_reg_values(context, key, &libdefaults->u.list);
++    if (code)
++        return code;
++
++    return parse_reg_subkeys(context, key, parent);
++}
++
++static krb5_error_code
++load_config_from_regpath(krb5_context context,
++                         HKEY hk_root,
++                         const char* key_path,
++                         krb5_config_section ** res)
++{
++    HKEY            key  = NULL;
++    LONG            rcode;
++    krb5_error_code code = 0;
++
++    rcode = RegOpenKeyEx(hk_root, key_path, 0, KEY_READ, &key);
++    if (rcode == ERROR_SUCCESS) {
++        code = parse_reg_root(context, key, res);
++        RegCloseKey(key);
++        key = NULL;
++    }
++
++    return code;
++}
++
++/**
++ * Load configuration from registry
++ *
++ * The registry keys 'HKCU\Software\Heimdal' and
++ * 'HKLM\Software\Heimdal' are treated as krb5.conf files.  Each
++ * registry key corresponds to a configuration section (or bound list)
++ * and each value in a registry key is treated as a bound value.  The
++ * set of values that are directly under the Heimdal key are treated
++ * as if they were defined in the [libdefaults] section.
++ *
++ * @see parse_reg_value() for details about how each type of value is handled.
++ */
++krb5_error_code
++_krb5_load_config_from_registry(krb5_context context,
++                                krb5_config_section ** res)
++{
++    krb5_error_code code;
++
++    code = load_config_from_regpath(context, HKEY_LOCAL_MACHINE,
++                                    REGPATH_KERBEROS, res);
++    if (code)
++        return code;
++
++    code = load_config_from_regpath(context, HKEY_LOCAL_MACHINE,
++                                    REGPATH_HEIMDAL, res);
++    if (code)
++        return code;
++
++    code = load_config_from_regpath(context, HKEY_CURRENT_USER,
++                                    REGPATH_KERBEROS, res);
++    if (code)
++        return code;
++
++    code = load_config_from_regpath(context, HKEY_CURRENT_USER,
++                                    REGPATH_HEIMDAL, res);
++    if (code)
++        return code;
++    return 0;
++}
++#endif
+ 
+ static krb5_error_code
+ set_etypes (krb5_context context,
+--- lib/krb5/eai_to_heim_errno.c	Tue Feb 18 23:33:47 2014
++++ lib/krb5/eai_to_heim_errno.c	Fri Sep 26 14:46:46 2014
+@@ -64,9 +64,11 @@
+ 	return HEIM_EAI_FAMILY;
+     case EAI_MEMORY:
+ 	return HEIM_EAI_MEMORY;
++#ifndef __MINGW32__
+ #if defined(EAI_NODATA) && EAI_NODATA != EAI_NONAME
+     case EAI_NODATA:
+ 	return HEIM_EAI_NODATA;
++#endif
+ #endif
+ #ifdef WSANO_DATA
+     case WSANO_DATA:
+--- lib/krb5/expand_path.c	Tue Feb 18 23:33:47 2014
++++ lib/krb5/expand_path.c	Fri Sep 26 14:46:46 2014
+@@ -40,6 +40,31 @@
+ #include <shlobj.h>
+ #include <sddl.h>
+ 
++HINSTANCE _krb5_hInstance = NULL;
++
++BOOL WINAPI DllMain(HINSTANCE hinstDLL,
++		    DWORD fdwReason,
++		    LPVOID lpvReserved)
++{
++    switch (fdwReason) {
++    case DLL_PROCESS_ATTACH:
++
++	_krb5_hInstance = hinstDLL;
++	return TRUE;
++
++    case DLL_PROCESS_DETACH:
++	return FALSE;
++
++    case DLL_THREAD_ATTACH:
++	return FALSE;
++
++    case DLL_THREAD_DETACH:
++	return FALSE;
++    }
++
++    return FALSE;
++}
++
+ /*
+  * Expand a %{TEMP} token
+  *
+--- lib/krb5/krb5-protos.h	Tue Feb 18 23:38:06 2014
++++ lib/krb5/krb5-protos.h	Fri Sep 26 14:46:46 2014
+@@ -33,7 +33,7 @@
+ 
+ #ifndef KRB5_LIB
+ #ifndef KRB5_LIB_FUNCTION
+-#if defined(_WIN32)
++#if defined (_WIN32) && !defined (__MINGW32__)
+ #define KRB5_LIB_FUNCTION __declspec(dllimport)
+ #define KRB5_LIB_CALL __stdcall
+ #define KRB5_LIB_VARIABLE __declspec(dllimport)
+--- lib/krb5/krb5.h	Tue Feb 18 23:33:47 2014
++++ lib/krb5/krb5.h	Fri Sep 26 14:46:46 2014
+@@ -53,7 +53,7 @@
+ #define KRB5KDC_ERR_KEY_EXP KRB5KDC_ERR_KEY_EXPIRED
+ #endif
+ 
+-#ifdef _WIN32
++#if defined (_WIN32) && !defined (__MINGW32__)
+ #define KRB5_CALLCONV __stdcall
+ #else
+ #define KRB5_CALLCONV
+--- lib/krb5/log.c	Tue Feb 18 23:33:47 2014
++++ lib/krb5/log.c	Fri Sep 26 14:46:46 2014
+@@ -35,7 +35,9 @@
+ 
+ #include "krb5_locl.h"
+ #include <vis.h>
+-
++#ifdef _WIN32
++#include <syslog.h>
++#endif
+ struct facility {
+     int min;
+     int max;
+--- lib/krb5/Makefile.in	Tue Feb 18 23:37:21 2014
++++ lib/krb5/Makefile.in	Wed Oct 01 09:09:23 2014
+@@ -271,7 +271,6 @@
+ 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+ 	$(libkrb5_la_LDFLAGS) $(LDFLAGS) -o $@
+ librfc3961_la_DEPENDENCIES = $(top_builddir)/lib/asn1/libasn1.la \
+-	$(top_builddir)/lib/ipc/libheim-ipcc.la \
+ 	$(top_builddir)/lib/wind/libwind.la $(LIB_pkinit) \
+ 	$(am__DEPENDENCIES_2) $(am__DEPENDENCIES_1) \
+ 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+@@ -1093,22 +1092,24 @@
+ check_DATA = test_config_strings.out
+ LDADD = libkrb5.la \
+ 	$(LIB_hcrypto) \
++	$(top_builddir)/lib/hx509/libhx509.la \
+ 	$(top_builddir)/lib/asn1/libasn1.la \
++	$(top_builddir)/lib/krb5/libkrb5.la \
++	$(top_builddir)/lib/com_err/libcom_err.la \
+ 	$(top_builddir)/lib/wind/libwind.la \
+ 	$(LIB_heimbase) $(LIB_roken)
+ 
+ @PKINIT_TRUE@LIB_pkinit = ../hx509/libhx509.la
+ @have_scc_TRUE@use_sqlite = $(LIB_sqlite3)
+ libkrb5_la_LIBADD = \
+-	$(top_builddir)/lib/asn1/libasn1.la \
+-	$(top_builddir)/lib/ipc/libheim-ipcc.la \
+-	$(top_builddir)/lib/wind/libwind.la \
+-	$(top_builddir)/lib/base/libheimbase.la \
+ 	$(LIB_pkinit) \
+ 	$(use_sqlite) \
+ 	$(LIB_com_err) \
+ 	$(LIB_hcrypto) \
+ 	$(LIB_libintl) \
++	$(top_builddir)/lib/asn1/libasn1.la \
++	$(top_builddir)/lib/wind/libwind.la \
++	$(top_builddir)/lib/base/libheimbase.la \
+ 	$(LIBADD_roken) \
+ 	$(PTHREAD_LIBADD) \
+ 	$(LIB_door_create) \
+@@ -1116,7 +1117,6 @@
+ 
+ librfc3961_la_LIBADD = \
+ 	$(top_builddir)/lib/asn1/libasn1.la \
+-	$(top_builddir)/lib/ipc/libheim-ipcc.la \
+ 	$(top_builddir)/lib/wind/libwind.la \
+ 	$(LIB_pkinit) \
+ 	$(use_sqlite) \
+@@ -1316,6 +1316,7 @@
+ test_rfc3961_LDADD = \
+ 	librfc3961.la 				\
+ 	$(top_builddir)/lib/asn1/libasn1.la	\
++	$(top_builddir)/lib/com_err/libcom_err.la	\
+ 	$(top_builddir)/lib/wind/libwind.la 	\
+ 	$(LIB_hcrypto)				\
+ 	$(LIB_roken)
+--- lib/krb5/salt-des.c	Tue Feb 18 23:33:47 2014
++++ lib/krb5/salt-des.c	Fri Sep 26 14:46:46 2014
+@@ -37,6 +37,1094 @@
+ 
+ #ifdef ENABLE_AFS_STRING_TO_KEY
+ 
++#if defined (__MINGW32__)
++/* src/port/crypt.c */
++/*	$NetBSD: crypt.c,v 1.18 2001/03/01 14:37:35 wiz Exp $	*/
++
++/*
++ * Copyright (c) 1989, 1993
++ *	The Regents of the University of California.  All rights reserved.
++ *
++ * This code is derived from software contributed to Berkeley by
++ * Tom Truscott.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *	  notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *	  notice, this list of conditions and the following disclaimer in the
++ *	  documentation and/or other materials provided with the distribution.
++ * 3. Neither the name of the University nor the names of its contributors
++ *	  may be used to endorse or promote products derived from this software
++ *	  without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.	IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++#if defined(LIBC_SCCS) && !defined(lint)
++#if 0
++static char sccsid[] = "@(#)crypt.c	8.1.1.1 (Berkeley) 8/18/93";
++#else
++__RCSID("$NetBSD: crypt.c,v 1.18 2001/03/01 14:37:35 wiz Exp $");
++#endif
++#endif   /* not lint */
++
++//#include "c.h"
++
++#include <limits.h>
++
++#ifndef WIN32
++#include <unistd.h>
++#endif
++
++static int	des_setkey(const char *key);
++static int	des_cipher(const char *in, char *out, long salt, int num_iter);
++
++/*
++ * UNIX password, and DES, encryption.
++ * By Tom Truscott, trt@rti.rti.org,
++ * from algorithms by Robert W. Baldwin and James Gillogly.
++ *
++ * References:
++ * "Mathematical Cryptology for Computer Scientists and Mathematicians,"
++ * by Wayne Patterson, 1987, ISBN 0-8476-7438-X.
++ *
++ * "Password Security: A Case History," R. Morris and Ken Thompson,
++ * Communications of the ACM, vol. 22, pp. 594-597, Nov. 1979.
++ *
++ * "DES will be Totally Insecure within Ten Years," M.E. Hellman,
++ * IEEE Spectrum, vol. 16, pp. 32-39, July 1979.
++ */
++
++/* =====  Configuration ==================== */
++
++/*
++ * define "MUST_ALIGN" if your compiler cannot load/store
++ * long integers at arbitrary (e.g. odd) memory locations.
++ * (Either that or never pass unaligned addresses to des_cipher!)
++ */
++/* #define	MUST_ALIGN */
++
++#ifdef CHAR_BITS
++#if CHAR_BITS != 8
++#error C_block structure assumes 8 bit characters
++#endif
++#endif
++
++/*
++ * define "B64" to be the declaration for a 64 bit integer.
++ * XXX this feature is currently unused, see "endian" comment below.
++ */
++#define B64 __int64
++
++/*
++ * define "LARGEDATA" to get faster permutations, by using about 72 kilobytes
++ * of lookup tables.  This speeds up des_setkey() and des_cipher(), but has
++ * little effect on crypt().
++ */
++/* #define	LARGEDATA */
++
++/* compile with "-DSTATIC=void" when profiling */
++#ifndef STATIC
++#define STATIC	static void
++#endif
++
++/*
++ * Define the "int32_t" type for integral type with a width of at least
++ * 32 bits.
++ */
++typedef int int32_t;
++
++/* ==================================== */
++
++#define _PASSWORD_EFMT1 '_'		/* extended encryption format */
++
++/*
++ * Cipher-block representation (Bob Baldwin):
++ *
++ * DES operates on groups of 64 bits, numbered 1..64 (sigh).  One
++ * representation is to store one bit per byte in an array of bytes.  Bit N of
++ * the NBS spec is stored as the LSB of the Nth byte (index N-1) in the array.
++ * Another representation stores the 64 bits in 8 bytes, with bits 1..8 in the
++ * first byte, 9..16 in the second, and so on.	The DES spec apparently has
++ * bit 1 in the MSB of the first byte, but that is particularly noxious so we
++ * bit-reverse each byte so that bit 1 is the LSB of the first byte, bit 8 is
++ * the MSB of the first byte.  Specifically, the 64-bit input data and key are
++ * converted to LSB format, and the output 64-bit block is converted back into
++ * MSB format.
++ *
++ * DES operates internally on groups of 32 bits which are expanded to 48 bits
++ * by permutation E and shrunk back to 32 bits by the S boxes.	To speed up
++ * the computation, the expansion is applied only once, the expanded
++ * representation is maintained during the encryption, and a compression
++ * permutation is applied only at the end.	To speed up the S-box lookups,
++ * the 48 bits are maintained as eight 6 bit groups, one per byte, which
++ * directly feed the eight S-boxes.  Within each byte, the 6 bits are the
++ * most significant ones.  The low two bits of each byte are zero.	(Thus,
++ * bit 1 of the 48 bit E expansion is stored as the "4"-valued bit of the
++ * first byte in the eight byte representation, bit 2 of the 48 bit value is
++ * the "8"-valued bit, and so on.)	In fact, a combined "SPE"-box lookup is
++ * used, in which the output is the 64 bit result of an S-box lookup which
++ * has been permuted by P and expanded by E, and is ready for use in the next
++ * iteration.  Two 32-bit wide tables, SPE[0] and SPE[1], are used for this
++ * lookup.	Since each byte in the 48 bit path is a multiple of four, indexed
++ * lookup of SPE[0] and SPE[1] is simple and fast.	The key schedule and
++ * "salt" are also converted to this 8*(6+2) format.  The SPE table size is
++ * 8*64*8 = 4K bytes.
++ *
++ * To speed up bit-parallel operations (such as XOR), the 8 byte
++ * representation is "union"ed with 32 bit values "i0" and "i1", and, on
++ * machines which support it, a 64 bit value "b64".  This data structure,
++ * "C_block", has two problems.  First, alignment restrictions must be
++ * honored.  Second, the byte-order (e.g. little-endian or big-endian) of
++ * the architecture becomes visible.
++ *
++ * The byte-order problem is unfortunate, since on the one hand it is good
++ * to have a machine-independent C_block representation (bits 1..8 in the
++ * first byte, etc.), and on the other hand it is good for the LSB of the
++ * first byte to be the LSB of i0.	We cannot have both these things, so we
++ * currently use the "little-endian" representation and avoid any multi-byte
++ * operations that depend on byte order.  This largely precludes use of the
++ * 64-bit datatype since the relative order of i0 and i1 are unknown.  It
++ * also inhibits grouping the SPE table to look up 12 bits at a time.  (The
++ * 12 bits can be stored in a 16-bit field with 3 low-order zeroes and 1
++ * high-order zero, providing fast indexing into a 64-bit wide SPE.)  On the
++ * other hand, 64-bit datatypes are currently rare, and a 12-bit SPE lookup
++ * requires a 128 kilobyte table, so perhaps this is not a big loss.
++ *
++ * Permutation representation (Jim Gillogly):
++ *
++ * A transformation is defined by its effect on each of the 8 bytes of the
++ * 64-bit input.  For each byte we give a 64-bit output that has the bits in
++ * the input distributed appropriately.  The transformation is then the OR
++ * of the 8 sets of 64-bits.  This uses 8*256*8 = 16K bytes of storage for
++ * each transformation.  Unless LARGEDATA is defined, however, a more compact
++ * table is used which looks up 16 4-bit "chunks" rather than 8 8-bit chunks.
++ * The smaller table uses 16*16*8 = 2K bytes for each transformation.  This
++ * is slower but tolerable, particularly for password encryption in which
++ * the SPE transformation is iterated many times.  The small tables total 9K
++ * bytes, the large tables total 72K bytes.
++ *
++ * The transformations used are:
++ * IE3264: MSB->LSB conversion, initial permutation, and expansion.
++ *	This is done by collecting the 32 even-numbered bits and applying
++ *	a 32->64 bit transformation, and then collecting the 32 odd-numbered
++ *	bits and applying the same transformation.	Since there are only
++ *	32 input bits, the IE3264 transformation table is half the size of
++ *	the usual table.
++ * CF6464: Compression, final permutation, and LSB->MSB conversion.
++ *	This is done by two trivial 48->32 bit compressions to obtain
++ *	a 64-bit block (the bit numbering is given in the "CIFP" table)
++ *	followed by a 64->64 bit "cleanup" transformation.	(It would
++ *	be possible to group the bits in the 64-bit block so that 2
++ *	identical 32->32 bit transformations could be used instead,
++ *	saving a factor of 4 in space and possibly 2 in time, but
++ *	byte-ordering and other complications rear their ugly head.
++ *	Similar opportunities/problems arise in the key schedule
++ *	transforms.)
++ * PC1ROT: MSB->LSB, PC1 permutation, rotate, and PC2 permutation.
++ *	This admittedly baroque 64->64 bit transformation is used to
++ *	produce the first code (in 8*(6+2) format) of the key schedule.
++ * PC2ROT[0]: Inverse PC2 permutation, rotate, and PC2 permutation.
++ *	It would be possible to define 15 more transformations, each
++ *	with a different rotation, to generate the entire key schedule.
++ *	To save space, however, we instead permute each code into the
++ *	next by using a transformation that "undoes" the PC2 permutation,
++ *	rotates the code, and then applies PC2.  Unfortunately, PC2
++ *	transforms 56 bits into 48 bits, dropping 8 bits, so PC2 is not
++ *	invertible.  We get around that problem by using a modified PC2
++ *	which retains the 8 otherwise-lost bits in the unused low-order
++ *	bits of each byte.	The low-order bits are cleared when the
++ *	codes are stored into the key schedule.
++ * PC2ROT[1]: Same as PC2ROT[0], but with two rotations.
++ *	This is faster than applying PC2ROT[0] twice,
++ *
++ * The Bell Labs "salt" (Bob Baldwin):
++ *
++ * The salting is a simple permutation applied to the 48-bit result of E.
++ * Specifically, if bit i (1 <= i <= 24) of the salt is set then bits i and
++ * i+24 of the result are swapped.	The salt is thus a 24 bit number, with
++ * 16777216 possible values.  (The original salt was 12 bits and could not
++ * swap bits 13..24 with 36..48.)
++ *
++ * It is possible, but ugly, to warp the SPE table to account for the salt
++ * permutation.  Fortunately, the conditional bit swapping requires only
++ * about four machine instructions and can be done on-the-fly with about an
++ * 8% performance penalty.
++ */
++
++typedef union
++{
++	unsigned char b[8];
++	struct
++	{
++		int32_t		i0;
++		int32_t		i1;
++	}			b32;
++#if defined(B64)
++	B64			b64;
++#endif
++} C_block;
++
++/*
++ * Convert twenty-four-bit long in host-order
++ * to six bits (and 2 low-order zeroes) per char little-endian format.
++ */
++#define TO_SIX_BIT(rslt, src) {				\
++		C_block cvt;				\
++		cvt.b[0] = src; src >>= 6;		\
++		cvt.b[1] = src; src >>= 6;		\
++		cvt.b[2] = src; src >>= 6;		\
++		cvt.b[3] = src;				\
++		rslt = (cvt.b32.i0 & 0x3f3f3f3fL) << 2; \
++	}
++
++/*
++ * These macros may someday permit efficient use of 64-bit integers.
++ */
++#define ZERO(d,d0,d1)			d0 = 0, d1 = 0
++#define LOAD(d,d0,d1,bl)		d0 = (bl).b32.i0, d1 = (bl).b32.i1
++#define LOADREG(d,d0,d1,s,s0,s1)	d0 = s0, d1 = s1
++#define OR(d,d0,d1,bl)			d0 |= (bl).b32.i0, d1 |= (bl).b32.i1
++#define STORE(s,s0,s1,bl)		(bl).b32.i0 = s0, (bl).b32.i1 = s1
++#define DCL_BLOCK(d,d0,d1)		int32_t d0, d1
++
++#if defined(LARGEDATA)
++ /* Waste memory like crazy.  Also, do permutations in line */
++#define LGCHUNKBITS 3
++#define CHUNKBITS	(1<<LGCHUNKBITS)
++#define PERM6464(d,d0,d1,cpp,p)				\
++	LOAD(d,d0,d1,(p)[(0<<CHUNKBITS)+(cpp)[0]]);		\
++	OR (d,d0,d1,(p)[(1<<CHUNKBITS)+(cpp)[1]]);		\
++	OR (d,d0,d1,(p)[(2<<CHUNKBITS)+(cpp)[2]]);		\
++	OR (d,d0,d1,(p)[(3<<CHUNKBITS)+(cpp)[3]]);		\
++	OR (d,d0,d1,(p)[(4<<CHUNKBITS)+(cpp)[4]]);		\
++	OR (d,d0,d1,(p)[(5<<CHUNKBITS)+(cpp)[5]]);		\
++	OR (d,d0,d1,(p)[(6<<CHUNKBITS)+(cpp)[6]]);		\
++	OR (d,d0,d1,(p)[(7<<CHUNKBITS)+(cpp)[7]]);
++#define PERM3264(d,d0,d1,cpp,p)				\
++	LOAD(d,d0,d1,(p)[(0<<CHUNKBITS)+(cpp)[0]]);		\
++	OR (d,d0,d1,(p)[(1<<CHUNKBITS)+(cpp)[1]]);		\
++	OR (d,d0,d1,(p)[(2<<CHUNKBITS)+(cpp)[2]]);		\
++	OR (d,d0,d1,(p)[(3<<CHUNKBITS)+(cpp)[3]]);
++#else
++ /* "small data" */
++#define LGCHUNKBITS 2
++#define CHUNKBITS	(1<<LGCHUNKBITS)
++#define PERM6464(d,d0,d1,cpp,p)				\
++	{ C_block tblk; permute(cpp,&tblk,p,8); LOAD (d,d0,d1,tblk); }
++#define PERM3264(d,d0,d1,cpp,p)				\
++	{ C_block tblk; permute(cpp,&tblk,p,4); LOAD (d,d0,d1,tblk); }
++#endif   /* LARGEDATA */
++
++STATIC		init_des(void);
++STATIC		init_perm(C_block[64 / CHUNKBITS][1 << CHUNKBITS], unsigned char[64], int, int);
++
++#ifndef LARGEDATA
++STATIC		permute(unsigned char *, C_block *, C_block *, int);
++#endif
++#ifdef DEBUG
++STATIC		prtab(char *, unsigned char *, int);
++#endif
++
++
++#ifndef LARGEDATA
++STATIC
++permute(cp, out, p, chars_in)
++unsigned char *cp;
++C_block    *out;
++C_block    *p;
++int			chars_in;
++{
++	DCL_BLOCK(D, D0, D1);
++	C_block    *tp;
++	int			t;
++
++	ZERO(D, D0, D1);
++	do
++	{
++		t = *cp++;
++		tp = &p[t & 0xf];
++		OR(D, D0, D1, *tp);
++		p += (1 << CHUNKBITS);
++		tp = &p[t >> 4];
++		OR(D, D0, D1, *tp);
++		p += (1 << CHUNKBITS);
++	} while (--chars_in > 0);
++	STORE(D, D0, D1, *out);
++}
++#endif   /* LARGEDATA */
++
++
++/* =====  (mostly) Standard DES Tables ==================== */
++
++static const unsigned char IP[] = {		/* initial permutation */
++	58, 50, 42, 34, 26, 18, 10, 2,
++	60, 52, 44, 36, 28, 20, 12, 4,
++	62, 54, 46, 38, 30, 22, 14, 6,
++	64, 56, 48, 40, 32, 24, 16, 8,
++	57, 49, 41, 33, 25, 17, 9, 1,
++	59, 51, 43, 35, 27, 19, 11, 3,
++	61, 53, 45, 37, 29, 21, 13, 5,
++	63, 55, 47, 39, 31, 23, 15, 7,
++};
++
++/* The final permutation is the inverse of IP - no table is necessary */
++
++static const unsigned char ExpandTr[] = {		/* expansion operation */
++	32, 1, 2, 3, 4, 5,
++	4, 5, 6, 7, 8, 9,
++	8, 9, 10, 11, 12, 13,
++	12, 13, 14, 15, 16, 17,
++	16, 17, 18, 19, 20, 21,
++	20, 21, 22, 23, 24, 25,
++	24, 25, 26, 27, 28, 29,
++	28, 29, 30, 31, 32, 1,
++};
++
++static const unsigned char PC1[] = {	/* permuted choice table 1 */
++	57, 49, 41, 33, 25, 17, 9,
++	1, 58, 50, 42, 34, 26, 18,
++	10, 2, 59, 51, 43, 35, 27,
++	19, 11, 3, 60, 52, 44, 36,
++
++	63, 55, 47, 39, 31, 23, 15,
++	7, 62, 54, 46, 38, 30, 22,
++	14, 6, 61, 53, 45, 37, 29,
++	21, 13, 5, 28, 20, 12, 4,
++};
++
++static const unsigned char Rotates[] = {		/* PC1 rotation schedule */
++	1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1,
++};
++
++/* note: each "row" of PC2 is left-padded with bits that make it invertible */
++static const unsigned char PC2[] = {	/* permuted choice table 2 */
++	9, 18, 14, 17, 11, 24, 1, 5,
++	22, 25, 3, 28, 15, 6, 21, 10,
++	35, 38, 23, 19, 12, 4, 26, 8,
++	43, 54, 16, 7, 27, 20, 13, 2,
++
++	0, 0, 41, 52, 31, 37, 47, 55,
++	0, 0, 30, 40, 51, 45, 33, 48,
++	0, 0, 44, 49, 39, 56, 34, 53,
++	0, 0, 46, 42, 50, 36, 29, 32,
++};
++
++static const unsigned char S[8][64] = { /* 48->32 bit substitution tables */
++	/* S[1]			*/
++	{14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7,
++		0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8,
++		4, 1, 14, 8, 13, 6, 2, 11, 15, 12, 9, 7, 3, 10, 5, 0,
++	15, 12, 8, 2, 4, 9, 1, 7, 5, 11, 3, 14, 10, 0, 6, 13},
++	/* S[2]			*/
++	{15, 1, 8, 14, 6, 11, 3, 4, 9, 7, 2, 13, 12, 0, 5, 10,
++		3, 13, 4, 7, 15, 2, 8, 14, 12, 0, 1, 10, 6, 9, 11, 5,
++		0, 14, 7, 11, 10, 4, 13, 1, 5, 8, 12, 6, 9, 3, 2, 15,
++	13, 8, 10, 1, 3, 15, 4, 2, 11, 6, 7, 12, 0, 5, 14, 9},
++	/* S[3]			*/
++	{10, 0, 9, 14, 6, 3, 15, 5, 1, 13, 12, 7, 11, 4, 2, 8,
++		13, 7, 0, 9, 3, 4, 6, 10, 2, 8, 5, 14, 12, 11, 15, 1,
++		13, 6, 4, 9, 8, 15, 3, 0, 11, 1, 2, 12, 5, 10, 14, 7,
++	1, 10, 13, 0, 6, 9, 8, 7, 4, 15, 14, 3, 11, 5, 2, 12},
++	/* S[4]			*/
++	{7, 13, 14, 3, 0, 6, 9, 10, 1, 2, 8, 5, 11, 12, 4, 15,
++		13, 8, 11, 5, 6, 15, 0, 3, 4, 7, 2, 12, 1, 10, 14, 9,
++		10, 6, 9, 0, 12, 11, 7, 13, 15, 1, 3, 14, 5, 2, 8, 4,
++	3, 15, 0, 6, 10, 1, 13, 8, 9, 4, 5, 11, 12, 7, 2, 14},
++	/* S[5]			*/
++	{2, 12, 4, 1, 7, 10, 11, 6, 8, 5, 3, 15, 13, 0, 14, 9,
++		14, 11, 2, 12, 4, 7, 13, 1, 5, 0, 15, 10, 3, 9, 8, 6,
++		4, 2, 1, 11, 10, 13, 7, 8, 15, 9, 12, 5, 6, 3, 0, 14,
++	11, 8, 12, 7, 1, 14, 2, 13, 6, 15, 0, 9, 10, 4, 5, 3},
++	/* S[6]			*/
++	{12, 1, 10, 15, 9, 2, 6, 8, 0, 13, 3, 4, 14, 7, 5, 11,
++		10, 15, 4, 2, 7, 12, 9, 5, 6, 1, 13, 14, 0, 11, 3, 8,
++		9, 14, 15, 5, 2, 8, 12, 3, 7, 0, 4, 10, 1, 13, 11, 6,
++	4, 3, 2, 12, 9, 5, 15, 10, 11, 14, 1, 7, 6, 0, 8, 13},
++	/* S[7]			*/
++	{4, 11, 2, 14, 15, 0, 8, 13, 3, 12, 9, 7, 5, 10, 6, 1,
++		13, 0, 11, 7, 4, 9, 1, 10, 14, 3, 5, 12, 2, 15, 8, 6,
++		1, 4, 11, 13, 12, 3, 7, 14, 10, 15, 6, 8, 0, 5, 9, 2,
++	6, 11, 13, 8, 1, 4, 10, 7, 9, 5, 0, 15, 14, 2, 3, 12},
++	/* S[8]			*/
++	{13, 2, 8, 4, 6, 15, 11, 1, 10, 9, 3, 14, 5, 0, 12, 7,
++		1, 15, 13, 8, 10, 3, 7, 4, 12, 5, 6, 11, 0, 14, 9, 2,
++		7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8,
++	2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11}
++};
++
++static const unsigned char P32Tr[] = {	/* 32-bit permutation function */
++	16, 7, 20, 21,
++	29, 12, 28, 17,
++	1, 15, 23, 26,
++	5, 18, 31, 10,
++	2, 8, 24, 14,
++	32, 27, 3, 9,
++	19, 13, 30, 6,
++	22, 11, 4, 25,
++};
++
++static const unsigned char CIFP[] = {	/* compressed/interleaved permutation */
++	1, 2, 3, 4, 17, 18, 19, 20,
++	5, 6, 7, 8, 21, 22, 23, 24,
++	9, 10, 11, 12, 25, 26, 27, 28,
++	13, 14, 15, 16, 29, 30, 31, 32,
++
++	33, 34, 35, 36, 49, 50, 51, 52,
++	37, 38, 39, 40, 53, 54, 55, 56,
++	41, 42, 43, 44, 57, 58, 59, 60,
++	45, 46, 47, 48, 61, 62, 63, 64,
++};
++
++static const unsigned char itoa64[] =	/* 0..63 => ascii-64 */
++"./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
++
++
++/* =====  Tables that are initialized at run time  ==================== */
++
++
++static unsigned char a64toi[128];		/* ascii-64 => 0..63 */
++
++/* Initial key schedule permutation */
++static C_block PC1ROT[64 / CHUNKBITS][1 << CHUNKBITS];
++
++/* Subsequent key schedule rotation permutations */
++static C_block PC2ROT[2][64 / CHUNKBITS][1 << CHUNKBITS];
++
++/* Initial permutation/expansion table */
++static C_block IE3264[32 / CHUNKBITS][1 << CHUNKBITS];
++
++/* Table that combines the S, P, and E operations.	*/
++static int32_t SPE[2][8][64];
++
++/* compressed/interleaved => final permutation table */
++static C_block CF6464[64 / CHUNKBITS][1 << CHUNKBITS];
++
++
++/* ==================================== */
++
++
++static C_block constdatablock;	/* encryption constant */
++static char cryptresult[1 + 4 + 4 + 11 + 1];	/* encrypted result */
++
++extern char *__md5crypt(const char *, const char *);	/* XXX */
++extern char *__bcrypt(const char *, const char *);		/* XXX */
++
++
++/*
++ * Return a pointer to static data consisting of the "setting"
++ * followed by an encryption produced by the "key" and "setting".
++ */
++char *
++crypt(key, setting)
++const char *key;
++const char *setting;
++{
++	char	   *encp;
++	int32_t		i;
++	int			t;
++	int32_t		salt;
++	int			num_iter,
++				salt_size;
++	C_block		keyblock,
++				rsltblock;
++
++#if 0
++	/* Non-DES encryption schemes hook in here. */
++	if (setting[0] == _PASSWORD_NONDES)
++	{
++		switch (setting[1])
++		{
++			case '2':
++				return (__bcrypt(key, setting));
++			case '1':
++			default:
++				return (__md5crypt(key, setting));
++		}
++	}
++#endif
++
++	for (i = 0; i < 8; i++)
++	{
++		if ((t = 2 * (unsigned char) (*key)) != 0)
++			key++;
++		keyblock.b[i] = t;
++	}
++	if (des_setkey((char *) keyblock.b))		/* also initializes "a64toi" */
++		return (NULL);
++
++	encp = &cryptresult[0];
++	switch (*setting)
++	{
++		case _PASSWORD_EFMT1:
++
++			/*
++			 * Involve the rest of the password 8 characters at a time.
++			 */
++			while (*key)
++			{
++				if (des_cipher((char *) (void *) &keyblock,
++							   (char *) (void *) &keyblock, 0L, 1))
++					return (NULL);
++				for (i = 0; i < 8; i++)
++				{
++					if ((t = 2 * (unsigned char) (*key)) != 0)
++						key++;
++					keyblock.b[i] ^= t;
++				}
++				if (des_setkey((char *) keyblock.b))
++					return (NULL);
++			}
++
++			*encp++ = *setting++;
++
++			/* get iteration count */
++			num_iter = 0;
++			for (i = 4; --i >= 0;)
++			{
++				if ((t = (unsigned char) setting[i]) == '\0')
++					t = '.';
++				encp[i] = t;
++				num_iter = (num_iter << 6) | a64toi[t];
++			}
++			setting += 4;
++			encp += 4;
++			salt_size = 4;
++			break;
++		default:
++			num_iter = 25;
++			salt_size = 2;
++	}
++
++	salt = 0;
++	for (i = salt_size; --i >= 0;)
++	{
++		if ((t = (unsigned char) setting[i]) == '\0')
++			t = '.';
++		encp[i] = t;
++		salt = (salt << 6) | a64toi[t];
++	}
++	encp += salt_size;
++	if (des_cipher((char *) (void *) &constdatablock,
++				   (char *) (void *) &rsltblock, salt, num_iter))
++		return (NULL);
++
++	/*
++	 * Encode the 64 cipher bits as 11 ascii characters.
++	 */
++	i = ((int32_t) ((rsltblock.b[0] << 8) | rsltblock.b[1]) << 8) |
++		rsltblock.b[2];
++	encp[3] = itoa64[i & 0x3f];
++	i >>= 6;
++	encp[2] = itoa64[i & 0x3f];
++	i >>= 6;
++	encp[1] = itoa64[i & 0x3f];
++	i >>= 6;
++	encp[0] = itoa64[i];
++	encp += 4;
++	i = ((int32_t) ((rsltblock.b[3] << 8) | rsltblock.b[4]) << 8) |
++		rsltblock.b[5];
++	encp[3] = itoa64[i & 0x3f];
++	i >>= 6;
++	encp[2] = itoa64[i & 0x3f];
++	i >>= 6;
++	encp[1] = itoa64[i & 0x3f];
++	i >>= 6;
++	encp[0] = itoa64[i];
++	encp += 4;
++	i = ((int32_t) ((rsltblock.b[6]) << 8) | rsltblock.b[7]) << 2;
++	encp[2] = itoa64[i & 0x3f];
++	i >>= 6;
++	encp[1] = itoa64[i & 0x3f];
++	i >>= 6;
++	encp[0] = itoa64[i];
++
++	encp[3] = 0;
++
++	return (cryptresult);
++}
++
++
++/*
++ * The Key Schedule, filled in by des_setkey() or setkey().
++ */
++#define KS_SIZE 16
++static C_block KS[KS_SIZE];
++
++static volatile int des_ready = 0;
++
++/*
++ * Set up the key schedule from the key.
++ */
++static int
++des_setkey(key)
++const char *key;
++{
++	DCL_BLOCK(K, K0, K1);
++	C_block    *ptabp;
++	int			i;
++
++	if (!des_ready)
++		init_des();
++
++	PERM6464(K, K0, K1, (unsigned char *) key, (C_block *) PC1ROT);
++	key = (char *) &KS[0];
++	STORE(K & ~0x03030303L, K0 & ~0x03030303L, K1, *(C_block *) key);
++	for (i = 1; i < 16; i++)
++	{
++		key += sizeof(C_block);
++		STORE(K, K0, K1, *(C_block *) key);
++		ptabp = (C_block *) PC2ROT[Rotates[i] - 1];
++		PERM6464(K, K0, K1, (unsigned char *) key, ptabp);
++		STORE(K & ~0x03030303L, K0 & ~0x03030303L, K1, *(C_block *) key);
++	}
++	return (0);
++}
++
++/*
++ * Encrypt (or decrypt if num_iter < 0) the 8 chars at "in" with abs(num_iter)
++ * iterations of DES, using the given 24-bit salt and the pre-computed key
++ * schedule, and store the resulting 8 chars at "out" (in == out is permitted).
++ *
++ * NOTE: the performance of this routine is critically dependent on your
++ * compiler and machine architecture.
++ */
++static int
++des_cipher(in, out, salt, num_iter)
++const char *in;
++char	   *out;
++long		salt;
++int			num_iter;
++{
++	/* variables that we want in registers, most important first */
++#if defined(pdp11)
++	int			j;
++#endif
++	int32_t		L0,
++				L1,
++				R0,
++				R1,
++				k;
++	C_block    *kp;
++	int			ks_inc,
++				loop_count;
++	C_block		B;
++
++	L0 = salt;
++	TO_SIX_BIT(salt, L0);		/* convert to 4*(6+2) format */
++
++#if defined(__vax__) || defined(pdp11)
++	salt = ~salt;				/* "x &~ y" is faster than "x & y". */
++#define SALT (~salt)
++#else
++#define SALT salt
++#endif
++
++#if defined(MUST_ALIGN)
++	B.b[0] = in[0];
++	B.b[1] = in[1];
++	B.b[2] = in[2];
++	B.b[3] = in[3];
++	B.b[4] = in[4];
++	B.b[5] = in[5];
++	B.b[6] = in[6];
++	B.b[7] = in[7];
++	LOAD(L, L0, L1, B);
++#else
++	LOAD(L, L0, L1, *(C_block *) in);
++#endif
++	LOADREG(R, R0, R1, L, L0, L1);
++	L0 &= 0x55555555L;
++	L1 &= 0x55555555L;
++	L0 = (L0 << 1) | L1;		/* L0 is the even-numbered input bits */
++	R0 &= 0xaaaaaaaaL;
++	R1 = (R1 >> 1) & 0x55555555L;
++	L1 = R0 | R1;				/* L1 is the odd-numbered input bits */
++	STORE(L, L0, L1, B);
++	PERM3264(L, L0, L1, B.b, (C_block *) IE3264);		/* even bits */
++	PERM3264(R, R0, R1, B.b + 4, (C_block *) IE3264);	/* odd bits */
++
++	if (num_iter >= 0)
++	{							/* encryption */
++		kp = &KS[0];
++		ks_inc = sizeof(*kp);
++	}
++	else
++	{							/* decryption */
++		num_iter = -num_iter;
++		kp = &KS[KS_SIZE - 1];
++		ks_inc = -(long) sizeof(*kp);
++	}
++
++	while (--num_iter >= 0)
++	{
++		loop_count = 8;
++		do
++		{
++
++#define SPTAB(t, i) \
++		(*(int32_t *)((unsigned char *)(t) + (i)*(sizeof(int32_t)/4)))
++#if defined(gould)
++			/* use this if B.b[i] is evaluated just once ... */
++#define DOXOR(x,y,i)	x^=SPTAB(SPE[0][i],B.b[i]); y^=SPTAB(SPE[1][i],B.b[i]);
++#else
++#if defined(pdp11)
++			/* use this if your "long" int indexing is slow */
++#define DOXOR(x,y,i)	j=B.b[i]; x^=SPTAB(SPE[0][i],j); y^=SPTAB(SPE[1][i],j);
++#else
++			/* use this if "k" is allocated to a register ... */
++#define DOXOR(x,y,i)	k=B.b[i]; x^=SPTAB(SPE[0][i],k); y^=SPTAB(SPE[1][i],k);
++#endif
++#endif
++
++#define CRUNCH(p0, p1, q0, q1)	\
++			k = ((q0) ^ (q1)) & SALT;				\
++			B.b32.i0 = k ^ (q0) ^ kp->b32.i0;		\
++			B.b32.i1 = k ^ (q1) ^ kp->b32.i1;		\
++			kp = (C_block *)((char *)kp+ks_inc);	\
++							\
++			DOXOR(p0, p1, 0);		\
++			DOXOR(p0, p1, 1);		\
++			DOXOR(p0, p1, 2);		\
++			DOXOR(p0, p1, 3);		\
++			DOXOR(p0, p1, 4);		\
++			DOXOR(p0, p1, 5);		\
++			DOXOR(p0, p1, 6);		\
++			DOXOR(p0, p1, 7);
++
++			CRUNCH(L0, L1, R0, R1);
++			CRUNCH(R0, R1, L0, L1);
++		} while (--loop_count != 0);
++		kp = (C_block *) ((char *) kp - (ks_inc * KS_SIZE));
++
++
++		/* swap L and R */
++		L0 ^= R0;
++		L1 ^= R1;
++		R0 ^= L0;
++		R1 ^= L1;
++		L0 ^= R0;
++		L1 ^= R1;
++	}
++
++	/* store the encrypted (or decrypted) result */
++	L0 = ((L0 >> 3) & 0x0f0f0f0fL) | ((L1 << 1) & 0xf0f0f0f0L);
++	L1 = ((R0 >> 3) & 0x0f0f0f0fL) | ((R1 << 1) & 0xf0f0f0f0L);
++	STORE(L, L0, L1, B);
++	PERM6464(L, L0, L1, B.b, (C_block *) CF6464);
++#if defined(MUST_ALIGN)
++	STORE(L, L0, L1, B);
++	out[0] = B.b[0];
++	out[1] = B.b[1];
++	out[2] = B.b[2];
++	out[3] = B.b[3];
++	out[4] = B.b[4];
++	out[5] = B.b[5];
++	out[6] = B.b[6];
++	out[7] = B.b[7];
++#else
++	STORE(L, L0, L1, *(C_block *) out);
++#endif
++	return (0);
++}
++
++
++/*
++ * Initialize various tables.  This need only be done once.  It could even be
++ * done at compile time, if the compiler were capable of that sort of thing.
++ */
++STATIC
++init_des()
++{
++	int			i,
++				j;
++	int32_t		k;
++	int			tableno;
++	static unsigned char perm[64],
++				tmp32[32];		/* "static" for speed */
++
++/*	static volatile long init_start = 0; not used */
++
++	/*
++	 * table that converts chars "./0-9A-Za-z"to integers 0-63.
++	 */
++	for (i = 0; i < 64; i++)
++		a64toi[itoa64[i]] = i;
++
++	/*
++	 * PC1ROT - bit reverse, then PC1, then Rotate, then PC2.
++	 */
++	for (i = 0; i < 64; i++)
++		perm[i] = 0;
++	for (i = 0; i < 64; i++)
++	{
++		if ((k = PC2[i]) == 0)
++			continue;
++		k += Rotates[0] - 1;
++		if ((k % 28) < Rotates[0])
++			k -= 28;
++		k = PC1[k];
++		if (k > 0)
++		{
++			k--;
++			k = (k | 07) - (k & 07);
++			k++;
++		}
++		perm[i] = k;
++	}
++#ifdef DEBUG
++	prtab("pc1tab", perm, 8);
++#endif
++	init_perm(PC1ROT, perm, 8, 8);
++
++	/*
++	 * PC2ROT - PC2 inverse, then Rotate (once or twice), then PC2.
++	 */
++	for (j = 0; j < 2; j++)
++	{
++		unsigned char pc2inv[64];
++
++		for (i = 0; i < 64; i++)
++			perm[i] = pc2inv[i] = 0;
++		for (i = 0; i < 64; i++)
++		{
++			if ((k = PC2[i]) == 0)
++				continue;
++			pc2inv[k - 1] = i + 1;
++		}
++		for (i = 0; i < 64; i++)
++		{
++			if ((k = PC2[i]) == 0)
++				continue;
++			k += j;
++			if ((k % 28) <= j)
++				k -= 28;
++			perm[i] = pc2inv[k];
++		}
++#ifdef DEBUG
++		prtab("pc2tab", perm, 8);
++#endif
++		init_perm(PC2ROT[j], perm, 8, 8);
++	}
++
++	/*
++	 * Bit reverse, then initial permutation, then expansion.
++	 */
++	for (i = 0; i < 8; i++)
++	{
++		for (j = 0; j < 8; j++)
++		{
++			k = (j < 2) ? 0 : IP[ExpandTr[i * 6 + j - 2] - 1];
++			if (k > 32)
++				k -= 32;
++			else if (k > 0)
++				k--;
++			if (k > 0)
++			{
++				k--;
++				k = (k | 07) - (k & 07);
++				k++;
++			}
++			perm[i * 8 + j] = k;
++		}
++	}
++#ifdef DEBUG
++	prtab("ietab", perm, 8);
++#endif
++	init_perm(IE3264, perm, 4, 8);
++
++	/*
++	 * Compression, then final permutation, then bit reverse.
++	 */
++	for (i = 0; i < 64; i++)
++	{
++		k = IP[CIFP[i] - 1];
++		if (k > 0)
++		{
++			k--;
++			k = (k | 07) - (k & 07);
++			k++;
++		}
++		perm[k - 1] = i + 1;
++	}
++#ifdef DEBUG
++	prtab("cftab", perm, 8);
++#endif
++	init_perm(CF6464, perm, 8, 8);
++
++	/*
++	 * SPE table
++	 */
++	for (i = 0; i < 48; i++)
++		perm[i] = P32Tr[ExpandTr[i] - 1];
++	for (tableno = 0; tableno < 8; tableno++)
++	{
++		for (j = 0; j < 64; j++)
++		{
++			k = (((j >> 0) & 01) << 5) |
++				(((j >> 1) & 01) << 3) |
++				(((j >> 2) & 01) << 2) |
++				(((j >> 3) & 01) << 1) |
++				(((j >> 4) & 01) << 0) |
++				(((j >> 5) & 01) << 4);
++			k = S[tableno][k];
++			k = (((k >> 3) & 01) << 0) |
++				(((k >> 2) & 01) << 1) |
++				(((k >> 1) & 01) << 2) |
++				(((k >> 0) & 01) << 3);
++			for (i = 0; i < 32; i++)
++				tmp32[i] = 0;
++			for (i = 0; i < 4; i++)
++				tmp32[4 * tableno + i] = (k >> i) & 01;
++			k = 0;
++			for (i = 24; --i >= 0;)
++				k = (k << 1) | tmp32[perm[i] - 1];
++			TO_SIX_BIT(SPE[0][tableno][j], k);
++			k = 0;
++			for (i = 24; --i >= 0;)
++				k = (k << 1) | tmp32[perm[i + 24] - 1];
++			TO_SIX_BIT(SPE[1][tableno][j], k);
++		}
++	}
++
++	des_ready = 1;
++}
++
++/*
++ * Initialize "perm" to represent transformation "p", which rearranges
++ * (perhaps with expansion and/or contraction) one packed array of bits
++ * (of size "chars_in" characters) into another array (of size "chars_out"
++ * characters).
++ *
++ * "perm" must be all-zeroes on entry to this routine.
++ */
++STATIC
++init_perm(perm, p, chars_in, chars_out)
++C_block		perm[64 / CHUNKBITS][1 << CHUNKBITS];
++unsigned char p[64];
++int			chars_in,
++			chars_out;
++{
++	int			i,
++				j,
++				k,
++				l;
++
++	for (k = 0; k < chars_out * 8; k++)
++	{							/* each output bit position */
++		l = p[k] - 1;			/* where this bit comes from */
++		if (l < 0)
++			continue;			/* output bit is always 0 */
++		i = l >> LGCHUNKBITS;	/* which chunk this bit comes from */
++		l = 1 << (l & (CHUNKBITS - 1)); /* mask for this bit */
++		for (j = 0; j < (1 << CHUNKBITS); j++)
++		{						/* each chunk value */
++			if ((j & l) != 0)
++				perm[i][j].b[k >> 3] |= 1 << (k & 07);
++		}
++	}
++}
++
++/*
++ * "setkey" routine (for backwards compatibility)
++ */
++#ifdef NOT_USED
++int
++setkey(key)
++const char *key;
++{
++	int			i,
++				j,
++				k;
++	C_block		keyblock;
++
++	for (i = 0; i < 8; i++)
++	{
++		k = 0;
++		for (j = 0; j < 8; j++)
++		{
++			k <<= 1;
++			k |= (unsigned char) *key++;
++		}
++		keyblock.b[i] = k;
++	}
++	return (des_setkey((char *) keyblock.b));
++}
++
++/*
++ * "encrypt" routine (for backwards compatibility)
++ */
++static int
++encrypt(block, flag)
++char	   *block;
++int			flag;
++{
++	int			i,
++				j,
++				k;
++	C_block		cblock;
++
++	for (i = 0; i < 8; i++)
++	{
++		k = 0;
++		for (j = 0; j < 8; j++)
++		{
++			k <<= 1;
++			k |= (unsigned char) *block++;
++		}
++		cblock.b[i] = k;
++	}
++	if (des_cipher((char *) &cblock, (char *) &cblock, 0L, (flag ? -1 : 1)))
++		return (1);
++	for (i = 7; i >= 0; i--)
++	{
++		k = cblock.b[i];
++		for (j = 7; j >= 0; j--)
++		{
++			*--block = k & 01;
++			k >>= 1;
++		}
++	}
++	return (0);
++}
++#endif
++
++#ifdef DEBUG
++STATIC
++prtab(s, t, num_rows)
++char	   *s;
++unsigned char *t;
++int			num_rows;
++{
++	int			i,
++				j;
++
++	(void) printf("%s:\n", s);
++	for (i = 0; i < num_rows; i++)
++	{
++		for (j = 0; j < 8; j++)
++			(void) printf("%3d", t[i * 8 + j]);
++		(void) printf("\n");
++	}
++	(void) printf("\n");
++}
++
++#endif
++#endif
++
+ /* This defines the Andrew string_to_key function.  It accepts a password
+  * string as input and converts it via a one-way encryption algorithm to a DES
+  * encryption key.  It is compatible with the original Andrew authentication
+--- lib/krb5/verify_krb5_conf.c	Tue Feb 18 23:33:47 2014
++++ lib/krb5/verify_krb5_conf.c	Fri Sep 26 14:46:46 2014
+@@ -35,7 +35,9 @@
+ #include <getarg.h>
+ #include <parse_bytes.h>
+ #include <err.h>
+-
++#ifdef _WIN32
++#include <syslog.h>
++#endif
+ /* verify krb5.conf */
+ 
+ static int dumpconfig_flag = 0;
+--- lib/roken/daemon.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/daemon.c	Fri Sep 26 14:46:46 2014
+@@ -26,6 +26,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
++#ifndef __MINGW32__
+ 
+ #if defined(LIBC_SCCS) && !defined(lint)
+ static char sccsid[] = "@(#)daemon.c	8.1 (Berkeley) 6/4/93";
+@@ -78,3 +79,4 @@
+ }
+ 
+ #endif /* HAVE_DAEMON */
++#endif
+\ No newline at end of file
+--- lib/roken/freeaddrinfo.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/freeaddrinfo.c	Fri Sep 26 14:46:46 2014
+@@ -31,6 +31,7 @@
+  * SUCH DAMAGE.
+  */
+ 
++#ifndef __MINGW32__
+ #include <config.h>
+ 
+ #include "roken.h"
+@@ -52,3 +53,4 @@
+ 	free (tofree);
+     }
+ }
++#endif
+\ No newline at end of file
+--- lib/roken/gai_strerror.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/gai_strerror.c	Fri Sep 26 14:46:46 2014
+@@ -30,7 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef __MINGW32__
+ #include <config.h>
+ 
+ #include "roken.h"
+@@ -72,3 +72,4 @@
+ 	    return g->str;
+     return "unknown error code in gai_strerror";
+ }
++#endif
+\ No newline at end of file
+--- lib/roken/getaddrinfo.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/getaddrinfo.c	Fri Sep 26 14:46:46 2014
+@@ -30,7 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef __MINGW32__
+ #include <config.h>
+ 
+ #include "roken.h"
+@@ -412,3 +412,4 @@
+ 	freeaddrinfo (*res);
+     return ret;
+ }
++#endif
+\ No newline at end of file
+--- lib/roken/getifaddrs.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/getifaddrs.c	Fri Sep 26 14:46:46 2014
+@@ -53,6 +53,130 @@
+ 
+ #include <ifaddrs.h>
+ 
++#ifdef _WIN32
++
++static struct sockaddr *
++dupaddr(const sockaddr_gen * src)
++{
++    sockaddr_gen * d = malloc(sizeof(*d));
++
++    if (d) {
++	memcpy(d, src, sizeof(*d));
++    }
++
++    return (struct sockaddr *) d;
++}
++
++int ROKEN_LIB_FUNCTION
++rk_getifaddrs(struct ifaddrs **ifpp)
++{
++    SOCKET s = INVALID_SOCKET;
++    size_t il_len = 8192;
++    int ret = -1;
++    INTERFACE_INFO *il = NULL;
++
++    *ifpp = NULL;
++
++    s = socket(AF_INET, SOCK_DGRAM, 0);
++    if (s == INVALID_SOCKET)
++	return -1;
++
++    for (;;) {
++	DWORD cbret = 0;
++
++	il = malloc(il_len);
++	if (!il)
++	    break;
++
++	ZeroMemory(il, il_len);
++
++	if (WSAIoctl(s, SIO_GET_INTERFACE_LIST, NULL, 0,
++		     (LPVOID) il, (DWORD) il_len, &cbret,
++		     NULL, NULL) == 0) {
++	    il_len = cbret;
++	    break;
++	}
++
++	free (il);
++	il = NULL;
++
++	if (WSAGetLastError() == WSAEFAULT && cbret > il_len) {
++	    il_len = cbret;
++	} else {
++	    break;
++	}
++    }
++
++    if (!il)
++	goto _exit;
++
++    /* il is an array of INTERFACE_INFO structures.  il_len has the
++       actual size of the buffer.  The number of elements is
++       il_len/sizeof(INTERFACE_INFO) */
++
++    {
++	size_t n = il_len / sizeof(INTERFACE_INFO);
++	size_t i;
++
++	for (i = 0; i < n; i++ ) {
++	    struct ifaddrs *ifp;
++
++	    ifp = malloc(sizeof(*ifp));
++	    if (ifp == NULL)
++		break;
++
++	    ZeroMemory(ifp, sizeof(*ifp));
++
++	    ifp->ifa_next = NULL;
++	    ifp->ifa_name = NULL;
++	    ifp->ifa_flags = il[i].iiFlags;
++	    ifp->ifa_addr = dupaddr(&il[i].iiAddress);
++	    ifp->ifa_netmask = dupaddr(&il[i].iiNetmask);
++	    ifp->ifa_broadaddr = dupaddr(&il[i].iiBroadcastAddress);
++	    ifp->ifa_data = NULL;
++
++	    *ifpp = ifp;
++	    ifpp = &ifp->ifa_next;
++	}
++
++	if (i == n)
++	    ret = 0;
++    }
++
++ _exit:
++
++    if (s != INVALID_SOCKET)
++	closesocket(s);
++
++    if (il)
++	free (il);
++
++    return ret;
++}
++
++void ROKEN_LIB_FUNCTION
++rk_freeifaddrs(struct ifaddrs *ifp)
++{
++    struct ifaddrs *p, *q;
++
++    for(p = ifp; p; ) {
++	if (p->ifa_name)
++	    free(p->ifa_name);
++	if(p->ifa_addr)
++	    free(p->ifa_addr);
++	if(p->ifa_dstaddr)
++	    free(p->ifa_dstaddr);
++	if(p->ifa_netmask)
++	    free(p->ifa_netmask);
++	if(p->ifa_data)
++	    free(p->ifa_data);
++	q = p;
++	p = p->ifa_next;
++	free(q);
++    }
++}
++#else
++
+ #ifdef __hpux
+ #define lifconf if_laddrconf
+ #define lifc_len iflc_len
+@@ -1307,3 +1431,4 @@
+     return 0;
+ }
+ #endif
++#endif
+\ No newline at end of file
+--- lib/roken/getipnodebyname.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/getipnodebyname.c	Fri Sep 26 14:46:46 2014
+@@ -30,7 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef __MINGW32__
+ #include <config.h>
+ 
+ #include "roken.h"
+@@ -81,3 +81,4 @@
+     }
+     return tmp;
+ }
++#endif
+\ No newline at end of file
+--- lib/roken/getnameinfo.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/getnameinfo.c	Fri Sep 26 14:46:46 2014
+@@ -30,7 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef __MINGW32__
+ #include <config.h>
+ 
+ #include "roken.h"
+@@ -122,3 +122,4 @@
+ 	return EAI_FAMILY;
+     }
+ }
++#endif
+\ No newline at end of file
+--- lib/roken/getxxyyy.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/getxxyyy.c	Fri Sep 26 14:46:46 2014
+@@ -30,7 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef __MINGW32__
+ #include <config.h>
+ 
+ #include "roken.h"
+@@ -133,5 +133,7 @@
+ 
+     return 0;
+ }
++
++#endif
+ 
+ #endif
+--- lib/roken/glob.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/glob.c	Wed Oct 01 08:27:45 2014
+@@ -85,6 +85,511 @@
+ #include <limits.h>
+ #endif
+ 
++#ifdef _WIN32
++#include "roken.h"
++#include <assert.h>
++#include <windows.h>
++#include <stddef.h>
++
++/* /////////////////////////////////////////////////////////////////////////
++ * Home:    http://synesis.com.au/software/
++ *
++ * Copyright (c) 2002-2010, Matthew Wilson and Synesis Software
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are
++ * met:
++ *
++ * - Redistributions of source code must retain the above copyright notice,
++ *   this list of conditions and the following disclaimer.
++ * - Redistributions in binary form must reproduce the above copyright
++ *   notice, this list of conditions and the following disclaimer in the
++ *   documentation and/or other materials provided with the distribution.
++ * - Neither the name(s) of Matthew Wilson and Synesis Software nor the
++ *   names of any contributors may be used to endorse or promote products
++ *   derived from this software without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
++ * IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
++ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
++ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
++ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
++ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
++ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
++ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
++ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
++ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
++ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ *
++ * ////////////////////////////////////////////////////////////////////// */
++
++/* Error codes */
++#define GLOB_NOSPACE         (1)                 /*!< (Error result code:) An attempt to allocate memory failed, or if errno was 0 GLOB_LIMIT was specified in the flags and ARG_MAX patterns were matched. */
++#define GLOB_ABORTED         (2)                 /*!< (Error result code:) The scan was stopped because an error was encountered and either GLOB_ERR was set or (*errfunc)() returned non-zero. */
++#define GLOB_NOMATCH         (3)                 /*!< (Error result code:) The pattern does not match any existing pathname, and GLOB_NOCHECK was not set int flags. */
++#define GLOB_NOSYS           (4)                 /*!< (Error result code:) . */
++#define GLOB_ABEND           GLOB_ABORTED /*!< (Error result code:) . */
++
++/* Flags */
++#define GLOB_ERR             0x00000001          /*!< Return on read errors. */
++#define GLOB_MARK            0x00000002          /*!< Append a slash to each name. */
++#define GLOB_NOSORT          0x00000004          /*!< Don't sort the names. */
++#define GLOB_DOOFFS          0x00000008          /*!< Insert PGLOB->gl_offs NULLs. Supported from version 1.6 of UNIXem. */
++#define GLOB_NOCHECK         0x00000010          /*!< If nothing matches, return the pattern. Supported from version 1.6 of UNIXem. */
++/* #define GLOB_APPEND          0x00000020     */     /*!< Append to results of a previous call. Not currently supported in this implementation. */
++#define GLOB_NOESCAPE        0x00000040          /*!< Backslashes don't quote metacharacters. Has no effect in this implementation, since escaping is not supported. */
++
++#define GLOB_PERIOD          0x00000080          /*!< Leading `.' can be matched by metachars. Supported from version 1.6 of UNIXem. */
++#define GLOB_MAGCHAR         0x00000100          /*!< Set in gl_flags if any metachars seen. Supported from version 1.6 of UNIXem. */
++/* #define GLOB_ALTDIRFUNC      0x00000200 */       /*!< Use gl_opendir et al functions. Not currently supported in this implementation. */
++/* #define GLOB_BRACE           0x00000400 */       /*!< Expand "{a,b}" to "a" "b". Not currently supported in this implementation. */
++#define GLOB_NOMAGIC         0x00000800          /*!< If no magic chars, return the pattern. Supported from version 1.6 of UNIXem. */
++#define GLOB_TILDE           0x00001000          /*!< Expand ~user and ~ to home directories. Partially supported from version 1.6 of UNIXem: leading ~ is expanded to %HOMEDRIVE%%HOMEPATH%. */
++#define GLOB_ONLYDIR         0x00002000          /*!< Match only directories. This implementation guarantees to only return directories when this flag is specified. */
++#define GLOB_TILDE_CHECK     0x00004000          /*!< Like GLOB_TILDE but return an GLOB_NOMATCH even if GLOB_NOCHECK specified. Supported from version 1.6 of UNIXem. */
++#define GLOB_ONLYFILE        0x00008000          /*!< Match only files. Supported from version 1.6 of UNIXem. */
++#define GLOB_NODOTSDIRS      0x00010000          /*!< Elide "." and ".." directories from wildcard searches. Supported from version 1.6 of UNIXem. */
++#define GLOB_LIMIT           0x00020000          /*!< Limits the search to the number specified by the caller in gl_matchc. Supported from version 1.6 of UNIXem. */
++
++typedef struct
++{
++  int       gl_pathc;   /*!< count of total paths so far */
++  int       gl_matchc;  /*!< count of paths matching pattern */
++  int       gl_offs;    /*!< reserved at beginning of gl_pathv */
++  int       gl_flags;   /*!< returned flags */
++  char**    gl_pathv; /*!< list of paths matching pattern */
++} glob_t;
++
++int glob(
++    char const*     pattern
++,   int             flags
++#if defined(__COMO__)
++,   int           (*errfunc)(char const*, int)
++#else /* ? compiler */
++,   const int     (*errfunc)(char const*, int)
++#endif /* compiler */
++,   glob_t*  pglob
++);
++
++/** Frees the results of a call to glob()
++ *
++ * This function releases any memory allocated in a call to glob().
++ * It must always be called for a successful call to glob().
++ *
++ * \param pglob Pointer to a glob_t structure to receive the search results
++ */
++void globfree(glob_t* pglob);
++
++
++char const* strrpbrk(char const* string, char const* strCharSet);
++
++int fsync(int fd) ;
++
++#define NUM_ELEMENTS(ar)      (sizeof(ar) / sizeof(0[ar]))
++
++#define USING_SAFE_STR_FUNCTIONS 1
++
++int fsync(int fd) 
++{
++  _commit(fd);
++}
++
++char const* strrpbrk(char const* string, char const* strCharSet)
++{
++    char*       part = NULL;
++    char const* pch;
++
++    for(pch = strCharSet; *pch; ++pch)
++    {
++        char* p = strrchr(string, *pch);
++
++        if(NULL != p)
++        {
++            if(NULL == part)
++            {
++                part = p;
++            }
++            else
++            {
++                if(part < p)
++                {
++                    part = p;
++                }
++            }
++        }
++    }
++
++    return part;
++}
++
++int glob(
++    char const*     pattern
++,   int             flags
++#if defined(__COMO__)
++, int             (*errfunc)(char const *, int)
++#else /* ? compiler */
++, const int       (*errfunc)(char const *, int)
++#endif /* compiler */
++,   glob_t*  pglob
++)
++{
++    int                 result;
++    char                szRelative[1 + _MAX_PATH];
++    char const*         file_part;
++    WIN32_FIND_DATAA    find_data;
++    HANDLE              hFind;
++    char*               buffer;
++    char                szPattern2[1 + _MAX_PATH];
++    char                szPattern3[1 + _MAX_PATH];
++    char const*         effectivePattern   =   pattern;
++    char const*         leafMost;
++    const int           bMagic              =   (NULL != strpbrk(pattern, "?*"));
++    int                 bNoMagic            =   0;
++    int                 bMagic0;
++    size_t              maxMatches          =   ~(size_t)(0);
++
++    assert(NULL != pglob);
++
++    if(flags & GLOB_NOMAGIC)
++    {
++        bNoMagic = !bMagic;
++    }
++
++    if(flags & GLOB_LIMIT)
++    {
++        maxMatches = (size_t)pglob->gl_matchc;
++    }
++
++    if(flags & GLOB_TILDE)
++    {
++        /* Check that begins with "~/" */
++        if( '~' == pattern[0] &&
++            (   '\0' == pattern[1] ||
++                '/' == pattern[1] ||
++                '\\' == pattern[1]))
++        {
++            DWORD   dw;
++
++            (void)lstrcpyA(&szPattern2[0], "%HOMEDRIVE%%HOMEPATH%");
++
++            dw = ExpandEnvironmentStringsA(&szPattern2[0], &szPattern3[0], NUM_ELEMENTS(szPattern3) - 1);
++
++            if(0 != dw)
++            {
++                (void)lstrcpynA(&szPattern3[0] + dw - 1, &pattern[1], (int)(NUM_ELEMENTS(szPattern3) - dw));
++                szPattern3[NUM_ELEMENTS(szPattern3) - 1] = '\0';
++
++                effectivePattern = szPattern3;
++            }
++        }
++    }
++
++    file_part = strrpbrk(effectivePattern, "\\/");
++
++    if(NULL != file_part)
++    {
++        leafMost = ++file_part;
++
++        (void)lstrcpyA(szRelative, effectivePattern);
++        szRelative[file_part - effectivePattern] = '\0';
++    }
++    else
++    {
++        szRelative[0] = '\0';
++        leafMost = effectivePattern;
++    }
++
++    bMagic0 =   (leafMost == strpbrk(leafMost, "?*"));
++
++    hFind   =   FindFirstFileA(effectivePattern, &find_data);
++    buffer  =   NULL;
++
++    pglob->gl_pathc = 0;
++    pglob->gl_pathv = NULL;
++
++    if(0 == (flags & GLOB_DOOFFS))
++    {
++        pglob->gl_offs = 0;
++    }
++
++    if(hFind == INVALID_HANDLE_VALUE)
++    {
++        /* If this was a pattern search, and the
++         * directory exists, then we return 0
++         * matches, rather than GLOB_NOMATCH
++         */
++        if( bMagic &&
++            NULL != file_part)
++        {
++            result = 0;
++        }
++        else
++        {
++            if(NULL != errfunc)
++            {
++                (void)errfunc(effectivePattern, (int)GetLastError());
++            }
++
++            result = GLOB_NOMATCH;
++        }
++    }
++    else
++    {
++        int     cbCurr      =   0;
++        size_t  cbAlloc     =   0;
++        size_t  cMatches    =   0;
++
++        result = 0;
++
++        do
++        {
++            int     cch;
++            size_t  new_cbAlloc;
++
++            if( bMagic0 &&
++                0 == (flags & GLOB_PERIOD))
++            {
++                if('.' == find_data.cFileName[0])
++                {
++                    continue;
++                }
++            }
++
++            if(find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
++            {
++#ifdef GLOB_ONLYFILE
++                if(flags & GLOB_ONLYFILE)
++                {
++                    continue;
++                }
++#endif /* GLOB_ONLYFILE */
++
++                if( bMagic0 &&
++                    GLOB_NODOTSDIRS == (flags & GLOB_NODOTSDIRS))
++                {
++                    /* Pattern must begin with '.' to match either dots directory */
++                    if( 0 == lstrcmpA(".", find_data.cFileName) ||
++                        0 == lstrcmpA("..", find_data.cFileName))
++                    {
++                        continue;
++                    }
++                }
++
++                if(flags & GLOB_MARK)
++                {
++#if 0
++                    if(find_data.cFileName[0] >= 'A' && find_data.cFileName[0] <= 'M')
++#endif /* 0 */
++                    (void)lstrcatA(find_data.cFileName, "/");
++                }
++            }
++            else
++            {
++                if(flags & GLOB_ONLYDIR)
++                {
++                    /* Skip all further actions, and get the next entry */
++#if 0
++                    if(find_data.cFileName[0] >= 'A' && find_data.cFileName[0] <= 'M')
++#endif /* 0 */
++                    continue;
++                }
++            }
++
++            cch = lstrlenA(find_data.cFileName);
++            if(NULL != file_part)
++            {
++                cch += (int)(file_part - effectivePattern);
++            }
++
++            new_cbAlloc = (size_t)cbCurr + cch + 1;
++            if(new_cbAlloc > cbAlloc)
++            {
++                char    *new_buffer;
++
++                new_cbAlloc *= 2;
++
++                new_cbAlloc = (new_cbAlloc + 31) & ~(31);
++
++                new_buffer  = (char*)realloc(buffer, new_cbAlloc);
++
++                if(new_buffer == NULL)
++                {
++                    result = GLOB_NOSPACE;
++                    free(buffer);
++                    buffer = NULL;
++                    break;
++                }
++
++                buffer = new_buffer;
++                cbAlloc = new_cbAlloc;
++            }
++
++            (void)lstrcpynA(buffer + cbCurr, szRelative, 1 + (int)(file_part - effectivePattern));
++            (void)lstrcatA(buffer + cbCurr, find_data.cFileName);
++            cbCurr += cch + 1;
++
++            ++cMatches;
++        }
++        while(FindNextFile(hFind, &find_data) && cMatches != maxMatches);
++
++        (void)FindClose(hFind);
++
++        if(result == 0)
++        {
++            /* Now expand the buffer, to fit in all the pointers. */
++            size_t  cbPointers  =   (1 + cMatches + pglob->gl_offs) * sizeof(char*);
++            char*   new_buffer  =   (char*)realloc(buffer, cbAlloc + cbPointers);
++
++            if(new_buffer == NULL)
++            {
++                result = GLOB_NOSPACE;
++                free(buffer);
++            }
++            else
++            {
++                char**  pp;
++                char**  begin;
++                char**  end;
++                char*   next_str;
++
++                buffer = new_buffer;
++
++                (void)memmove(new_buffer + cbPointers, new_buffer, cbAlloc);
++
++                /* Handle the offsets. */
++                begin =   (char**)new_buffer;
++                end   =   begin + pglob->gl_offs;
++
++                for(; begin != end; ++begin)
++                {
++                    *begin = NULL;
++                }
++
++                /* Sort, or no sort. */
++                pp    =   (char**)new_buffer + pglob->gl_offs;
++                begin =   pp;
++                end   =   begin + cMatches;
++
++                if(flags & GLOB_NOSORT)
++                {
++                    /* The way we need in order to test the removal of dots in the findfile_sequence. */
++                    *end = NULL;
++                    for(begin = pp, next_str = buffer + cbPointers; begin != end; --end)
++                    {
++                        *(end - 1) = next_str;
++
++                        /* Find the next string. */
++                        next_str += 1 + lstrlenA(next_str);
++                    }
++                }
++                else
++                {
++                    /* The normal way. */
++                    for(begin = pp, next_str = buffer + cbPointers; begin != end; ++begin)
++                    {
++                        *begin = next_str;
++
++                        /* Find the next string. */
++                        next_str += 1 + lstrlenA(next_str);
++                    }
++                    *begin = NULL;
++                }
++
++                /* Return results to caller. */
++                pglob->gl_pathc =   (int)cMatches;
++                pglob->gl_matchc=   (int)cMatches;
++                pglob->gl_flags =   0;
++                if(bMagic)
++                {
++                    pglob->gl_flags |= GLOB_MAGCHAR;
++                }
++                pglob->gl_pathv =   (char**)new_buffer;
++            }
++        }
++
++        if(0 == cMatches)
++        {
++            result = GLOB_NOMATCH;
++        }
++    }
++
++    if(GLOB_NOMATCH == result)
++    {
++        if( (flags & GLOB_TILDE_CHECK) &&
++            effectivePattern == szPattern3)
++        {
++            result = GLOB_NOMATCH;
++        }
++        else if(bNoMagic ||
++                (flags & GLOB_NOCHECK))
++        {
++            const size_t    effPattLen  =   strlen(effectivePattern);
++            const size_t    cbNeeded    =   ((2 + pglob->gl_offs) * sizeof(char*)) + (1 + effPattLen);
++            char**          pp          =   (char**)realloc(buffer, cbNeeded);
++
++            if(NULL == pp)
++            {
++                result = GLOB_NOSPACE;
++                free(buffer);
++            }
++            else
++            {
++                /* Handle the offsets. */
++                char**  begin   =   pp;
++                char**  end     =   pp + pglob->gl_offs;
++                char*   dest    =   (char*)(pp + 2 + pglob->gl_offs);
++
++                for(; begin != end; ++begin)
++                {
++                    *begin = NULL;
++                }
++
++                /* Synthesise the pattern result. */
++#ifdef USING_SAFE_STR_FUNCTIONS
++                pp[0 + pglob->gl_offs]  =   (strcpy_s(dest, effPattLen + 1, effectivePattern), dest);
++#else /* ? USING_SAFE_STR_FUNCTIONS */
++                pp[0 + pglob->gl_offs]  =   strcpy(dest, effectivePattern);
++#endif /* USING_SAFE_STR_FUNCTIONS */
++                pp[1 + pglob->gl_offs]  =   NULL;
++
++                /* Return results to caller. */
++                pglob->gl_pathc =   1;
++                pglob->gl_matchc=   1;
++                pglob->gl_flags =   0;
++                if(bMagic)
++                {
++                    pglob->gl_flags |= GLOB_MAGCHAR;
++                }
++                pglob->gl_pathv =   pp;
++
++                result = 0;
++            }
++        }
++    }
++    else if(0 == result)
++    {
++        if((size_t)pglob->gl_matchc == maxMatches)
++        {
++            result = GLOB_NOSPACE;
++        }
++    }
++
++    return result;
++}
++
++void globfree(glob_t* pglob)
++{
++    if(pglob != NULL)
++    {
++        free(pglob->gl_pathv);
++        pglob->gl_pathc = 0;
++        pglob->gl_pathv = NULL;
++    }
++}
++
++#else
++
+ #include "glob.h"
+ #include "roken.h"
+ 
+@@ -845,4 +1350,5 @@
+ 		printf("%c", ismeta(*p) ? '_' : ' ');
+ 	printf("\n");
+ }
++#endif
+ #endif
+--- lib/roken/iruserok.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/iruserok.c	Fri Sep 26 14:46:46 2014
+@@ -26,7 +26,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef __MINGW32__
+ #include <config.h>
+ 
+ #include <stdio.h>
+@@ -279,3 +279,4 @@
+ 	}
+ 	return (-1);
+ }
++#endif
+\ No newline at end of file
+--- lib/roken/k_getpwnam.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/k_getpwnam.c	Wed Oct 01 07:27:27 2014
+@@ -30,7 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef _WIN32
+ #include <config.h>
+ 
+ #include "roken.h"
+@@ -59,3 +59,4 @@
+ #endif
+      return p;
+ }
++#endif
+\ No newline at end of file
+--- lib/roken/k_getpwuid.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/k_getpwuid.c	Wed Oct 01 07:27:40 2014
+@@ -30,7 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef _WIN32
+ #include <config.h>
+ 
+ #include "roken.h"
+@@ -59,3 +59,4 @@
+ #endif
+      return p;
+ }
++#endif
+\ No newline at end of file
+--- lib/roken/rand.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/rand.c	Fri Sep 26 14:46:46 2014
+@@ -31,6 +31,7 @@
+  * SUCH DAMAGE.
+  */
+ 
++#include <config.h>
+ #include "roken.h"
+ 
+ void ROKEN_LIB_FUNCTION
+--- lib/roken/rkpty.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/rkpty.c	Fri Sep 26 14:46:46 2014
+@@ -30,7 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef __MINGW32__
+ #include "config.h"
+ 
+ #ifndef HAVE_SYS_TYPES_H
+@@ -379,3 +379,8 @@
+ 	return eval_parent(pid);
+     }
+ }
++#else
++int main()
++{
++}
++#endif
+\ No newline at end of file
+--- lib/roken/roken.h.in	Tue Feb 18 23:33:47 2014
++++ lib/roken/roken.h.in	Fri Sep 26 14:46:46 2014
+@@ -43,11 +43,11 @@
+ #include <signal.h>
+ 
+ #ifndef ROKEN_LIB_FUNCTION
+-#ifdef _WIN32
+-#  define ROKEN_LIB_CALL     __cdecl
++#if defined (_WIN32_) && !defined (__MINGW32__)
++#  define ROKEN_LIB_CALL
+ #  ifdef ROKEN_LIB_DYNAMIC
+-#    define ROKEN_LIB_FUNCTION __declspec(dllimport)
+-#    define ROKEN_LIB_VARIABLE __declspec(dllimport)
++#    define ROKEN_LIB_FUNCTION
++#    define ROKEN_LIB_VARIABLE
+ #  else
+ #    define ROKEN_LIB_FUNCTION
+ #    define ROKEN_LIB_VARIABLE
+@@ -61,7 +61,6 @@
+ 
+ #ifdef HAVE_WINSOCK
+ /* Declarations for Microsoft Windows */
+-
+ #include <winsock2.h>
+ #include <ws2tcpip.h>
+ 
+@@ -601,8 +600,10 @@
+ #endif
+ 
+ #if !HAVE_DECL_H_ERRNO
++#ifndef __MINGW32__
+ extern int h_errno;
+ #endif
++#endif
+ 
+ #if !defined(HAVE_INET_ATON) || defined(NEED_INET_ATON_PROTO)
+ #ifndef HAVE_INET_ATON
+@@ -826,7 +827,12 @@
+ 
+ #ifndef HAVE_VSYSLOG
+ #define vsyslog rk_vsyslog
++#ifdef __MINGW32__
++#undef openlog //don't know which redefine this
++ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL vsyslog(int, char *, va_list);
++#else
+ ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL vsyslog(int, const char *, va_list);
++#endif
+ #endif
+ 
+ #ifndef HAVE_GETOPT
+--- lib/roken/signal.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/signal.c	Fri Sep 26 14:46:46 2014
+@@ -30,6 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
++#ifndef __MINGW32__
+ 
+ #include <config.h>
+ 
+@@ -75,3 +76,5 @@
+     return(saOld.sa_handler);
+ }
+ #endif
++
++#endif
+\ No newline at end of file
+--- lib/roken/simple_exec.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/simple_exec.c	Fri Sep 26 14:46:46 2014
+@@ -68,6 +68,402 @@
+    0			don't timeout again
+    n			seconds to next timeout
+    */
++#ifdef _WIN32
++
++#include <strsafe.h>
++
++/**
++ * wait_for_process_timed waits for a process to terminate or until a
++ * specified timeout occurs.
++ *
++ * @param[in] pid Process id for the monitored process
++
++ * @param[in] func Timeout callback function.  When the wait times out,
++ *     the callback function is called.  The possible return values
++ *     from the callback function are:
++ *
++ * - ((time_t) -2) Exit loop without killing child and return SE_E_EXECTIMEOUT.
++ * - ((time_t) -1) Kill child with SIGTERM and wait for child to exit.
++ * - 0             Don't timeout again
++ * - n             Seconds to next timeout
++ *
++ * @param[in] ptr Optional parameter for func()
++ *
++ * @param[in] timeout Seconds to first timeout.
++ *
++ * @retval SE_E_UNSPECIFIED   Unspecified system error
++ * @retval SE_E_FORKFAILED    Fork failure (not applicable for _WIN32 targets)
++ * @retval SE_E_WAITPIDFAILED waitpid errors
++ * @retval SE_E_EXECTIMEOUT   exec timeout
++ * @retval 0 <= Return value  from subprocess
++ * @retval SE_E_NOTFOUND      The program coudln't be found
++ * @retval 128- The signal that killed the subprocess +128.
++ */
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++wait_for_process_timed(pid_t pid, time_t (*func)(void *),
++		       void *ptr, time_t timeout)
++{
++    HANDLE hProcess;
++    DWORD wrv = 0;
++    DWORD dtimeout;
++    int rv = 0;
++
++    hProcess = OpenProcess(SYNCHRONIZE, FALSE, pid);
++
++    if (hProcess == NULL) {
++        return SE_E_WAITPIDFAILED;
++    }
++
++    dtimeout = (DWORD) ((timeout == 0)? INFINITE: timeout * 1000);
++
++    do {
++	wrv = WaitForSingleObject(hProcess, dtimeout);
++
++	if (wrv == WAIT_OBJECT_0) {
++
++	    DWORD prv = 0;
++
++	    GetExitCodeProcess(hProcess, &prv);
++	    rv = (int) prv;
++	    break;
++
++	} else if (wrv == WAIT_TIMEOUT) {
++
++	    if (func == NULL)
++		continue;
++
++	    timeout = (*func)(ptr);
++
++	    if (timeout == (time_t)-1) {
++
++		if (TerminateProcess(hProcess, 128 + 9)) {
++		    dtimeout = INFINITE;
++		    continue;
++		}
++		rv = SE_E_UNSPECIFIED;
++		break;
++
++	    } else if (timeout == (time_t) -2) {
++
++		rv = SE_E_EXECTIMEOUT;
++		break;
++
++	    } else {
++
++		dtimeout = (DWORD) ((timeout == 0)? INFINITE: timeout * 1000);
++		continue;
++
++	    }
++
++	} else {
++
++	    rv = SE_E_UNSPECIFIED;
++	    break;
++
++	}
++
++    } while(TRUE);
++
++    CloseHandle(hProcess);
++
++    return rv;
++}
++
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++wait_for_process(pid_t pid)
++{
++    return wait_for_process_timed(pid, NULL, NULL, 0);
++}
++
++static char *
++collect_commandline(const char * fn, va_list * ap)
++{
++    size_t len = 0;
++    size_t alloc_len = 0;
++    const char * s;
++    char * cmd = NULL;
++
++    for (s = fn; s; s = (char *) va_arg(*ap, char *)) {
++	size_t cmp_len;
++	int need_quote = FALSE;
++
++	if (FAILED(StringCchLength(s, MAX_PATH, &cmp_len))) {
++	    if (cmd)
++		free(cmd);
++	    return NULL;
++	}
++
++	if (cmp_len == 0)
++	    continue;
++
++	if (strchr(s, ' ') &&	/* need to quote any component that
++				   has embedded spaces, but not if
++				   they are already quoted. */
++	    s[0] != '"' &&
++	    s[cmp_len - 1] != '"') {
++	    need_quote = TRUE;
++	    cmp_len += 2 * sizeof(char);
++	}
++
++	if (s != fn)
++	    cmp_len += 1 * sizeof(char);
++
++	if (alloc_len < len + cmp_len + 1) {
++	    char * nc;
++
++	    alloc_len += ((len + cmp_len - alloc_len) / MAX_PATH + 1) * MAX_PATH;
++	    nc = (char *) realloc(cmd, alloc_len * sizeof(char));
++	    if (nc == NULL) {
++		if (cmd)
++		    free(cmd);
++		return NULL;
++	    }
++	}
++
++	if (cmd == NULL)
++	    return NULL;
++
++	if (s != fn)
++	    cmd[len++] = ' ';
++
++	if (need_quote) {
++	    StringCchPrintf(cmd + len, alloc_len - len, "\"%s\"", s);
++	} else {
++	    StringCchCopy(cmd + len, alloc_len - len, s);
++	}
++
++	len += cmp_len;
++    }
++
++    return cmd;
++}
++
++ROKEN_LIB_FUNCTION pid_t ROKEN_LIB_CALL
++pipe_execv(FILE **stdin_fd, FILE **stdout_fd, FILE **stderr_fd,
++	   const char *file, ...)
++{
++    HANDLE  hOut_r = NULL;
++    HANDLE  hOut_w = NULL;
++    HANDLE  hIn_r  = NULL;
++    HANDLE  hIn_w  = NULL;
++    HANDLE  hErr_r = NULL;
++    HANDLE  hErr_w = NULL;
++
++    SECURITY_ATTRIBUTES sa;
++    STARTUPINFO si;
++    PROCESS_INFORMATION pi;
++
++    char * commandline = NULL;
++
++    pid_t rv = (pid_t) -1;
++
++    {
++	va_list ap;
++
++	va_start(ap, file);
++	commandline = collect_commandline(file, &ap);
++
++	if (commandline == NULL)
++	    return rv;
++    }
++
++    ZeroMemory(&si, sizeof(si));
++    ZeroMemory(&pi, sizeof(pi));
++    ZeroMemory(&sa, sizeof(sa));
++
++    pi.hProcess = NULL;
++    pi.hThread = NULL;
++
++    sa.nLength = sizeof(sa);
++    sa.bInheritHandle = TRUE;
++    sa.lpSecurityDescriptor = NULL;
++
++    if ((stdout_fd && !CreatePipe(&hOut_r, &hOut_w, &sa, 0 /* Use default */)) ||
++
++	(stdin_fd && !CreatePipe(&hIn_r, &hIn_w, &sa, 0)) ||
++
++	(stderr_fd && !CreatePipe(&hErr_r, &hErr_w, &sa, 0)) ||
++
++	(!stdout_fd && (hOut_w = CreateFile("CON", GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE,
++					    &sa, OPEN_EXISTING, 0, NULL)) == INVALID_HANDLE_VALUE) ||
++
++	(!stdin_fd && (hIn_r = CreateFile("CON",GENERIC_READ, FILE_SHARE_READ|FILE_SHARE_WRITE,
++					  &sa, OPEN_EXISTING, 0, NULL)) == INVALID_HANDLE_VALUE) ||
++
++	(!stderr_fd && (hErr_w = CreateFile("CON", GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE,
++					    &sa, OPEN_EXISTING, 0, NULL)) == INVALID_HANDLE_VALUE))
++
++	goto _exit;
++
++    /* We don't want the child processes inheriting these */
++    if (hOut_r)
++	SetHandleInformation(hOut_r, HANDLE_FLAG_INHERIT, FALSE);
++
++    if (hIn_w)
++	SetHandleInformation(hIn_w, HANDLE_FLAG_INHERIT, FALSE);
++
++    if (hErr_r)
++	SetHandleInformation(hErr_r, HANDLE_FLAG_INHERIT, FALSE);
++
++    si.cb = sizeof(si);
++    si.lpReserved = NULL;
++    si.lpDesktop = NULL;
++    si.lpTitle = NULL;
++    si.dwFlags = STARTF_USESTDHANDLES;
++    si.hStdInput = hIn_r;
++    si.hStdOutput = hOut_w;
++    si.hStdError = hErr_w;
++
++    if (!CreateProcess(file, commandline, NULL, NULL,
++		       TRUE,	/* bInheritHandles */
++		       CREATE_NO_WINDOW, /* dwCreationFlags */
++		       NULL,		 /* lpEnvironment */
++		       NULL,		 /* lpCurrentDirectory */
++		       &si,
++		       &pi)) {
++
++	rv = (pid_t) (GetLastError() == ERROR_FILE_NOT_FOUND)? 127 : -1;
++	goto _exit;
++    }
++
++    if (stdin_fd) {
++	*stdin_fd = _fdopen(_open_osfhandle((intptr_t) hIn_w, 0), "wb");
++	if (*stdin_fd)
++	    hIn_w = NULL;
++    }
++
++    if (stdout_fd) {
++	*stdout_fd = _fdopen(_open_osfhandle((intptr_t) hOut_r, _O_RDONLY), "rb");
++	if (*stdout_fd)
++	    hOut_r = NULL;
++    }
++
++    if (stderr_fd) {
++	*stderr_fd = _fdopen(_open_osfhandle((intptr_t) hErr_r, _O_RDONLY), "rb");
++	if (*stderr_fd)
++	    hErr_r = NULL;
++    }
++
++    rv = (pid_t) pi.dwProcessId;
++
++ _exit:
++
++    if (pi.hProcess) CloseHandle(pi.hProcess);
++
++    if (pi.hThread) CloseHandle(pi.hThread);
++
++    if (hIn_r) CloseHandle(hIn_r);
++
++    if (hIn_w) CloseHandle(hIn_w);
++
++    if (hOut_r) CloseHandle(hOut_r);
++
++    if (hOut_w) CloseHandle(hOut_w);
++
++    if (hErr_r) CloseHandle(hErr_r);
++
++    if (hErr_w) CloseHandle(hErr_w);
++
++    return rv;
++}
++
++
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++simple_execvp_timed(const char *file, char *const args[],
++		    time_t (*func)(void *), void *ptr, time_t timeout)
++{
++    intptr_t hp;
++    int rv;
++
++    hp = spawnvp(_P_NOWAIT, file, args);
++
++    if (hp == -1)
++	return (errno == ENOENT)? 127: 126;
++    else if (hp == 0)
++	return 0;
++
++    rv = wait_for_process_timed(GetProcessId((HANDLE) hp), func, ptr, timeout);
++
++    CloseHandle((HANDLE) hp);
++
++    return rv;
++}
++
++
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++simple_execvp(const char *file, char *const args[])
++{
++    return simple_execvp_timed(file, args, NULL, NULL, 0);
++}
++
++
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++simple_execve_timed(const char *file, char *const args[], char *const envp[],
++		    time_t (*func)(void *), void *ptr, time_t timeout)
++{
++    intptr_t hp;
++    int rv;
++
++    hp = spawnve(_P_NOWAIT, file, args, envp);
++
++    if (hp == -1)
++	return (errno == ENOENT)? 127: 126;
++    else if (hp == 0)
++	return 0;
++
++    rv = wait_for_process_timed(GetProcessId((HANDLE) hp), func, ptr, timeout);
++
++    CloseHandle((HANDLE) hp);
++
++    return rv;
++}
++
++
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++simple_execve(const char *file, char *const args[], char *const envp[])
++{
++    return simple_execve_timed(file, args, envp, NULL, NULL, 0);
++}
++
++
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++simple_execlp(const char *file, ...)
++{
++    va_list ap;
++    char **argv;
++    int ret;
++
++    va_start(ap, file);
++    argv = vstrcollect(&ap);
++    va_end(ap);
++    if(argv == NULL)
++	return SE_E_UNSPECIFIED;
++    ret = simple_execvp(file, argv);
++    free(argv);
++    return ret;
++}
++
++
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++simple_execle(const char *file, ... /* ,char *const envp[] */)
++{
++    va_list ap;
++    char **argv;
++    char *const* envp;
++    int ret;
++
++    va_start(ap, file);
++    argv = vstrcollect(&ap);
++    envp = va_arg(ap, char **);
++    va_end(ap);
++    if(argv == NULL)
++	return SE_E_UNSPECIFIED;
++    ret = simple_execve(file, argv, envp);
++    free(argv);
++    return ret;
++}
++
++#else
+ 
+ static int sig_alarm;
+ 
+@@ -323,3 +719,5 @@
+     free(argv);
+     return ret;
+ }
++
++#endif
+\ No newline at end of file
+--- lib/roken/socket.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/socket.c	Fri Sep 26 14:46:46 2014
+@@ -36,6 +36,46 @@
+ #include "roken.h"
+ #include <err.h>
+ 
++#ifdef _WIN32
++
++volatile LONG _startup_count = 0;
++
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++rk_WSAStartup(void)
++{
++    WSADATA wsad;
++
++    if (!WSAStartup( MAKEWORD(2, 2), &wsad )) {
++	if (wsad.wVersion != MAKEWORD(2, 2)) {
++	    /* huh? We can't use 2.2? */
++	    WSACleanup();
++	    return -1;
++	}
++
++	InterlockedIncrement(&_startup_count);
++	return 0;
++    }
++
++    return -1;
++}
++
++
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++rk_WSACleanup(void)
++{
++    LONG l;
++
++    if ((l = InterlockedDecrement(&_startup_count)) < 0) {
++	l = InterlockedIncrement(&_startup_count) - 1;
++    }
++
++    if (l >= 0) {
++	return WSACleanup();
++    }
++    return -1;
++}
++#endif
++
+ /*
+  * Set `sa' to the unitialized address of address family `af'
+  */
+--- lib/roken/verify.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/verify.c	Fri Sep 26 14:46:46 2014
+@@ -30,7 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
+-
++#ifndef __MINGW32__
+ #include <config.h>
+ 
+ #include <stdio.h>
+@@ -57,3 +57,4 @@
+     return -1;
+ }
+ 
++#endif
+\ No newline at end of file
+--- lib/roken/vsyslog.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/vsyslog.c	Fri Sep 26 14:46:46 2014
+@@ -33,6 +33,487 @@
+ 
+ #include <config.h>
+ 
++#ifdef _WIN32
++#include "roken.h"
++
++#include <stdarg.h>
++
++/*
++ * priorities/facilities are encoded into a single 32-bit quantity, where the
++ * bottom 3 bits are the priority (0-7) and the top 28 bits are the facility
++ * (0-big number).  Both the priorities and the facilities map roughly
++ * one-to-one to strings in the syslogd(8) source code.  This mapping is
++ * included in this file.
++ *
++ * priorities (these are ordered)
++ */
++#define	LOG_EMERG	0	/* system is unusable */
++#define	LOG_ALERT	1	/* action must be taken immediately */
++#define	LOG_CRIT	2	/* critical conditions */
++#define	LOG_ERR		3	/* error conditions */
++#define	LOG_WARNING	4	/* warning conditions */
++#define	LOG_NOTICE	5	/* normal but significant condition */
++#define	LOG_INFO	6	/* informational */
++#define	LOG_DEBUG	7	/* debug-level messages */
++
++#define	LOG_PRIMASK	0x07	/* mask to extract priority part (internal) */
++				/* extract priority */
++#define	LOG_PRI(p)	((p) & LOG_PRIMASK)
++#define	LOG_MAKEPRI(fac, pri)	(((fac) << 3) | (pri))
++
++#ifdef SYSLOG_NAMES
++#define	INTERNAL_NOPRI	0x10	/* the "no priority" priority */
++				/* mark "facility" */
++#define	INTERNAL_MARK	LOG_MAKEPRI(LOG_NFACILITIES, 0)
++typedef struct _code {
++	char	*c_name;
++	int	c_val;
++} CODE;
++
++CODE prioritynames[] =
++  {
++    { "alert", LOG_ALERT },
++    { "crit", LOG_CRIT },
++    { "debug", LOG_DEBUG },
++    { "emerg", LOG_EMERG },
++    { "err", LOG_ERR },
++    { "error", LOG_ERR },		/* DEPRECATED */
++    { "info", LOG_INFO },
++    { "none", INTERNAL_NOPRI },		/* INTERNAL */
++    { "notice", LOG_NOTICE },
++    { "panic", LOG_EMERG },		/* DEPRECATED */
++    { "warn", LOG_WARNING },		/* DEPRECATED */
++    { "warning", LOG_WARNING },
++    { NULL, -1 }
++  };
++#endif
++
++/* facility codes */
++#define	LOG_KERN	(0<<3)	/* kernel messages */
++#define	LOG_USER	(1<<3)	/* random user-level messages */
++#define	LOG_MAIL	(2<<3)	/* mail system */
++#define	LOG_DAEMON	(3<<3)	/* system daemons */
++#define	LOG_AUTH	(4<<3)	/* security/authorization messages */
++#define	LOG_SYSLOG	(5<<3)	/* messages generated internally by syslogd */
++#define	LOG_LPR		(6<<3)	/* line printer subsystem */
++#define	LOG_NEWS	(7<<3)	/* network news subsystem */
++#define	LOG_UUCP	(8<<3)	/* UUCP subsystem */
++#define	LOG_CRON	(9<<3)	/* clock daemon */
++#define	LOG_AUTHPRIV	(10<<3)	/* security/authorization messages (private) */
++#define	LOG_FTP		(11<<3)	/* ftp daemon */
++
++	/* other codes through 15 reserved for system use */
++#define	LOG_LOCAL0	(16<<3)	/* reserved for local use */
++#define	LOG_LOCAL1	(17<<3)	/* reserved for local use */
++#define	LOG_LOCAL2	(18<<3)	/* reserved for local use */
++#define	LOG_LOCAL3	(19<<3)	/* reserved for local use */
++#define	LOG_LOCAL4	(20<<3)	/* reserved for local use */
++#define	LOG_LOCAL5	(21<<3)	/* reserved for local use */
++#define	LOG_LOCAL6	(22<<3)	/* reserved for local use */
++#define	LOG_LOCAL7	(23<<3)	/* reserved for local use */
++
++#define	LOG_NFACILITIES	24	/* current number of facilities */
++#define	LOG_FACMASK	0x03f8	/* mask to extract facility part */
++				/* facility of pri */
++#define	LOG_FAC(p)	(((p) & LOG_FACMASK) >> 3)
++
++#ifdef SYSLOG_NAMES
++CODE facilitynames[] =
++  {
++    { "auth", LOG_AUTH },
++    { "authpriv", LOG_AUTHPRIV },
++    { "cron", LOG_CRON },
++    { "daemon", LOG_DAEMON },
++    { "ftp", LOG_FTP },
++    { "kern", LOG_KERN },
++    { "lpr", LOG_LPR },
++    { "mail", LOG_MAIL },
++    { "mark", INTERNAL_MARK },		/* INTERNAL */
++    { "news", LOG_NEWS },
++    { "security", LOG_AUTH },		/* DEPRECATED */
++    { "syslog", LOG_SYSLOG },
++    { "user", LOG_USER },
++    { "uucp", LOG_UUCP },
++    { "local0", LOG_LOCAL0 },
++    { "local1", LOG_LOCAL1 },
++    { "local2", LOG_LOCAL2 },
++    { "local3", LOG_LOCAL3 },
++    { "local4", LOG_LOCAL4 },
++    { "local5", LOG_LOCAL5 },
++    { "local6", LOG_LOCAL6 },
++    { "local7", LOG_LOCAL7 },
++    { NULL, -1 }
++  };
++#endif
++
++/*
++ * arguments to setlogmask.
++ */
++#define	LOG_MASK(pri)	(1 << (pri))		/* mask for one priority */
++#define	LOG_UPTO(pri)	((1 << ((pri)+1)) - 1)	/* all priorities through pri */
++
++/*
++ * Option flags for openlog.
++ *
++ * LOG_ODELAY no longer does anything.
++ * LOG_NDELAY is the inverse of what it used to be.
++ */
++#define	LOG_PID		0x01	/* log the pid with each message */
++#define	LOG_CONS	0x02	/* log on the console if errors in sending */
++#define	LOG_ODELAY	0x04	/* delay open until first syslog() (default) */
++#define	LOG_NDELAY	0x08	/* don't delay open */
++#define	LOG_NOWAIT	0x10	/* don't wait for console forks: DEPRECATED */
++#define	LOG_PERROR	0x20	/* log to stderr as well */
++
++#define SYSLOG_PORT     514
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/* Close desriptor used to write to system logger.  */
++extern void closelog (void);
++#undef openlog
++/* Open connection to system logger.  */
++extern void openlog (char *__ident, int __option, int __facility);
++
++/* Set the log mask level.  */
++extern int setlogmask (int __mask);
++
++/* Generate a log message using FMT string and option arguments.  */
++extern void syslog (int __pri, char *__fmt, ...);
++
++/* Generate a log message using FMT and using arguments pointed to by AP.  */
++extern void vsyslog (int __pri, char *__fmt, va_list __ap);
++
++    /* Windows specific.
++
++       init_syslog() *must* be called before calling any of the above
++       functions.  exit_syslog() will be scheduled using atexit().
++       However, it is not an error and encouraged to call
++       exit_syslog() before the application exits.
++
++       During operation, the application is free to call exit_syslog()
++       followed by init_syslog() to re-initialize the library. i.e. if
++       a different syslog host is to be used.
++
++     */
++
++    /* Initializes the syslog library and sets the syslog host.  The
++       hostname parameter is of the form "<hostname>[:<port>]".  The
++       <port> may be a numeric port or it may be a name of a service.
++       If the <port> is specified using a service name, it will be
++       looked up using getservbyname().
++
++       On failure, the hostname and port will be set to "localhost"
++       and SYSLOG_PORT respectively.
++    */
++    extern void init_syslog(const char * hostname);
++
++    extern void exit_syslog(void);
++
++#define SYSLOG_DGRAM_SIZE 1024
++
++static BOOL        syslog_opened = FALSE;
++
++static int         syslog_mask = 0xFF;
++static char        syslog_ident[ 128 ] = "";
++static int         syslog_facility = LOG_USER;
++static char        syslog_procid_str[ 20 ];
++
++static SOCKADDR_IN syslog_hostaddr;
++static SOCKET      syslog_socket = INVALID_SOCKET;
++static char        local_hostname[ MAX_COMPUTERNAME_LENGTH + 1 ];
++
++static char        syslog_hostname[ MAX_COMPUTERNAME_LENGTH + 1 ] = "localhost";
++static unsigned short syslog_port = SYSLOG_PORT;
++
++static int   datagramm_size;
++
++volatile BOOL initialized = FALSE;
++BOOL wsa_initialized = FALSE;
++CRITICAL_SECTION cs_syslog;
++
++ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
++init_syslog(const char * hostname)
++{
++    WSADATA wsd;
++    char * service;
++
++    if ( initialized )
++        return;
++
++    if( WSAStartup( MAKEWORD( 2, 2 ), &wsd ) ) {
++        fprintf(stderr, "Can't initialize WinSock\n");
++        /* we let the rest of the initialization code go through,
++           although none of the syslog calls would succeed. */
++    } else {
++        wsa_initialized = TRUE;
++    }
++
++    if (hostname)
++        strcpy_s(syslog_hostname, sizeof(syslog_hostname), hostname);
++    else
++        strcpy_s(syslog_hostname, sizeof(syslog_hostname), "");
++
++    service = strchr(syslog_hostname, ':');
++
++    if (service) {
++        int tp;
++
++        *service++ = '\0';
++
++        if ((tp = atoi(service)) <= 0) {
++            struct servent * se;
++
++            se = getservbyname(service, "udp");
++
++            syslog_port = (se == NULL)? SYSLOG_PORT: se->s_port;
++        } else {
++            syslog_port = (unsigned short) tp;
++        }
++    } else {
++        syslog_port = SYSLOG_PORT;
++    }
++
++    InitializeCriticalSection(&cs_syslog);
++    initialized = TRUE;
++
++    atexit(exit_syslog);
++}
++
++ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
++exit_syslog(void)
++{
++    if ( !initialized )
++        return;
++
++    closelog();
++
++    if ( wsa_initialized )
++        WSACleanup();
++
++    DeleteCriticalSection(&cs_syslog);
++    initialized = FALSE;
++}
++
++static void init_logger_addr()
++{
++    struct hostent * phe = NULL;
++
++    memset( &syslog_hostaddr, 0, sizeof(SOCKADDR_IN) );
++    syslog_hostaddr.sin_family = AF_INET;
++
++    if (syslog_hostname[0] == '\0')
++        goto use_default;
++
++    phe = gethostbyname( syslog_hostname );
++    if( !phe )
++        goto use_default;
++
++    memcpy( &syslog_hostaddr.sin_addr.s_addr, phe->h_addr, phe->h_length );
++
++    syslog_hostaddr.sin_port = htons( syslog_port );
++    return;
++
++use_default:
++    syslog_hostaddr.sin_addr.S_un.S_addr = htonl( 0x7F000001 );
++    syslog_hostaddr.sin_port = htons( SYSLOG_PORT );
++}
++
++/******************************************************************************
++ * closelog
++ *
++ * Close desriptor used to write to system logger.
++ */
++ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
++closelog()
++{
++    if ( !initialized )
++        return;
++
++    EnterCriticalSection(&cs_syslog);
++    if( syslog_opened ) {
++        closesocket( syslog_socket );
++        syslog_socket = INVALID_SOCKET;
++        syslog_opened = FALSE;
++    }
++    LeaveCriticalSection(&cs_syslog);
++}
++
++/******************************************************************************
++ * openlog
++ *
++ * Open connection to system logger.
++ */
++ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
++openlog( char* ident, int option, int facility )
++{
++    BOOL failed = FALSE;
++    SOCKADDR_IN sa_local;
++    DWORD n;
++    int size;
++
++    if ( !initialized )
++        return;
++
++    EnterCriticalSection(&cs_syslog);
++
++    if( syslog_opened )
++        goto done;
++
++    failed = TRUE;
++
++    syslog_facility = facility? facility : LOG_USER;
++
++    if( option & LOG_PID )
++        sprintf_s( syslog_procid_str, sizeof(syslog_procid_str), "[%lu]", GetCurrentProcessId() );
++    else
++        syslog_procid_str[0] = '\0';
++
++    /* FIXME: handle other options */
++
++    n = sizeof(local_hostname);
++    if( !GetComputerName( local_hostname, &n ) )
++        goto done;
++
++    syslog_socket = INVALID_SOCKET;
++
++    init_logger_addr();
++
++    for( n = 0;; n++ )
++    {
++        syslog_socket = socket( AF_INET, SOCK_DGRAM, 0 );
++        if( INVALID_SOCKET == syslog_socket )
++            goto done;
++
++        memset( &sa_local, 0, sizeof(SOCKADDR_IN) );
++        sa_local.sin_family = AF_INET;
++        if( bind( syslog_socket, (SOCKADDR*) &sa_local, sizeof(SOCKADDR_IN) ) == 0 )
++            break;
++        rk_closesocket( syslog_socket );
++        syslog_socket = INVALID_SOCKET;
++        if( n == 100 )
++            goto done;
++        Sleep(0);
++    }
++
++    /* get size of datagramm */
++    size = sizeof(datagramm_size);
++    if( getsockopt( syslog_socket, SOL_SOCKET, SO_MAX_MSG_SIZE, (char*) &datagramm_size, &size ) )
++        goto done;
++    if( datagramm_size - strlen(local_hostname) - (ident? strlen(ident) : 0) < 64 )
++        goto done;
++    if( datagramm_size > SYSLOG_DGRAM_SIZE )
++        datagramm_size = SYSLOG_DGRAM_SIZE;
++
++    if (ident)
++        strcpy_s(syslog_ident, sizeof(syslog_ident), ident);
++
++    syslog_facility = (facility ? facility : LOG_USER);
++    failed = FALSE;
++
++ done:
++    if( failed ) {
++        if( syslog_socket != INVALID_SOCKET )
++            rk_closesocket( syslog_socket );
++    }
++    syslog_opened = !failed;
++
++    LeaveCriticalSection(&cs_syslog);
++}
++
++/******************************************************************************
++ * setlogmask
++ *
++ * Set the log mask level.
++ */
++ROKEN_LIB_FUNCTION int ROKEN_LIB_CALL
++setlogmask( int mask )
++{
++    int ret;
++
++    if ( !initialized )
++        return 0;
++
++    EnterCriticalSection(&cs_syslog);
++
++    ret = syslog_mask;
++    if( mask )
++        syslog_mask = mask;
++
++    LeaveCriticalSection(&cs_syslog);
++
++    return ret;
++}
++
++/******************************************************************************
++ * syslog
++ *
++ * Generate a log message using FMT string and option arguments.
++ */
++ROKEN_LIB_FUNCTION void
++syslog( int pri, char* fmt, ... )
++{
++    va_list ap;
++
++    va_start( ap, fmt );
++    vsyslog( pri, fmt, ap );
++    va_end( ap );
++}
++
++/******************************************************************************
++ * vsyslog
++ *
++ * Generate a log message using FMT and using arguments pointed to by AP.
++ */
++ROKEN_LIB_FUNCTION void ROKEN_LIB_CALL
++vsyslog( int pri, char* fmt, va_list ap )
++{
++    static char *month[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
++                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
++    char  datagramm[ SYSLOG_DGRAM_SIZE ];
++    SYSTEMTIME stm;
++    int len;
++    char *p;
++
++    if ( !initialized )
++        return;
++
++    EnterCriticalSection(&cs_syslog);
++
++    if( !(LOG_MASK( LOG_PRI( pri )) & syslog_mask) )
++        goto done;
++
++    openlog( NULL, 0, pri & LOG_FACMASK );
++    if( !syslog_opened )
++        goto done;
++
++    if( !(pri & LOG_FACMASK) )
++        pri |= syslog_facility;
++
++    GetLocalTime( &stm );
++    len = sprintf_s( datagramm, sizeof(datagramm),
++                     "<%d>%s %2d %02d:%02d:%02d %s %s%s: ",
++                     pri,
++                     month[ stm.wMonth - 1 ], stm.wDay, stm.wHour, stm.wMinute, stm.wSecond,
++                     local_hostname, syslog_ident, syslog_procid_str );
++    vsprintf_s( datagramm + len, datagramm_size - len, fmt, ap );
++    p = strchr( datagramm, '\n' );
++    if( p )
++        *p = 0;
++    p = strchr( datagramm, '\r' );
++    if( p )
++        *p = 0;
++
++    sendto( syslog_socket, datagramm, strlen(datagramm), 0, (SOCKADDR*) &syslog_hostaddr, sizeof(SOCKADDR_IN) );
++
++ done:
++    LeaveCriticalSection(&cs_syslog);
++}
++
++#else
++
+ #ifndef HAVE_VSYSLOG
+ 
+ #include <stdio.h>
+@@ -110,4 +591,6 @@
+     syslog (pri, "%s", buf);
+     free (buf);
+ }
++#endif
++
+ #endif
+--- lib/roken/write_pid.c	Tue Feb 18 23:33:47 2014
++++ lib/roken/write_pid.c	Fri Sep 26 14:46:46 2014
+@@ -30,6 +30,7 @@
+  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+  * SUCH DAMAGE.
+  */
++#ifndef __MINGW32__
+ 
+ #include <config.h>
+ 
+@@ -88,3 +89,5 @@
+ #endif
+ }
+ #endif
++
++#endif
+\ No newline at end of file
+--- lib/wind/idn-lookup.c	Tue Feb 18 23:33:47 2014
++++ lib/wind/idn-lookup.c	Fri Sep 26 14:46:46 2014
+@@ -36,11 +36,18 @@
+ #endif
+ #include <assert.h>
+ #include <err.h>
++#ifndef _WIN32
+ #include <netdb.h>
++#endif
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#ifndef _WIN32
+ #include <sys/socket.h>
++#else
++#include <ws2tcpip.h>
++#include <winsock2.h>
++#endif
+ #include <sys/types.h>
+ 
+ #include <getarg.h>
+--- lib/Makefile.in	Tue Feb 18 23:37:19 2014
++++ lib/Makefile.in	Wed Oct 01 11:00:30 2014
+@@ -193,7 +193,7 @@
+ ETAGS = etags
+ CTAGS = ctags
+ DIST_SUBDIRS = roken base vers libedit com_err sl wind asn1 sqlite \
+-	hcrypto ipc hx509 krb5 ntlm kafs gssapi hdb kadm5 otp kdfs
++	hcrypto hx509 krb5 ntlm gssapi hdb kadm5 otp kdfs
+ DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
+ am__relativize = \
+   dir0=`pwd`; \
+@@ -490,14 +490,12 @@
+ 	asn1 \
+ 	$(dir_sqlite) \
+ 	$(dir_hcrypto) \
+-	ipc \
+ 	hx509 \
+ 	krb5 \
+ 	ntlm \
+-	kafs \
+ 	gssapi \
+-	hdb \
+-	kadm5 \
++	#hdb \
++	#kadm5 \
+ 	$(dir_otp) \
+ 	$(dir_dce)
+ 
+--- tools/krb5-config.in	Tue Feb 18 23:33:47 2014
++++ tools/krb5-config.in	Wed Oct 01 08:38:40 2014
+@@ -105,10 +105,10 @@
+     library=kadm-server
+     lib_kadm_server=yes
+     ;;
+-  kafs)
+-    library=kafs
+-    lib_kafs=yes
+-    ;;
++#  kafs)
++#    library=kafs
++#    lib_kafs=yes
++#    ;;
+   *)
+     echo "unknown option: $i"
+     exit 1
+@@ -130,9 +130,9 @@
+     echo
+     echo "libraries: krb5             Kerberos 5 applications"
+     echo "           gssapi           GSSAPI applications"
+-    echo "           kadm-client      libkadm5 client"
+-    echo "           kadm-server      libkadm5 server"
+-    echo "           kafs             kafs"
++#    echo "           kadm-client      libkadm5 client"
++#    echo "           kadm-server      libkadm5 server"
++#    echo "           kafs             kafs"
+     exit $usage_exit
+ fi
+ 
+@@ -190,12 +190,12 @@
+ 	    lib_krb5=yes
+ 	fi
+     fi
+-    if test "$lib_kafs" = yes; then
+-	lib_flags="$lib_flags -lkafs"
+-	if test X"$do_lib_deps" = Xyes; then
+-	    lib_krb5=yes
+-	fi
+-    fi
++#    if test "$lib_kafs" = yes; then
++#	lib_flags="$lib_flags -lkafs"
++#	if test X"$do_lib_deps" = Xyes; then
++#	    lib_krb5=yes
++#	fi
++#    fi
+     if test "$lib_krb5" = yes; then
+ 	lib_flags="$lib_flags -lkrb5"
+     fi
+--- configure	Tue Feb 18 23:37:13 2014
++++ configure	Fri Sep 26 14:46:46 2014
+@@ -24151,7 +24151,7 @@
+ 
+ 
+ 
+-subdirs="$subdirs lib/libedit"
++#subdirs="$subdirs lib/libedit"
+ 
+ 
+ 
