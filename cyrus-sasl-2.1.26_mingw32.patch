@@ -1,0 +1,168 @@
+Intended for single dll use
+configure --with-gss_impl=heimdal --with-sqlite3=$IPATH --with-openssl CPPFLAGS="$CPPFLAGS -I$IPATH/include/heimdal" --without-saslauthd --without-authdaemond --enable-sql --enable-ntlm --enable-login --enable-srp --enable-srp-setpass
+
+Build will stopped at dbcoverter, but no need for other stuff from here
+build dll from buildir root with:
+$CC -shared -o $IPATH/bin/libsasl.dll -Wl,--whole-archive lib/.libs/libsasl2.a -Wl,--no-whole-archive -L./plugins/.libs -L$IPATH/lib -lws2_32 -ldl -lanonymous -lcrammd5 -ldigestmd5 -lgssapiv2 -llogin -lotp -lplain -lsrp -lsasldb -lntlm -lsql -lcrypto -lsqlite3 -lgssapi -lws2_32 -ldb-4.8 -Wl,-s -Wl,--out-implib,$IPATH/lib/libsasl2.dll.a
+
+install header and pc files
+you might want to hardlink libsasl2.dll.a to libsasl.dll.a
+
+--- include/prop.h	Fri Oct 12 21:05:48 2012
++++ include/prop.h	Fri Oct 03 09:31:13 2014
+@@ -33,6 +33,9 @@
+ /* Under Unix, life is simpler: we just need to mark library functions
+  * as extern.  (Technically, we don't even have to do that.) */
+ #ifdef WIN32
++# ifdef __MINGW32__
++#  define LIBSASL_EXPORTS
++# endif
+ # ifdef LIBSASL_EXPORTS
+ #  define LIBSASL_API  extern __declspec(dllexport)
+ # else /* LIBSASL_EXPORTS */
+--- include/sasl.h	Fri Oct 12 21:05:48 2012
++++ include/sasl.h	Fri Oct 03 11:32:23 2014
+@@ -130,6 +130,7 @@
+ #define SASL_VERSION_FULL ((SASL_VERSION_MAJOR << 16) |\
+       (SASL_VERSION_MINOR << 8) | SASL_VERSION_STEP)
+ 
++#include <sys/types.h>
+ #include "prop.h"
+ 
+ /*************
+--- lib/getaddrinfo.c	Sat Jan 28 06:31:36 2012
++++ lib/getaddrinfo.c	Fri Oct 03 09:31:13 2014
+@@ -61,9 +61,9 @@
+ #include "config.h"
+ #ifndef WIN32
+ #include <sys/param.h>
+-# ifndef macintosh
++# ifndef macintosh
+ #  include <arpa/inet.h>
+-# endif /* macintosh */
++# endif /* macintosh */
+ #endif /* WIN32 */
+ #include <ctype.h>
+ 
+@@ -115,6 +115,7 @@
+     }
+ }
+ 
++#ifndef HAVE_GETADDRINFO
+ char *
+ gai_strerror(int ecode)
+ {
+@@ -252,3 +253,4 @@
+ #endif
+     return EAI_NODATA;
+ }
++#endif
+\ No newline at end of file
+--- lib/saslutil.c	Fri Oct 12 21:05:48 2012
++++ lib/saslutil.c	Fri Oct 03 09:31:13 2014
+@@ -607,7 +607,7 @@
+     return (0);
+ }
+ 
+-#ifdef WIN32
++#if defined WIN32 && !defined __MINGW64_VERSION_MAJOR
+ /***************************************************************************** 
+  * 
+  *  MODULE NAME : GETOPT.C 
+--- plugins/gssapi.c	Sat Jan 28 06:31:36 2012
++++ plugins/gssapi.c	Fri Oct 03 09:31:13 2014
+@@ -43,14 +43,14 @@
+  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  */
+ 
+-#include <config.h>
+ 
++#define HAVE_GSSAPI_H
+ #ifdef HAVE_GSSAPI_H
+ #include <gssapi.h>
+ #else
+ #include <gssapi/gssapi.h>
+ #endif
+-
++#include <config.h>
+ #ifdef WIN32
+ #  include <winsock2.h>
+ 
+--- config.h.in	Wed Nov 07 02:20:59 2012
++++ config.h.in	Fri Oct 03 09:31:13 2014
+@@ -534,7 +534,31 @@
+ #  include <sys/param.h>
+ # endif
+ #else /* WIN32 */
++# include <ws2tcpip.h>
+ # include <winsock2.h>
++#define HAVE_SOCKLEN_T
++#define HAVE_GETADDRINFO
++#define STATIC_ANONYMOUS 1
++#define STATIC_CRAMMD5 1
++#define STATIC_DIGESTMD5 1
++#define STATIC_SCRAM 1
++#define STATIC_GSSAPIV2 1
++#define STATIC_LOGIN 1
++#define STATIC_SQL 1
++#define STATIC_OTP 1
++#define STATIC_PLAIN 1
++#define STATIC_SASLDB 1
++#define STATIC_NTLM 1
++#define STATIC_SRP 1
++#undef SASL_DB_PATH
++#undef SASL_DEV_RANDOM
++/* Registry key that contains the locations of the plugins */
++#define SASL_ROOT_KEY "SOFTWARE\\Carnegie Mellon\\Project Cyrus\\SASL Library"
++#define SASL_PLUGIN_PATH_ATTR "SearchPath"
++#define SASL_CONF_PATH_ATTR "ConfFile"
++/* : This should probably be replaced with a call to a function
++   : that gets the proper value from Registry */
++#define SASL_DB_PATH "c:\\CMU\\sasldb2"
+ #endif /* WIN32 */
+ #include <string.h>
+ 
+--- configure	Wed Nov 07 02:21:37 2012
++++ configure	Fri Oct 03 09:31:14 2014
+@@ -4348,7 +4348,7 @@
+ 
+     # first, try -R
+     SAVE_LDFLAGS="${LDFLAGS}"
+-    LDFLAGS="-R /usr/lib"
++    LDFLAGS="-L /usr/local/lib"
+     cat >conftest.$ac_ext <<_ACEOF
+ /* confdefs.h.  */
+ _ACEOF
+@@ -4385,7 +4385,7 @@
+ 	 test "$cross_compiling" = yes ||
+ 	 $as_test_x conftest$ac_exeext
+        }; then
+-  andrew_cv_runpath_switch="-R"
++  andrew_cv_runpath_switch="-L"
+ else
+   $as_echo "$as_me: failed program was:" >&5
+ sed 's/^/| /' conftest.$ac_ext >&5
+@@ -14591,9 +14591,9 @@
+ $as_echo "$as_me: WARNING: SQLite Library not found" >&2;}; true;;
+     *)
+      if test -d ${with_sqlite}/lib; then
+-         LIB_SQLITE="-L${with_sqlite}/lib -R${with_sqlite}/lib"
++         LIB_SQLITE="-L${with_sqlite}/lib"
+      else
+-         LIB_SQLITE="-L${with_sqlite} -R${with_sqlite}"
++         LIB_SQLITE="-L${with_sqlite}"
+      fi
+ 
+      LIB_SQLITE_DIR=$LIB_SQLITE
+@@ -14721,9 +14721,9 @@
+ $as_echo "$as_me: WARNING: SQLite3 Library not found" >&2;}; true;;
+     *)
+      if test -d ${with_sqlite3}/lib; then
+-         LIB_SQLITE3="-L${with_sqlite3}/lib -R${with_sqlite3}/lib"
++         LIB_SQLITE3="-L${with_sqlite3}/lib"
+      else
+-         LIB_SQLITE3="-L${with_sqlite3} -R${with_sqlite3}"
++         LIB_SQLITE3="-L${with_sqlite3}"
+      fi
+ 
+      LIB_SQLITE3_DIR=$LIB_SQLITE3
