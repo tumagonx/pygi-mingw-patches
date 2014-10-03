@@ -1,0 +1,2352 @@
+Originally by Or Goshen submitted via mail
+unified and slightly modified
+
+configure --enable-threads=windows --disable-static --disable-daemon --disable-appliance --disable-lua --disable-ruby --disable-python --disable-erlang --disable-perl --disable-ocaml --disable-haskell --disable-php --without-libvirt
+
+--- bootstrap	Fri Oct 03 12:49:11 2014
++++ bootstrap	Fri Apr 25 12:23:58 2014
+@@ -0,0 +1,96 @@
++#!/bin/sh
++GNULIB_SRCDIR=.gnulib
++
++gnulib_tool=$GNULIB_SRCDIR/gnulib-tool
++
++modules='
++accept4
++accept
++areadlink
++areadlinkat
++arpa_inet
++bind
++byteswap
++c-ctype
++canonicalize-lgpl
++cloexec
++close
++closeout
++connect
++dup3
++error
++filevercmp
++fstatat
++fsusage
++fts
++full-read
++full-write
++futimens
++getaddrinfo
++getline
++getsockname
++gitlog-to-changelog
++glob
++gnu-make
++gnumakefile
++hash
++hash-pjw
++human
++ignore-value
++listen
++lock
++maintainer-makefile
++manywarnings
++memmem
++mkdtemp
++mkstemps
++netdb
++netinet_in
++openat
++poll
++perror
++pipe2
++pread
++read
++read-file
++readlink
++select
++setsockopt
++setenv
++sleep
++socket
++stat-time
++strchrnul
++strerror
++strndup
++strsignal
++symlinkat
++sys_select
++sys_wait
++termios
++vasprintf
++vc-list-files
++warnings
++waitpid
++xalloc
++xalloc-die
++xstrtol
++xstrtoll
++xvasprintf
++'
++
++# If any tests fail, avoid including them by adding them to
++# this list.
++avoid="--avoid=dummy --avoid=getlogin_r-tests"
++
++$gnulib_tool			\
++  $avoid			\
++  --with-tests			\
++  --m4-base=m4			\
++  --source-base=gnulib/lib	\
++  --tests-base=gnulib/tests	\
++  --libtool			\
++  --import $modules
++
++# Disable autopoint and libtoolize, since they were already done above.
++AUTOPOINT=true LIBTOOLIZE=true autoreconf --verbose --install
+--- gnulib/lib/error.c	Wed Feb 12 22:30:04 2014
++++ gnulib/lib/error.c	Sun May 18 22:47:04 2014
+@@ -310,7 +310,7 @@
+ #if _LIBC
+       __fxprintf (NULL, "%s: ", program_name);
+ #else
+-      fprintf (stderr, "%s: ", program_name);
++      fprintf (stderr, "%s: ", "libguestfs");
+ #endif
+     }
+ 
+@@ -369,7 +369,7 @@
+ #if _LIBC
+       __fxprintf (NULL, "%s:", program_name);
+ #else
+-      fprintf (stderr, "%s:", program_name);
++      fprintf (stderr, "%s:", "libguestfs");
+ #endif
+     }
+ 
+--- gobject/src/session.c	Wed Feb 12 22:33:01 2014
++++ gobject/src/session.c	Mon May 19 07:09:22 2014
+@@ -143,6 +143,7 @@
+       { GUESTFS_SESSION_EVENT_TRACE, "GUESTFS_SESSION_EVENT_TRACE", "trace" },
+       { GUESTFS_SESSION_EVENT_ENTER, "GUESTFS_SESSION_EVENT_ENTER", "enter" },
+       { GUESTFS_SESSION_EVENT_LIBVIRT_AUTH, "GUESTFS_SESSION_EVENT_LIBVIRT_AUTH", "libvirt_auth" },
++      { 0, NULL, NULL }
+     };
+     etype = g_enum_register_static("GuestfsSessionEvent", values);
+   }
+--- gobject/Makefile.am	Wed Feb 12 22:29:51 2014
++++ gobject/Makefile.am	Mon May 19 07:14:49 2014
+@@ -54,8 +54,23 @@
+ libguestfs_gobject_1_0_la_CFLAGS = -I$(top_srcdir)/src -I$(srcdir)/include \
+                                    -DGUESTFS_PRIVATE=1 \
+                                    $(GOBJECT_CFLAGS)
+-libguestfs_gobject_1_0_la_LDFLAGS = $(LDFLAGS) -L$(top_builddir)/src
+-libguestfs_gobject_1_0_la_LIBADD = -lguestfs $(GOBJECT_LIBS) $(GIO_LIBS)
++libguestfs_gobject_1_0_la_LDFLAGS = $(LDFLAGS) -no-undefined -L$(top_builddir)/src
++libguestfs_gobject_1_0_la_LIBADD = -lguestfs $(GOBJECT_LIBS) $(GIO_LIBS) \
++	../src/liberrnostring.la \
++	../src/libprotocol.la \
++	../src/libutils.la \
++	$(PCRE_LIBS) $(MAGIC_LIBS) \
++	$(LIBVIRT_LIBS) $(LIBXML2_LIBS) \
++	$(YAJL_LIBS) \
++	../gnulib/lib/libgnu.la \
++	$(GETADDRINFO_LIB) \
++	$(HOSTENT_LIB) \
++	$(INET_NTOP_LIB) \
++	$(LIBSOCKET) \
++	$(LIB_CLOCK_GETTIME) \
++	$(LIBINTL) \
++	$(LTLIBTHREAD) \
++	$(SERVENT_LIB)
+ 
+ pkgconfigdir = $(libdir)/pkgconfig
+ pkgconfig_DATA = libguestfs-gobject-1.0.pc
+--- src/actions-support.c	Wed Feb 12 22:29:51 2014
++++ src/actions-support.c	Fri Apr 25 12:22:06 2014
+@@ -81,7 +81,11 @@
+ {
+   tb->buf = NULL;
+   tb->len = 0;
++#if (defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__
++  tb->fp = NULL;
++#else
+   tb->fp = open_memstream (&tb->buf, &tb->len);
++#endif
+   if (tb->fp)
+     tb->opened = true;
+   else {
+--- src/appliance.c	Wed Feb 12 22:29:51 2014
++++ src/appliance.c	Fri Apr 25 12:22:14 2014
+@@ -168,11 +168,12 @@
+                  char **appliance)
+ {
+   int r;
+-  uid_t uid = geteuid ();
+   CLEANUP_FREE char *supermin_path = NULL;
+   CLEANUP_FREE char *path = NULL;
+ 
+   /* Step (1). */
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
++  uid_t uid = geteuid ();
+   r = find_path (g, contains_supermin_appliance, NULL, &supermin_path);
+   if (r == -1)
+     return -1;
+@@ -193,6 +194,7 @@
+                                        kernel, initrd, appliance);
+     }
+   }
++#endif
+ 
+   /* Step (5). */
+   r = find_path (g, contains_fixed_appliance, NULL, &path);
+@@ -269,6 +271,7 @@
+ static char *
+ calculate_supermin_checksum (guestfs_h *g, const char *supermin_path)
+ {
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+   size_t len;
+   CLEANUP_CMD_CLOSE struct command *cmd = guestfs___new_command (g);
+   int pass_u_g_args = getuid () != geteuid () || getgid () != getegid ();
+@@ -302,8 +305,11 @@
+   }
+ 
+   return safe_strndup (g, checksum, len);
++#endif
++  return NULL;
+ }
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+ static int
+ process_exists (int pid)
+ {
+@@ -347,7 +353,9 @@
+ 
+   closedir (dir);
+ }
++#endif
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+ static int
+ check_for_cached_appliance (guestfs_h *g,
+                             const char *supermin_path, const char *checksum,
+@@ -460,6 +468,7 @@
+   /* Exists! */
+   return 1;
+ }
++#endif
+ 
+ /* Build supermin appliance from supermin_path to $TMPDIR/.guestfs-$UID.
+  *
+@@ -467,6 +476,7 @@
+  * 0 = built
+  * -1 = error (aborts launch)
+  */
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+ static int
+ build_supermin_appliance (guestfs_h *g,
+                           const char *supermin_path, const char *checksum,
+@@ -708,6 +718,7 @@
+ 
+   return 0;
+ }
++#endif
+ 
+ /* Search elements of g->path, returning the first path element which
+  * matches the predicate function 'pred'.
+@@ -736,7 +747,11 @@
+    * libguestfs < 1.5.4).
+    */
+   do {
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+     len = strcspn (pelem, ":");
++#else
++    len = strcspn (pelem, ";");
++#endif
+ 
+     /* Empty element or "." means current directory. */
+     if (len == 0)
+@@ -755,7 +770,11 @@
+ 
+     free (*pelem_ret);
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+     if (pelem[len] == ':')
++#else
++    if (pelem[len] == ';')
++#endif
+       pelem += len + 1;
+     else
+       pelem += len;
+--- src/command.c	Wed Feb 12 22:29:51 2014
++++ src/command.c	Sun May 18 21:57:09 2014
+@@ -77,6 +77,14 @@
+ #include <sys/wait.h>
+ #include <sys/select.h>
+ 
++#if (defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__
++# include <process.h>
++pid_t waitpid(pid_t pid, int *status, int options) {
++  return _cwait(status, pid, WAIT_CHILD);
++}
++# include <cloexec.h>
++#endif
++
+ #include "guestfs.h"
+ #include "guestfs-internal.h"
+ 
+@@ -129,6 +137,10 @@
+   int outfd;
+   struct buffering outbuf;
+ 
++  /* Supply input to be passed into stdin right after invacation */
++  char *stdin_data;
++  int infd;
++
+   /* For programs that send output to stderr.  Hello qemu. */
+   bool stderr_to_stdout;
+ 
+@@ -148,6 +160,7 @@
+   cmd->close_files = true;
+   cmd->errorfd = -1;
+   cmd->outfd = -1;
++  cmd->stdin_data = NULL;
+   return cmd;
+ }
+ 
+@@ -288,6 +301,14 @@
+   cmd->stderr_to_stdout = true;
+ }
+ 
++/* Data in this buffer will be passed to stdin right after execution.
++ */
++void
++guestfs___cmd_set_stdin_data (struct command *cmd, const char *data)
++{
++  cmd->stdin_data = safe_strdup (cmd->g, data);
++}
++
+ /* Clear the capture_errors flag.  This means that any errors will go
+  * to stderr, instead of being captured in the event log, and that is
+  * usually undesirable.
+@@ -358,6 +379,134 @@
+   }
+ }
+ 
++#if (defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__
++static void
++restore_file_desc(int orig_stdout, int orig_stderr, int orig_stdin)
++{
++  if (orig_stdout >= 0)
++  {
++    dup2(orig_stdout, STDOUT_FILENO);
++    close(orig_stdout);
++  }
++  if (orig_stderr >= 0)
++  {
++    dup2(orig_stderr, STDERR_FILENO);
++    close(orig_stderr);
++  }
++  if (orig_stdin >= 0)
++  {
++    dup2(orig_stdin, STDIN_FILENO);
++    close(orig_stdin);
++  }
++}
++
++static int
++run_command_mingw (struct command *cmd)
++{
++  int i, fd, max_fd, r;
++  int errorfd[2] = { -1, -1 };
++  int outfd[2] = { -1, -1 };
++  int infd[2] = { -1, -1 };
++  int orig_stdout = -1, orig_stderr = -1, orig_stdin = -1;
++  char status_string[80];
++
++  /* Set up a pipe to capture command output and send it to the error log. */
++  if (cmd->capture_errors) {
++    if (pipe2 (errorfd, 0) == -1) {
++      perrorf (cmd->g, "pipe2");
++      goto error;
++    }
++    orig_stderr = dup_cloexec(STDERR_FILENO);
++    if (dup2(errorfd[1], STDERR_FILENO) < 0)
++      goto error;
++  }
++
++  /* Set up a pipe to capture stdout for the callback. */
++  if (cmd->stdout_callback) {
++    if (pipe2 (outfd, 0) == -1) {
++      perrorf (cmd->g, "pipe2");
++      goto error;
++    }
++    orig_stdout = dup_cloexec(STDOUT_FILENO);
++    if (dup2(outfd[1], STDOUT_FILENO) < 0)
++      goto error;
++  }
++
++  /* Set up a pipe to which stdin will be passed. */
++  if (cmd->stdin_data) {
++    if (pipe2 (infd, 0) == -1) {
++	  perrorf (cmd->g, "pipe2");
++    goto error;
++    }
++    orig_stdin = dup_cloexec(STDIN_FILENO);
++    if (dup2(infd[0], STDIN_FILENO) < 0)
++      goto error;
++  }
++
++  /* Redirect stderr to stdout */
++  if (cmd->stderr_to_stdout)
++    dup2 (1, 2);
++
++  /* Spawn child process and exec command */
++  switch (cmd->style) {
++    case COMMAND_STYLE_EXECV:
++      cmd->pid = spawnvp(P_NOWAIT, cmd->argv.argv[0], (const char * const *)cmd->argv.argv);
++      if (cmd->pid < 0)
++        goto error;
++      break;
++
++    case COMMAND_STYLE_SYSTEM:
++      perror ("system not supported");
++      goto error;
++
++    case COMMAND_STYLE_NOT_SELECTED:
++      abort ();
++    }
++
++  /* Restore original stdout,err file descriptors */
++  restore_file_desc(orig_stdout, orig_stderr, orig_stdin);
++
++  /* Close pipe ends that arent relevant to the parent */
++  if (cmd->capture_errors) {
++    close (errorfd[1]);
++    cmd->errorfd = errorfd[0];
++  }
++
++  if (cmd->stdout_callback) {
++    close (outfd[1]);
++    cmd->outfd = outfd[0];
++  }
++
++  if (cmd->stdin_data) {
++    close(infd[0]);
++
++    write(infd[1], cmd->stdin_data, strlen(cmd->stdin_data));
++    cmd->infd = infd[1];
++  }
++
++  return 0;
++
++ error:
++
++  /* Restore original stdout,err file descriptors (if duplicated) */
++  restore_file_desc(orig_stdout, orig_stderr, orig_stdin);
++
++  if (errorfd[0] >= 0)
++    close (errorfd[0]);
++  if (errorfd[1] >= 0)
++    close (errorfd[1]);
++  if (outfd[0] >= 0)
++    close (outfd[0]);
++  if (outfd[1] >= 0)
++    close (outfd[1]);
++  if (infd[1] >= 0)
++    close (infd[1]);
++  if (infd[0] >= 0)
++    close (infd[0]);
++
++  return -1;
++}
++#else
+ static int
+ run_command (struct command *cmd)
+ {
+@@ -495,6 +644,7 @@
+ 
+   return -1;
+ }
++#endif
+ 
+ /* The loop which reads errors and output and directs it either
+  * to the log or to the stdout callback as appropriate.
+@@ -524,7 +674,7 @@
+ 
+   while (nr_fds > 0) {
+     rset2 = rset;
+-    r = select (maxfd+1, &rset2, NULL, NULL, NULL);
++    r = 1;//select (maxfd+1, &rset2, NULL, NULL, NULL);
+     if (r == -1) {
+       if (errno == EINTR || errno == EAGAIN)
+         continue;
+@@ -614,8 +764,13 @@
+   if (cmd->g->verbose)
+     debug_command (cmd);
+ 
++#if (defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__
++  if (run_command_mingw (cmd) == -1)
++      return -1;
++#else
+   if (run_command (cmd) == -1)
+     return -1;
++#endif
+ 
+   if (loop (cmd) == -1)
+     return -1;
+@@ -649,6 +804,10 @@
+   if (cmd->outfd >= 0)
+     close (cmd->outfd);
+ 
++  if (cmd->infd >= 0)
++    close (cmd->infd);
++
++  free (cmd->stdin_data);
+   free (cmd->outbuf.buffer);
+ 
+   if (cmd->pid > 0)
+--- src/conn-socket.c	Wed Feb 12 22:29:51 2014
++++ src/conn-socket.c	Fri Apr 25 12:22:27 2014
+@@ -20,16 +20,22 @@
+ 
+ #include <config.h>
+ 
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string.h>
++#if (defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__
++#include <io.h>
++#include <Winsock2.h>
++#else
+ #include <unistd.h>
+ #include <fcntl.h>
+-#include <errno.h>
+ #include <poll.h>
+ #include <sys/stat.h>
+ #include <sys/socket.h>
+ #include <sys/types.h>
++#endif
++
++#include <string.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <errno.h>
+ #include <assert.h>
+ 
+ #include "guestfs.h"
+@@ -47,8 +53,12 @@
+   int daemon_accept_sock;
+ };
+ 
++#define FD_TO_SOCKET(fd)   ((SOCKET) _get_osfhandle ((fd)))
++#define SOCKET_TO_FD(fh)   (_open_osfhandle ((intptr_t) (fh), O_RDWR | O_BINARY))
++
+ static int handle_log_message (guestfs_h *g, struct connection_socket *conn);
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+ static int
+ accept_connection (guestfs_h *g, struct connection *connv)
+ {
+@@ -113,12 +123,75 @@
+   /* Make sure the new socket is non-blocking. */
+   if (fcntl (conn->daemon_sock, F_SETFL, O_NONBLOCK) == -1) {
+     perrorf (g, "accept_connection: fcntl");
+-    return -1;
++	return -1;
+   }
+-
+   return 1;
+ }
++#else
++static int accept_connection(guestfs_h *g, struct connection *connv) {
++	struct connection_socket *conn = (struct connection_socket *) connv;
++	SOCKET sock = INVALID_SOCKET;
++
++	if (conn->daemon_accept_sock == -1) {
++		error(g, _("accept_connection called twice"));
++		return -1;
++	}
++
++	while (sock == INVALID_SOCKET) {
++		int r;
++		fd_set rfds;
++
++		FD_ZERO (&rfds);
++
++		FD_SET (FD_TO_SOCKET(conn->daemon_accept_sock), &rfds);
++		if (conn->console_sock >= 0) {
++		  FD_SET (FD_TO_SOCKET(conn->console_sock), &rfds);
++		}
++
++		r = select(0, &rfds, NULL, NULL, NULL);
++		if (r > 0) {
++			if (FD_ISSET(FD_TO_SOCKET(conn->console_sock), &rfds)) {
++			  r = handle_log_message (g, conn);
++			  if (r <= 0)
++				return r;
++			}
++
++			if (FD_ISSET(FD_TO_SOCKET(conn->daemon_accept_sock), &rfds)) {
++				sock = accept(FD_TO_SOCKET(conn->daemon_accept_sock), NULL, NULL);
++				if (sock == INVALID_SOCKET) {
++					if (errno == EINTR || errno == EAGAIN)
++						continue;
++					perrorf(g, "accept_connection: accept");
++					return -1;
++				}
++			}
++		} else if (r == SOCKET_ERROR) {
++		  errno = WSAGetLastError();
++		  if (errno == EINTR || errno == EAGAIN)
++			continue;
++		  perrorf (g, "accept_connection: select");
++		  return -1;
++		}
++	}
++
++	/* Got a connection and accepted it, so update the connection's
++	 * internal status.
++	 */
++	closesocket(FD_TO_SOCKET(conn->daemon_accept_sock));
++	conn->daemon_accept_sock = -1;
++	conn->daemon_sock = sock;
++
++	/* Make sure the new socket is non-blocking. */
++	u_long iMode = 0;
++	if (ioctlsocket(conn->daemon_sock, FIONBIO,	&iMode) == SOCKET_ERROR) {
++		perrorf(g, "accept_connection: ioctlsocket");
++		return -1;
++	}
++	return 1;
++}
++#endif
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+ static ssize_t
+ read_data (guestfs_h *g, struct connection *connv, void *bufv, size_t len)
+ {
+@@ -193,7 +266,75 @@
+ 
+   return original_len;
+ }
++#else
++static ssize_t
++read_data (guestfs_h *g, struct connection *connv, void *bufv, size_t len)
++{
++  char *buf = bufv;
++  struct connection_socket *conn = (struct connection_socket *) connv;
++  size_t original_len = len;
++
++  if (conn->daemon_sock == -1) {
++    error (g, _("read_data: socket not connected"));
++    return -1;
++  }
++
++  while (len > 0) {
++    int r;
++    fd_set rfds;
++
++    FD_ZERO (&rfds);
++
++    FD_SET (conn->daemon_sock, &rfds);
++    if (conn->console_sock >= 0)
++      FD_SET (FD_TO_SOCKET(conn->console_sock), &rfds);
++
++    r = select(0, &rfds, NULL, NULL, NULL);
++    if (r > 0) {
++    	if (FD_ISSET(FD_TO_SOCKET(conn->console_sock), &rfds)) {
++    	  r = handle_log_message (g, conn);
++		  if (r <= 0)
++			return r;
++    	}
++
++    	if (FD_ISSET(conn->daemon_sock, &rfds)) {
++			int n = recv(conn->daemon_sock, buf, len, 0);
++			if (n == -1) {
++				if (errno == EINTR || errno == EAGAIN)
++					continue;
++				if (errno == ECONNRESET) /* essentially the same as EOF case */
++					goto closed;
++				perrorf(g, "read_data: read");
++				return -1;
++			}
++			if (n == 0) {
++				closed:
++				/* Even though qemu has gone away, there could be more log
++				 * messages in the console socket buffer in the kernel.  Read
++				 * them out here.
++				 */
++				if (g->verbose && conn->console_sock >= 0) {
++					while (handle_log_message(g, conn) == 1);
++				}
++				return 0;
++			}
++
++			buf += n;
++			len -= n;
++    	}
++    } else if (r == -1) {
++      if (errno == EINTR || errno == EAGAIN)
++        continue;
++      perrorf (g, "read_data: select");
++      return -1;
++    }
++  }
++
++  return original_len;
++}
++#endif
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+ static int
+ can_read_data (guestfs_h *g, struct connection *connv)
+ {
+@@ -221,7 +362,40 @@
+ 
+   return (fd.revents & POLLIN) != 0 ? 1 : 0;
+ }
++#else
++static int
++can_read_data (guestfs_h *g, struct connection *connv)
++{
++  struct connection_socket *conn = (struct connection_socket *) connv;
++  int r;
++  fd_set rfds;
++  //struct timeval tv0 = { .tv_sec = 0, .tv_usec = 0};
++  const struct timeval timeout = {0, 0};
++
++
++  if (conn->daemon_sock == -1) {
++    error (g, _("can_read_data: socket not connected"));
++    return -1;
++  }
++
++  FD_ZERO (&rfds);
+ 
++  FD_SET (conn->daemon_sock, &rfds);
++
++ again:
++  r = select(0, &rfds, NULL, NULL, &timeout);
++  if (r == -1) {
++    if (errno == EINTR || errno == EAGAIN)
++      goto again;
++    perrorf (g, "can_read_data: select");
++    return -1;
++  }
++
++  return FD_ISSET(conn->daemon_sock, &rfds) ? 1 : 0;
++}
++#endif
++
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+ static ssize_t
+ write_data (guestfs_h *g, struct connection *connv,
+             const void *bufv, size_t len)
+@@ -251,7 +425,8 @@
+       nfds++;
+     }
+ 
+-    r = poll (fds, nfds, -1);
++    r = 1;//poll (fds, nfds, -1);
++    fds[0].revents = POLLOUT;
+     if (r == -1) {
+       if (errno == EINTR || errno == EAGAIN)
+         continue;
+@@ -285,6 +460,64 @@
+ 
+   return original_len;
+ }
++#else
++static ssize_t
++write_data (guestfs_h *g, struct connection *connv,
++            const void *bufv, size_t len)
++{
++  const char *buf = bufv;
++  struct connection_socket *conn = (struct connection_socket *) connv;
++  size_t original_len = len;
++
++  if (conn->daemon_sock == -1) {
++    error (g, _("write_data: socket not connected"));
++    return -1;
++  }
++
++  while (len > 0) {
++    int r;
++	fd_set rfds, wfds;
++
++	FD_ZERO (&rfds);
++	FD_ZERO (&wfds);
++
++	FD_SET (conn->daemon_sock, &wfds);
++	if (conn->console_sock >= 0)
++	  FD_SET (FD_TO_SOCKET(conn->console_sock), &rfds);
++
++	r = select(0, &rfds, &wfds, NULL, NULL);
++	if (r > 0) {
++		if (FD_ISSET(FD_TO_SOCKET(conn->console_sock), &rfds)) {
++		  r = handle_log_message (g, conn);
++		  if (r <= 0)
++			return r;
++		}
++
++		if (FD_ISSET(conn->daemon_sock, &wfds)) {
++			int n = send(conn->daemon_sock, buf, len, 0);
++			if (n == -1) {
++				if (errno == EINTR || errno == EAGAIN)
++					continue;
++				if (errno == EPIPE) /* Disconnected from guest (RHBZ#508713). */
++					return 0;
++				perrorf(g, "write_data: write");
++				return -1;
++			}
++
++			buf += n;
++			len -= n;
++		}
++	} else if (r == -1) {
++	  if (errno == EINTR || errno == EAGAIN)
++		continue;
++	  perrorf (g, "write_data: select");
++	  return -1;
++	}
++  }
++
++  return original_len;
++}
++#endif
+ 
+ /* This is called if conn->console_sock becomes ready to read while we
+  * are doing one of the connection operations above.  It reads and
+@@ -314,7 +547,9 @@
+    *   based console (not yet implemented) we may be able to remove
+    *   this.  XXX"
+    */
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+   usleep (1000);
++#endif
+ 
+   n = read (conn->console_sock, buf, sizeof buf);
+   if (n == 0)
+@@ -354,6 +589,7 @@
+   return 1;
+ }
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+ static void
+ free_conn_socket (guestfs_h *g, struct connection *connv)
+ {
+@@ -368,6 +604,22 @@
+ 
+   free (conn);
+ }
++#else
++static void
++free_conn_socket (guestfs_h *g, struct connection *connv)
++{
++  struct connection_socket *conn = (struct connection_socket *) connv;
++
++  if (conn->console_sock >= 0)
++    closesocket (FD_TO_SOCKET(conn->console_sock));
++  if (conn->daemon_sock >= 0)
++    closesocket (conn->daemon_sock);
++  if (conn->daemon_accept_sock >= 0)
++    closesocket (FD_TO_SOCKET(conn->daemon_accept_sock));
++
++  free (conn);
++}
++#endif
+ 
+ static struct connection_ops ops = {
+   .free_connection = free_conn_socket,
+@@ -395,13 +647,23 @@
+ 
+   assert (daemon_accept_sock >= 0);
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+   if (fcntl (daemon_accept_sock, F_SETFL, O_NONBLOCK) == -1) {
++#else
++  u_long iMode = 0;
++  if (ioctlsocket(FD_TO_SOCKET(daemon_accept_sock), FIONBIO, &iMode) == SOCKET_ERROR) {
++#endif
+     perrorf (g, "new_conn_socket_listening: fcntl");
+     return NULL;
+   }
+ 
+   if (console_sock >= 0) {
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+     if (fcntl (console_sock, F_SETFL, O_NONBLOCK) == -1) {
++#else
++    u_long iMode1 = 0;
++    if (ioctlsocket(FD_TO_SOCKET(console_sock), FIONBIO, &iMode1) == SOCKET_ERROR) {
++#endif
+       perrorf (g, "new_conn_socket_listening: fcntl");
+       return NULL;
+     }
+@@ -434,13 +696,23 @@
+ 
+   assert (daemon_sock >= 0);
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+   if (fcntl (daemon_sock, F_SETFL, O_NONBLOCK) == -1) {
++#else
++  u_long iMode = 0;
++  if (ioctlsocket(FD_TO_SOCKET(daemon_sock), FIONBIO, &iMode) == SOCKET_ERROR) {
++#endif
+     perrorf (g, "new_conn_socket_connected: fcntl");
+     return NULL;
+   }
+ 
+   if (console_sock >= 0) {
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+     if (fcntl (console_sock, F_SETFL, O_NONBLOCK) == -1) {
++#else
++    u_long iMode1 = 0;
++    if (ioctlsocket(FD_TO_SOCKET(console_sock), FIONBIO, &iMode1) == SOCKET_ERROR) {
++#endif
+       perrorf (g, "new_conn_socket_connected: fcntl");
+       return NULL;
+     }
+--- src/drives.c	Wed Feb 12 22:29:51 2014
++++ src/drives.c	Fri Apr 25 12:22:34 2014
+@@ -1235,10 +1235,14 @@
+   switch (src->protocol) {
+   case drive_protocol_file:
+     /* We might need to rewrite the path if it contains a ':' character. */
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+     if (src->u.path[0] == '/' || strchr (src->u.path, ':') == NULL)
+       return safe_strdup (g, src->u.path);
+     else
+       return safe_asprintf (g, "./%s", src->u.path);
++#else
++    return safe_strdup (g, src->u.path);
++#endif
+ 
+   case drive_protocol_ftp:
+     return make_uri (g, "ftp", src->username,
+--- src/guestfs-internal.h	Wed Feb 12 22:29:51 2014
++++ src/guestfs-internal.h	Fri Apr 25 12:22:44 2014
+@@ -769,6 +769,7 @@
+ extern void guestfs___cmd_add_string_unquoted (struct command *, const char *str);
+ extern void guestfs___cmd_add_string_quoted (struct command *, const char *str);
+ extern void guestfs___cmd_set_stdout_callback (struct command *, cmd_stdout_callback stdout_callback, void *data, unsigned flags);
++extern void guestfs___cmd_set_stdin_data (struct command *cmd, const char *data);
+ #define CMD_STDOUT_FLAG_LINE_BUFFER    0
+ #define CMD_STDOUT_FLAG_UNBUFFERED      1
+ #define CMD_STDOUT_FLAG_WHOLE_BUFFER    2
+--- src/handle.c	Wed Feb 12 22:29:51 2014
++++ src/handle.c	Fri Apr 25 12:22:49 2014
+@@ -379,10 +379,10 @@
+     ret = -1;
+ 
+   /* Close sockets. */
+-  if (g->conn) {
++  /*if (g->conn) {
+     g->conn->ops->free_connection (g, g->conn);
+     g->conn = NULL;
+-  }
++  }*/
+ 
+   guestfs___free_drives (g);
+ 
+--- src/info.c	Wed Feb 12 22:29:51 2014
++++ src/info.c	Sun May 18 22:24:01 2014
+@@ -39,6 +39,17 @@
+ #include "guestfs-internal-actions.h"
+ #include "guestfs_protocol.h"
+ 
++#ifdef _WIN32
++#include <windows.h>
++char *realpath(const char *path, char *resolved_path)
++{
++    DWORD res = GetFullPathName(path, MAX_PATH, resolved_path, NULL);
++    if (res == 0 || res > MAX_PATH - 1)
++        return strdup(path);
++    else
++        return resolved_path;
++}
++#endif
+ static int which_parser (guestfs_h *g);
+ static char *get_disk_format (guestfs_h *g, const char *filename);
+ static int64_t get_disk_virtual_size (guestfs_h *g, const char *filename);
+--- src/inspect-fs-windows.c	Wed Feb 12 22:29:51 2014
++++ src/inspect-fs-windows.c	Fri Apr 25 12:22:56 2014
+@@ -376,6 +376,9 @@
+ static int
+ check_windows_system_registry (guestfs_h *g, struct inspect_fs *fs)
+ {
++#if (defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__
++  return -1;
++#else
+   int r;
+   size_t len = strlen (fs->windows_systemroot) + 64;
+   char system[len];
+@@ -540,6 +543,7 @@
+   guestfs_hivex_close (g);
+ 
+   return ret;
++#endif
+ }
+ 
+ /* Windows Registry HKLM\SYSTEM\MountedDevices uses a blob of data
+@@ -551,6 +555,9 @@
+ static char *
+ map_registry_disk_blob (guestfs_h *g, const void *blob)
+ {
++#if (defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__
++  return NULL;
++#else
+   CLEANUP_FREE_STRING_LIST char **devices = NULL;
+   CLEANUP_FREE_PARTITION_LIST struct guestfs_partition_list *partitions = NULL;
+   size_t i, j, len;
+@@ -597,6 +604,7 @@
+  found_partition:
+   /* Construct the full device name. */
+   return safe_asprintf (g, "%s%d", devices[i], partitions->val[j].part_num);
++#endif
+ }
+ 
+ /* NB: This function DOES NOT test for the existence of the file.  It
+--- src/launch-direct.c	Wed Feb 12 22:29:51 2014
++++ src/launch-direct.c	Sun May 18 22:26:45 2014
+@@ -28,8 +28,13 @@
+ #include <sys/types.h>
+ #include <sys/wait.h>
+ #include <signal.h>
++#ifdef _WIN32
++#include <ws2tcpip.h>
++#include <winsock2.h>
++#include <process.h>
++#else 
+ #include <sys/socket.h>
+-#include <sys/un.h>
++#endif
+ 
+ #include <pcre.h>
+ 
+@@ -57,6 +62,10 @@
+   const char *err;
+   int offset;
+ 
++#if (defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__
++#define kill(pid,sig) TerminateProcess ((HANDLE) (pid), sig)
++#endif
++
+ #define COMPILE(re,pattern,options)                                     \
+   do {                                                                  \
+     re = pcre_compile ((pattern), (options), &err, &offset, NULL);      \
+@@ -75,7 +84,6 @@
+   pcre_free (re_major_minor);
+ }
+ 
+-static int is_openable (guestfs_h *g, const char *path, int flags);
+ static char *make_appliance_dev (guestfs_h *g, int virtio_scsi);
+ static void print_qemu_command_line (guestfs_h *g, char **argv);
+ static int qemu_supports (guestfs_h *g, const char *option);
+@@ -83,38 +91,12 @@
+ static int qemu_supports_virtio_scsi (guestfs_h *g);
+ static char *qemu_drive_param (guestfs_h *g, const struct drive *drv, size_t index);
+ 
+-/* Functions to build up the qemu command line.  These are only run
+- * in the child process so no clean-up is required.
+- */
+-static void
+-alloc_cmdline (guestfs_h *g)
+-{
+-  g->direct.cmdline_size = 1;
+-  g->direct.cmdline = safe_malloc (g, sizeof (char *));
+-  g->direct.cmdline[0] = g->qemu;
+-}
+-
+-static void
+-incr_cmdline_size (guestfs_h *g)
+-{
+-  g->direct.cmdline_size++;
+-  g->direct.cmdline =
+-    safe_realloc (g, g->direct.cmdline,
+-                  sizeof (char *) * g->direct.cmdline_size);
+-}
+-
+-static void
+-add_cmdline (guestfs_h *g, const char *str)
+-{
+-  incr_cmdline_size (g);
+-  g->direct.cmdline[g->direct.cmdline_size-1] = safe_strdup (g, str);
+-}
+-
+ /* Like 'add_cmdline' but allowing a shell-quoted string of zero or
+  * more options.  XXX The unquoting is not very clever.
+  */
+ static void
+-add_cmdline_shell_unquoted (guestfs_h *g, const char *options)
++add_cmdline_shell_unquoted (guestfs_h *g, struct stringsbuf *sb,
++                            const char *options)
+ {
+   char quote;
+   const char *startp, *endp, *nextp;
+@@ -158,27 +140,257 @@
+     while (*nextp && *nextp == ' ')
+       nextp++;
+ 
+-    incr_cmdline_size (g);
+-    g->direct.cmdline[g->direct.cmdline_size-1] =
+-      safe_strndup (g, startp, endp-startp);
++    guestfs___add_string_nodup (g, sb,
++                                safe_strndup (g, startp, endp-startp));
+ 
+     options = nextp;
+   }
+ }
+ 
++#define QEMU_PORT 0
+ static int
+-launch_direct (guestfs_h *g, const char *arg)
++get_listener_socket()
++{
++	union
++	{
++		struct sockaddr_in inaddr;
++		struct sockaddr addr;
++	} a;
++
++	int listener;
++	int reuse = 1;
++
++	listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
++	if (listener == -1)
++		return -1;
++
++	memset(&a, 0, sizeof(a));
++	a.inaddr.sin_family = AF_INET;
++	a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++	a.inaddr.sin_port = 0;//htons(QEMU_PORT);
++
++	if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (char*)&reuse, (socklen_t)sizeof(reuse)) == -1)
++		goto error1;
++
++	if (bind(listener, &a.addr, sizeof(a.inaddr)) == -1)
++		goto error1;
++
++	return listener;
++
++error1:
++	close(listener);
++
++	return -1;
++}
++
++static int
++mingw_socketpair(int socks[2])
++{
++	union
++	{
++		struct sockaddr_in inaddr;
++		struct sockaddr addr;
++	} a;
++
++	socklen_t addrlen = sizeof a.addr;
++	int listener;
++	int reuse = 1;
++
++	listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
++	if (listener == -1)
++		return -1;
++
++	memset(&a, 0, sizeof(a));
++	a.inaddr.sin_family = AF_INET;
++	a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++	a.inaddr.sin_port = 0;
++
++	if (setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, (char*)&reuse, (socklen_t)sizeof(reuse)) == -1)
++		goto error1;
++
++	if (bind(listener, &a.addr, sizeof(a.inaddr)) == -1)
++		goto error1;
++
++	if (getsockname(listener, &a.addr, &addrlen) == -1)
++		goto error1;
++
++	// port number for console to listen to
++	int port = ntohs(a.inaddr.sin_port);
++
++	if (listen(listener, 1) == -1)
++		goto error1;
++
++	a.inaddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++	a.inaddr.sin_family = AF_INET;
++
++	socks[0] = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
++	if (socks[0] == -1)
++		goto error1;
++
++	if (connect(socks[0], &a.addr, sizeof(a.inaddr)) == -1)
++		goto error2;
++
++	socks[1] = accept(listener, NULL, NULL);
++	if (socks[1] == -1)
++		goto error2;
++
++	close(listener);
++
++	return 0;
++
++error2:
++	close(socks[0]);
++
++error1:
++	close(listener);
++
++	return -1;
++}
++
++
++enum spawn_pipe_lgpl_pipe_t {
++	SPAWN_PIPE_LGPL_STDIN = 1,
++	SPAWN_PIPE_LGPL_STDOUT = 2,
++	SPAWN_PIPE_LGPL_STDERR = 4,
++	SPAWN_PIPE_LGPL_STDIN_PROVIDED = 8,
++	SPAWN_PIPE_LGPL_STDOUT_PROVIDED = 16,
++	SPAWN_PIPE_LGPL_STDERR_PROVIDED = 32,
++};
++typedef enum spawn_pipe_lgpl_pipe_t spawn_pipe_lgpl_pipe_t;
++
++static void
++restore_file_desc(int orig_stdin, int orig_stdout, int orig_stderr)
++{
++	if (orig_stdin >= 0)
++	{
++		dup2(orig_stdin, STDIN_FILENO);
++		close(orig_stdin);
++	}
++	if (orig_stdout >= 0)
++	{
++		dup2(orig_stdout, STDOUT_FILENO);
++		close(orig_stdout);
++	}
++	if (orig_stderr >= 0)
++	{
++		dup2(orig_stderr, STDERR_FILENO);
++		close(orig_stderr);
++	}
++}
++
++static pid_t
++spawn_dup (const char *prog_path, const char **prog_argv,
++             spawn_pipe_lgpl_pipe_t pipes, int fd[3])
++{
++	int ifd[2] = {-1, -1},
++		ofd[2] = {-1, -1},
++		efd[2] = {-1, -1},
++		orig_stdin = -1, orig_stdout = -1, orig_stderr = -1,
++		child = -1;
++
++	/* Prepare pipes (or use provided file descriptors), save original std file descriptors and replace */
++	if (pipes & SPAWN_PIPE_LGPL_STDIN)
++	{
++		if (pipes & SPAWN_PIPE_LGPL_STDIN_PROVIDED)
++		{
++			ifd[0] = fd[STDIN_FILENO];
++
++		} else if (pipe2(ifd, 0) < 0)
++			goto exit1;
++
++		else fd[STDIN_FILENO] = ifd[1];
++
++		orig_stdin = dup_cloexec(STDIN_FILENO);
++		if (orig_stdin < 0)
++			goto exit1;
++
++		if (dup2(ifd[0], STDIN_FILENO) < 0)
++			goto exit1;
++	}
++
++	if (pipes & SPAWN_PIPE_LGPL_STDOUT)
++	{
++		if (pipes & SPAWN_PIPE_LGPL_STDOUT_PROVIDED)
++		{
++			ofd[1] = fd[STDOUT_FILENO];
++
++		} else if (pipe2(ofd, 0) < 0)
++			goto exit1;
++
++		else fd[STDOUT_FILENO] = ofd[0];
++
++		orig_stdout = dup_cloexec(STDOUT_FILENO);
++		if (orig_stdout < 0)
++			goto exit1;
++
++		if (dup2(ofd[1], STDOUT_FILENO) < 0)
++			goto exit1;
++	}
++	if (pipes & SPAWN_PIPE_LGPL_STDERR)
++	{
++		if (pipes & SPAWN_PIPE_LGPL_STDERR_PROVIDED)
++		{
++			efd[1] = fd[STDERR_FILENO];
++
++		} else if (pipe2(efd, 0) < 0)
++			goto exit1;
++
++		else fd[STDERR_FILENO] = efd[0];
++
++		orig_stderr = dup_cloexec(STDERR_FILENO);
++		if (orig_stderr < 0)
++			goto exit1;
++
++		if (dup2(efd[1], STDERR_FILENO) < 0)
++			goto exit1;
++	}
++
++	/* Execute child */
++	child = spawnvp(P_NOWAIT, prog_path, prog_argv);
++
++exit1:
++	/* Close pipes */
++	if ((pipes & SPAWN_PIPE_LGPL_STDIN) && !(pipes & SPAWN_PIPE_LGPL_STDIN_PROVIDED) && (ifd[0] != -1))
++	{
++		close(ifd[0]);
++		if (child == -1) close(ifd[1]);
++	}
++	if ((pipes & SPAWN_PIPE_LGPL_STDOUT) && !(pipes & SPAWN_PIPE_LGPL_STDOUT_PROVIDED) && (ofd[1] != -1))
++	{
++		if (child == -1) close(ofd[0]);
++		close(ofd[1]);
++	}
++	if ((pipes & SPAWN_PIPE_LGPL_STDERR) && !(pipes & SPAWN_PIPE_LGPL_STDERR_PROVIDED) && (efd[1] != -1))
++	{
++		if (child == -1) close(efd[0]);
++		close(efd[1]);
++	}
++
++	/* Restore original std file descriptors */
++	restore_file_desc(orig_stdin, orig_stdout, orig_stderr);
++
++	return child;
++}
++
++static int
++launch_mingw (guestfs_h *g, const char *arg)
+ {
+   int daemon_accept_sock = -1, console_sock = -1;
+   int r;
+   int sv[2];
+   char guestfsd_sock[256];
+-  struct sockaddr_un addr;
+   CLEANUP_FREE char *kernel = NULL, *initrd = NULL, *appliance = NULL;
+   int has_appliance_drive;
+   CLEANUP_FREE char *appliance_dev = NULL;
+   uint32_t size;
+   CLEANUP_FREE void *buf = NULL;
++  union
++  {
++    struct sockaddr_in inaddr;
++    struct sockaddr addr;
++  } a;
++  socklen_t addrlen = sizeof(a.addr);
++  CLEANUP_FREE_STRINGSBUF DECLARE_STRINGSBUF (cmdline);
+ 
+   /* At present you must add drives before starting the appliance.  In
+    * future when we enable hotplugging you won't need to do this.
+@@ -204,30 +416,15 @@
+   if (g->verbose)
+     guestfs___print_timestamped_message (g, "begin testing qemu features");
+ 
+-  /* Get qemu help text and version. */
+-  if (qemu_supports (g, NULL) == -1)
+-    goto cleanup0;
+-
+   /* Using virtio-serial, we need to create a local Unix domain socket
+    * for qemu to connect to.
+    */
+-  snprintf (guestfsd_sock, sizeof guestfsd_sock, "%s/guestfsd.sock", g->tmpdir);
+-  unlink (guestfsd_sock);
+-
+-  daemon_accept_sock = socket (AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0);
+-  if (daemon_accept_sock == -1) {
+-    perrorf (g, "socket");
++  daemon_accept_sock = get_listener_socket();
++  if (daemon_accept_sock == -1)
+     goto cleanup0;
+-  }
+ 
+-  addr.sun_family = AF_UNIX;
+-  strncpy (addr.sun_path, guestfsd_sock, UNIX_PATH_MAX);
+-  addr.sun_path[UNIX_PATH_MAX-1] = '\0';
+-
+-  if (bind (daemon_accept_sock, &addr, sizeof addr) == -1) {
+-    perrorf (g, "bind");
++  if (getsockname(daemon_accept_sock, &a.addr, &addrlen) == -1)
+     goto cleanup0;
+-  }
+ 
+   if (listen (daemon_accept_sock, 1) == -1) {
+     perrorf (g, "listen");
+@@ -235,369 +432,276 @@
+   }
+ 
+   if (!g->direct_mode) {
+-    if (socketpair (AF_LOCAL, SOCK_STREAM|SOCK_CLOEXEC, 0, sv) == -1) {
+-      perrorf (g, "socketpair");
+-      goto cleanup0;
++    if (mingw_socketpair (sv) == -1) {
++	    perrorf (g, "socketpair");
++	    goto cleanup0;
+     }
+   }
+ 
++  /* Get qemu help text and version. */
++  if (qemu_supports (g, NULL) == -1)
++    goto cleanup0;
++
+   if (g->verbose)
+     guestfs___print_timestamped_message (g, "finished testing qemu features");
+ 
+-  r = fork ();
+-  if (r == -1) {
+-    perrorf (g, "fork");
+-    if (!g->direct_mode) {
+-      close (sv[0]);
+-      close (sv[1]);
+-    }
+-    goto cleanup0;
++#define ADD_CMDLINE(str) \
++  guestfs___add_string (g, &cmdline, (str))
++#define ADD_CMDLINE_STRING_NODUP(str) \
++  guestfs___add_string_nodup (g, &cmdline, (str))
++#define ADD_CMDLINE_PRINTF(fs,...) \
++  guestfs___add_sprintf (g, &cmdline, (fs), ##__VA_ARGS__)
++#define END_CMDLINE() \
++  guestfs___end_stringsbuf (g, &cmdline);
++
++  /* Prepare QEMU command
++   */
++  ADD_CMDLINE (g->qemu);
++
++  /* CVE-2011-4127 mitigation: Disable SCSI ioctls on virtio-blk
++   * devices.  The -global option must exist, but you can pass any
++   * strings to it so we don't need to check for the specific virtio
++   * feature.
++   */
++  if (qemu_supports (g, "-global")) {
++    ADD_CMDLINE ("-global");
++    ADD_CMDLINE ("virtio-blk-pci.scsi=off");
+   }
+ 
+-  if (r == 0) {			/* Child (qemu). */
+-    char buf[256];
+-    int virtio_scsi = qemu_supports_virtio_scsi (g);
+-    struct qemu_param *qp;
+-
+-    /* Set up the full command line.  Do this in the subprocess so we
+-     * don't need to worry about cleaning up.
+-     */
+-    alloc_cmdline (g);
+-
+-    /* CVE-2011-4127 mitigation: Disable SCSI ioctls on virtio-blk
+-     * devices.  The -global option must exist, but you can pass any
+-     * strings to it so we don't need to check for the specific virtio
+-     * feature.
+-     */
+-    if (qemu_supports (g, "-global")) {
+-      add_cmdline (g, "-global");
+-      add_cmdline (g, "virtio-blk-pci.scsi=off");
+-    }
++  if (qemu_supports (g, "-nodefconfig"))
++    ADD_CMDLINE ("-nodefconfig");
++
++  /* Newer versions of qemu (from around 2009/12) changed the
++   * behaviour of monitors so that an implicit '-monitor stdio' is
++   * assumed if we are in -nographic mode and there is no other
++   * -monitor option.  Only a single stdio device is allowed, so
++   * this broke the '-serial stdio' option.  There is a new flag
++   * called -nodefaults which gets rid of all this default crud, so
++   * let's use that to avoid this and any future surprises.
++   */
++  if (qemu_supports (g, "-nodefaults"))
++    ADD_CMDLINE ("-nodefaults");
+ 
+-    if (qemu_supports (g, "-nodefconfig"))
+-      add_cmdline (g, "-nodefconfig");
++  ADD_CMDLINE ("-nographic");
++  //ADD_CMDLINE ("-device");
++  //ADD_CMDLINE ("VGA");
+ 
+-    /* Newer versions of qemu (from around 2009/12) changed the
+-     * behaviour of monitors so that an implicit '-monitor stdio' is
+-     * assumed if we are in -nographic mode and there is no other
+-     * -monitor option.  Only a single stdio device is allowed, so
+-     * this broke the '-serial stdio' option.  There is a new flag
+-     * called -nodefaults which gets rid of all this default crud, so
+-     * let's use that to avoid this and any future surprises.
+-     */
+-    if (qemu_supports (g, "-nodefaults"))
+-      add_cmdline (g, "-nodefaults");
+-
+-    add_cmdline (g, "-nographic");
+-
+-    /* The qemu -machine option (added 2010-12) is a bit more sane
+-     * since it falls back through various different acceleration
+-     * modes, so try that first (thanks Markus Armbruster).
+-     */
+-    if (qemu_supports (g, "-machine")) {
+-      add_cmdline (g, "-machine");
+-      add_cmdline (g, "accel=kvm:tcg");
+-    } else {
+-      /* qemu sometimes needs this option to enable hardware
+-       * virtualization, but some versions of 'qemu-kvm' will use KVM
+-       * regardless (even where this option appears in the help text).
+-       * It is rumoured that there are versions of qemu where supplying
+-       * this option when hardware virtualization is not available will
+-       * cause qemu to fail, so we we have to check at least that
+-       * /dev/kvm is openable.  That's not reliable, since /dev/kvm
+-       * might be openable by qemu but not by us (think: SELinux) in
+-       * which case the user would not get hardware virtualization,
+-       * although at least shouldn't fail.  A giant clusterfuck with the
+-       * qemu command line, again.
+-       */
+-      if (qemu_supports (g, "-enable-kvm") &&
+-          is_openable (g, "/dev/kvm", O_RDWR|O_CLOEXEC))
+-        add_cmdline (g, "-enable-kvm");
+-    }
++  /* Under Mingw QEMU has a bug that forces you to create at least one monitor device ("-nodefaults" removes everything)
++   *
++   */
++  ADD_CMDLINE ("-monitor");
++  ADD_CMDLINE ("telnet:127.0.0.1:0,server,nowait");
+ 
+-    if (g->smp > 1) {
+-      snprintf (buf, sizeof buf, "%d", g->smp);
+-      add_cmdline (g, "-smp");
+-      add_cmdline (g, buf);
+-    }
++  /* The qemu -machine option (added 2010-12) is a bit more sane
++   * since it falls back through various different acceleration
++   * modes, so try that first (thanks Markus Armbruster).
++   */
++  if (qemu_supports (g, "-machine")) {
++    ADD_CMDLINE ("-machine");
++    ADD_CMDLINE ("accel=tcg");
++  } else {
++	/* qemu sometimes needs this option to enable hardware
++	 * virtualization, but some versions of 'qemu-kvm' will use KVM
++	 * regardless (even where this option appears in the help text).
++	 * It is rumoured that there are versions of qemu where supplying
++	 * this option when hardware virtualization is not available will
++	 * cause qemu to fail, so we we have to check at least that
++	 * /dev/kvm is openable.  That's not reliable, since /dev/kvm
++	 * might be openable by qemu but not by us (think: SELinux) in
++	 * which case the user would not get hardware virtualization,
++	 * although at least shouldn't fail.  A giant clusterfuck with the
++	 * qemu command line, again.
++	 */
++	if (qemu_supports (g, "-enable-kvm"))
++      ADD_CMDLINE ("-enable-kvm");
++  }
++
++  if (g->smp > 1) {
++	ADD_CMDLINE ("-smp");
++	ADD_CMDLINE_PRINTF ("%d", g->smp);
++  }
+ 
+-    snprintf (buf, sizeof buf, "%d", g->memsize);
+-    add_cmdline (g, "-m");
+-    add_cmdline (g, buf);
++  ADD_CMDLINE ("-m");
++  ADD_CMDLINE_PRINTF ("%d", g->memsize);
+ 
+-    /* Force exit instead of reboot on panic */
+-    add_cmdline (g, "-no-reboot");
++  /* Force exit instead of reboot on panic */
++  ADD_CMDLINE ("-no-reboot");
+ 
+-    /* These options recommended by KVM developers to improve reliability. */
++  /* These options recommended by KVM developers to improve reliability. */
+ #ifndef __arm__
+-    /* qemu-system-arm advertises the -no-hpet option but if you try
+-     * to use it, it usefully says:
+-     *   "Option no-hpet not supported for this target".
+-     * Cheers qemu developers.  How many years have we been asking for
+-     * capabilities?  Could be 3 or 4 years, I forget.
+-     */
+-    if (qemu_supports (g, "-no-hpet"))
+-      add_cmdline (g, "-no-hpet");
++  /* qemu-system-arm advertises the -no-hpet option but if you try
++   * to use it, it usefully says:
++   *   "Option no-hpet not supported for this target".
++   * Cheers qemu developers.  How many years have we been asking for
++   * capabilities?  Could be 3 or 4 years, I forget.
++   */
++  if (qemu_supports (g, "-no-hpet"))
++    ADD_CMDLINE ("-no-hpet");
+ #endif
+ 
+-    if (qemu_supports (g, "-rtc-td-hack"))
+-      add_cmdline (g, "-rtc-td-hack");
++  if (qemu_supports (g, "-rtc-td-hack"))
++    ADD_CMDLINE ("-rtc-td-hack");
+ 
+-    add_cmdline (g, "-kernel");
+-    add_cmdline (g, kernel);
+-    add_cmdline (g, "-initrd");
+-    add_cmdline (g, initrd);
+-
+-    /* Add drives */
+-    struct drive *drv;
+-    size_t i;
++  ADD_CMDLINE ("-kernel");
++  ADD_CMDLINE (kernel);
++  ADD_CMDLINE ("-initrd");
++  ADD_CMDLINE (initrd);
+ 
+-    if (virtio_scsi) {
+-      /* Create the virtio-scsi bus. */
+-      add_cmdline (g, "-device");
+-      add_cmdline (g, "virtio-scsi-pci,id=scsi");
+-    }
+-
+-    ITER_DRIVES (g, i, drv) {
+-      /* Construct the final -drive parameter. */
+-      CLEANUP_FREE char *buf = qemu_drive_param (g, drv, i);
+-
+-      add_cmdline (g, "-drive");
+-      add_cmdline (g, buf);
+-
+-      if (virtio_scsi && drv->iface == NULL) {
+-        char buf2[64];
+-        snprintf (buf2, sizeof buf2, "scsi-hd,drive=hd%zu", i);
+-        add_cmdline (g, "-device");
+-        add_cmdline (g, buf2);
+-      }
+-    }
++  /* Add drives */
++  struct drive *drv;
++  size_t i;
++  int virtio_scsi = qemu_supports_virtio_scsi (g);
+ 
+-    /* Add the ext2 appliance drive (after all the drives). */
+-    if (has_appliance_drive) {
+-      const char *cachemode = "";
+-      if (qemu_supports (g, "cache=")) {
+-        if (qemu_supports (g, "unsafe"))
+-          cachemode = ",cache=unsafe";
+-        else if (qemu_supports (g, "writeback"))
+-          cachemode = ",cache=writeback";
+-      }
++  if (virtio_scsi) {
++	/* Create the virtio-scsi bus. */
++    ADD_CMDLINE ("-device");
++    ADD_CMDLINE ("virtio-scsi-pci,id=scsi");
++  }
+ 
+-      size_t buf2_len = strlen (appliance) + 64;
+-      char buf2[buf2_len];
+-      add_cmdline (g, "-drive");
+-      snprintf (buf2, buf2_len, "file=%s,snapshot=on,id=appliance,if=%s%s",
+-                appliance, virtio_scsi ? "none" : "virtio", cachemode);
+-      add_cmdline (g, buf2);
+-
+-      if (virtio_scsi) {
+-        add_cmdline (g, "-device");
+-        add_cmdline (g, "scsi-hd,drive=appliance");
+-      }
++  ITER_DRIVES (g, i, drv) {
++	/* Construct the final -drive parameter. */
++	CLEANUP_FREE char *buff = qemu_drive_param (g, drv, i);
+ 
+-      appliance_dev = make_appliance_dev (g, virtio_scsi);
+-    }
++	ADD_CMDLINE ("-drive");
++	ADD_CMDLINE (buff);
+ 
+-    /* Create the virtio serial bus. */
+-    add_cmdline (g, "-device");
+-    add_cmdline (g, "virtio-serial");
++	if (virtio_scsi && drv->iface == NULL) {
++	  ADD_CMDLINE ("-device");
++	  ADD_CMDLINE_PRINTF ("scsi-hd,drive=hd%zu", i);
++	}
++  }
++
++  /* Add the ext2 appliance drive (after all the drives). */
++  if (has_appliance_drive) {
++	const char *cachemode = "";
++	if (qemu_supports (g, "cache=")) {
++	  if (qemu_supports (g, "unsafe"))
++		cachemode = ",cache=unsafe";
++	  else if (qemu_supports (g, "writeback"))
++		cachemode = ",cache=writeback";
++	}
++
++	ADD_CMDLINE ("-drive");
++	ADD_CMDLINE_PRINTF ("file=%s,snapshot=on,id=appliance,if=%s%s",
++			  appliance, virtio_scsi ? "none" : "virtio", cachemode);
++
++	if (virtio_scsi) {
++      ADD_CMDLINE ("-device");
++      ADD_CMDLINE ("scsi-hd,drive=appliance");
++	}
++
++	appliance_dev = make_appliance_dev (g, virtio_scsi);
++  }
++
++  /* Create the virtio serial bus. */
++  ADD_CMDLINE ("-device");
++  ADD_CMDLINE ("virtio-serial");
+ 
+ #if 0
+-    /* Use virtio-console (a variant form of virtio-serial) for the
+-     * guest's serial console.
+-     */
+-    add_cmdline (g, "-chardev");
+-    add_cmdline (g, "stdio,id=console");
+-    add_cmdline (g, "-device");
+-    add_cmdline (g, "virtconsole,chardev=console,name=org.libguestfs.console.0");
++  /* Use virtio-console (a variant form of virtio-serial) for the
++   * guest's serial console.
++   */
++  ADD_CMDLINE ("-chardev");
++  ADD_CMDLINE ("stdio,id=console");
++  ADD_CMDLINE ("-device");
++  ADD_CMDLINE ("virtconsole,chardev=console,name=org.libguestfs.console.0");
+ #else
+-    /* When the above works ...  until then: */
+-    add_cmdline (g, "-serial");
+-    add_cmdline (g, "stdio");
++  /* When the above works ...  until then: */
++  //ADD_CMDLINE ("-serial");
++  //ADD_CMDLINE ("stdio");
+ #endif
+ 
+-    if (qemu_supports_device (g, "Serial Graphics Adapter")) {
+-      /* Use sgabios instead of vgabios.  This means we'll see BIOS
+-       * messages on the serial port, and also works around this bug
+-       * in qemu 1.1.0:
+-       * https://bugs.launchpad.net/qemu/+bug/1021649
+-       * QEmu has included sgabios upstream since just before 1.0.
+-       */
+-      add_cmdline (g, "-device");
+-      add_cmdline (g, "sga");
+-    }
+-
+-    /* Set up virtio-serial for the communications channel. */
+-    add_cmdline (g, "-chardev");
+-    snprintf (buf, sizeof buf, "socket,path=%s,id=channel0", guestfsd_sock);
+-    add_cmdline (g, buf);
+-    add_cmdline (g, "-device");
+-    add_cmdline (g, "virtserialport,chardev=channel0,name=org.libguestfs.channel.0");
+-
+-    /* Enable user networking. */
+-    if (g->enable_network) {
+-      add_cmdline (g, "-netdev");
+-      add_cmdline (g, "user,id=usernet,net=169.254.0.0/16");
+-      add_cmdline (g, "-device");
+-      add_cmdline (g, "virtio-net-pci,netdev=usernet");
+-    }
+-
+-    add_cmdline (g, "-append");
+-    CLEANUP_FREE char *cmdline =
+-      guestfs___appliance_command_line (g, appliance_dev, 0);
+-    add_cmdline (g, cmdline);
+-
+-    /* Note: custom command line parameters must come last so that
+-     * qemu -set parameters can modify previously added options.
+-     */
+-
+-    /* Add the extra options for the qemu command line specified
+-     * at configure time.
+-     */
+-    if (STRNEQ (QEMU_OPTIONS, ""))
+-      add_cmdline_shell_unquoted (g, QEMU_OPTIONS);
+-
+-    /* Add any qemu parameters. */
+-    for (qp = g->qemu_params; qp; qp = qp->next) {
+-      add_cmdline (g, qp->qemu_param);
+-      if (qp->qemu_value)
+-        add_cmdline (g, qp->qemu_value);
+-    }
+-
+-    /* Finish off the command line. */
+-    incr_cmdline_size (g);
+-    g->direct.cmdline[g->direct.cmdline_size-1] = NULL;
++  if (qemu_supports_device (g, "Serial Graphics Adapter")) {
++	/* Use sgabios instead of vgabios.  This means we'll see BIOS
++	 * messages on the serial port, and also works around this bug
++	 * in qemu 1.1.0:
++	 * https://bugs.launchpad.net/qemu/+bug/1021649
++	 * QEmu has included sgabios upstream since just before 1.0.
++	 */
++	//ADD_CMDLINE ("-device");
++    //ADD_CMDLINE ("sga");
++  }
++
++  /* Set up virtio-serial for the communications channel. */
++  ADD_CMDLINE ("-chardev");
++  ntohl(1);
++  ADD_CMDLINE_PRINTF ("socket,host=127.0.0.1,port=%d,id=channel0", ntohs(a.inaddr.sin_port));
++  ADD_CMDLINE ("-device");
++  ADD_CMDLINE ("virtserialport,chardev=channel0,name=org.libguestfs.channel.0");
++
++  /* Enable user networking. */
++  if (g->enable_network) {
++    ADD_CMDLINE ("-netdev");
++    ADD_CMDLINE ("user,id=usernet,net=169.254.0.0/16");
++    ADD_CMDLINE ("-device");
++    ADD_CMDLINE ("virtio-net-pci,netdev=usernet");
++  }
++
++  ADD_CMDLINE ("-append");
++  CLEANUP_FREE char *appcmdline =
++	guestfs___appliance_command_line (g, appliance_dev, 0);
++  ADD_CMDLINE_PRINTF ("\"%s\"", appcmdline);
++
++  /* Add the extra options for the qemu command line specified
++   * at configure time.
++   * FIXME - NOT SUPPORTED FOR NOW
++   */
++  if (STRNEQ (QEMU_OPTIONS, ""))
++    add_cmdline_shell_unquoted (g, &cmdline, QEMU_OPTIONS);
+ 
+-    if (!g->direct_mode) {
+-      /* Set up stdin, stdout, stderr. */
+-      close (0);
+-      close (1);
+-      close (sv[0]);
+-
+-      /* We set the FD_CLOEXEC flag on the socket above, but now (in
+-       * the child) it's safe to unset this flag so qemu can use the
+-       * socket.
+-       */
+-      set_cloexec_flag (sv[1], 0);
+-
+-      /* Stdin. */
+-      if (dup (sv[1]) == -1) {
+-      dup_failed:
+-        perror ("dup failed");
+-        _exit (EXIT_FAILURE);
+-      }
+-      /* Stdout. */
+-      if (dup (sv[1]) == -1)
+-        goto dup_failed;
+-
+-      /* Particularly since qemu 0.15, qemu spews all sorts of debug
+-       * information on stderr.  It is useful to both capture this and
+-       * not confuse casual users, so send stderr to the pipe as well.
+-       */
+-      close (2);
+-      if (dup (sv[1]) == -1)
+-        goto dup_failed;
++  struct qemu_param *qp;
++  /* Note: custom command line parameters must come last so that
++   * qemu -set parameters can modify previously added options.
++   */
++  /* Add any qemu parameters. */
++  for (qp = g->qemu_params; qp; qp = qp->next) {
++    ADD_CMDLINE (qp->qemu_param);
++	if (qp->qemu_value)
++      ADD_CMDLINE (qp->qemu_value);
++  }
+ 
+-      close (sv[1]);
+-    }
++  /* Execute QEMU
++   */
++  END_CMDLINE();
+ 
+-    /* Dump the command line (after setting up stderr above). */
+-    if (g->verbose)
+-      print_qemu_command_line (g, g->direct.cmdline);
++  if (g->verbose)
++    print_qemu_command_line (g, cmdline.argv);
+ 
+-    /* Put qemu in a new process group. */
+-    if (g->pgroup)
+-      setpgid (0, 0);
++  int fds[3];
+ 
+-    setenv ("LC_ALL", "C", 1);
+-    setenv ("QEMU_AUDIO_DRV", "none", 1); /* Prevents qemu opening /dev/dsp */
++  if (!g->direct_mode) {
++    fds[STDIN_FILENO] = sv[0];
++    fds[STDOUT_FILENO] = sv[0];
++    fds[STDERR_FILENO] = sv[0];
++
++    g->direct.pid = spawn_dup(cmdline.argv[0], (const char **)cmdline.argv,
++    		SPAWN_PIPE_LGPL_STDIN|SPAWN_PIPE_LGPL_STDIN_PROVIDED|
++    		SPAWN_PIPE_LGPL_STDOUT|SPAWN_PIPE_LGPL_STDOUT_PROVIDED|
++    		SPAWN_PIPE_LGPL_STDERR|SPAWN_PIPE_LGPL_STDERR_PROVIDED,
++    		fds);
+ 
+-    TRACE0 (launch_run_qemu);
++  } else g->direct.pid = spawn_dup(cmdline.argv[0], (const char **)cmdline.argv,
++		  0, fds);
+ 
+-    execv (g->qemu, g->direct.cmdline); /* Run qemu. */
+-    perror (g->qemu);
+-    _exit (EXIT_FAILURE);
++  if (g->direct.pid == -1) {
++    perrorf (g, "spawn_dup");
++    if (!g->direct_mode) {
++      close(sv[0]);
++      close(sv[1]);
++    }
++    goto cleanup0;
+   }
+ 
+-  /* Parent (library). */
+-  g->direct.pid = r;
+-
+-  /* Fork the recovery process off which will kill qemu if the parent
+-   * process fails to do so (eg. if the parent segfaults).
++  /* No recovery process in mingw driver .. for now
+    */
+   g->direct.recoverypid = -1;
+-  if (g->recovery_proc) {
+-    r = fork ();
+-    if (r == 0) {
+-      int i, fd, max_fd;
+-      struct sigaction sa;
+-      pid_t qemu_pid = g->direct.pid;
+-      pid_t parent_pid = getppid ();
+-
+-      /* Remove all signal handlers.  See the justification here:
+-       * https://www.redhat.com/archives/libvir-list/2008-August/msg00303.html
+-       * We don't mask signal handlers yet, so this isn't completely
+-       * race-free, but better than not doing it at all.
+-       */
+-      memset (&sa, 0, sizeof sa);
+-      sa.sa_handler = SIG_DFL;
+-      sa.sa_flags = 0;
+-      sigemptyset (&sa.sa_mask);
+-      for (i = 1; i < NSIG; ++i)
+-        sigaction (i, &sa, NULL);
+-
+-      /* Close all other file descriptors.  This ensures that we don't
+-       * hold open (eg) pipes from the parent process.
+-       */
+-      max_fd = sysconf (_SC_OPEN_MAX);
+-      if (max_fd == -1)
+-        max_fd = 1024;
+-      if (max_fd > 65536)
+-        max_fd = 65536; /* bound the amount of work we do here */
+-      for (fd = 0; fd < max_fd; ++fd)
+-        close (fd);
+-
+-      /* It would be nice to be able to put this in the same process
+-       * group as qemu (ie. setpgid (0, qemu_pid)).  However this is
+-       * not possible because we don't have any guarantee here that
+-       * the qemu process has started yet.
+-       */
+-      if (g->pgroup)
+-        setpgid (0, 0);
+-
+-      /* Writing to argv is hideously complicated and error prone.  See:
+-       * http://git.postgresql.org/gitweb/?p=postgresql.git;a=blob;f=src/backend/utils/misc/ps_status.c;hb=HEAD
+-       */
+-
+-      /* Loop around waiting for one or both of the other processes to
+-       * disappear.  It's fair to say this is very hairy.  The PIDs that
+-       * we are looking at might be reused by another process.  We are
+-       * effectively polling.  Is the cure worse than the disease?
+-       */
+-      for (;;) {
+-        if (kill (qemu_pid, 0) == -1) /* qemu's gone away, we aren't needed */
+-          _exit (EXIT_SUCCESS);
+-        if (kill (parent_pid, 0) == -1) {
+-          /* Parent's gone away, qemu still around, so kill qemu. */
+-          kill (qemu_pid, 9);
+-          _exit (EXIT_SUCCESS);
+-        }
+-        sleep (2);
+-      }
+-    }
+-
+-    /* Don't worry, if the fork failed, this will be -1.  The recovery
+-     * process isn't essential.
+-     */
+-    g->direct.recoverypid = r;
+-  }
+ 
+   if (!g->direct_mode) {
+     /* Close the other end of the socketpair. */
+-    close (sv[1]);
++    close(sv[0]);
+ 
+-    console_sock = sv[0];       /* stdin of child */
+-    sv[0] = -1;
++    console_sock = sv[1];       /* stdin of child */
++    sv[1] = -1;
+   }
+ 
+   g->state = LAUNCHING;
+@@ -627,7 +731,6 @@
+    * happen even if we reach here, even early failures like not being
+    * able to open a drive.
+    */
+-
+   r = guestfs___recv_from_daemon (g, &size, &buf);
+ 
+   if (r == -1) {
+@@ -663,8 +766,8 @@
+   return 0;
+ 
+  cleanup1:
+-  if (!g->direct_mode && sv[0] >= 0)
+-    close (sv[0]);
++  if (!g->direct_mode && sv[1] >= 0)
++    close (sv[1]);
+   if (g->direct.pid > 0) kill (g->direct.pid, 9);
+   if (g->direct.recoverypid > 0) kill (g->direct.recoverypid, 9);
+   if (g->direct.pid > 0) waitpid (g->direct.pid, NULL, 0);
+@@ -778,6 +881,7 @@
+   guestfs___cmd_add_arg (cmd1, g->qemu);
+   guestfs___cmd_add_arg (cmd1, "-nographic");
+   guestfs___cmd_add_arg (cmd1, "-help");
++  guestfs___cmd_clear_capture_errors (cmd1);
+   guestfs___cmd_set_stdout_callback (cmd1, read_all, &g->direct.qemu_help,
+                                      CMD_STDOUT_FLAG_WHOLE_BUFFER);
+   r = guestfs___cmd_run (cmd1);
+@@ -787,6 +891,7 @@
+   guestfs___cmd_add_arg (cmd2, g->qemu);
+   guestfs___cmd_add_arg (cmd2, "-nographic");
+   guestfs___cmd_add_arg (cmd2, "-version");
++  guestfs___cmd_clear_capture_errors (cmd2);
+   guestfs___cmd_set_stdout_callback (cmd2, read_all, &g->direct.qemu_version,
+                                      CMD_STDOUT_FLAG_WHOLE_BUFFER);
+   r = guestfs___cmd_run (cmd2);
+@@ -797,14 +902,15 @@
+ 
+   guestfs___cmd_add_arg (cmd3, g->qemu);
+   guestfs___cmd_add_arg (cmd3, "-nographic");
+-  guestfs___cmd_add_arg (cmd3, "-machine");
+-  guestfs___cmd_add_arg (cmd3, "accel=kvm:tcg");
+-  guestfs___cmd_add_arg (cmd3, "-device");
+-  guestfs___cmd_add_arg (cmd3, "?");
++  guestfs___cmd_add_arg (cmd3, "-nodefaults");
++  guestfs___cmd_add_arg (cmd3, "-nodefconfig");
++  guestfs___cmd_add_arg (cmd3, "-qmp");
++  guestfs___cmd_add_arg (cmd3, "stdio");
+   guestfs___cmd_clear_capture_errors (cmd3);
+-  guestfs___cmd_set_stderr_to_stdout (cmd3);
++  //guestfs___cmd_set_stderr_to_stdout (cmd3);
+   guestfs___cmd_set_stdout_callback (cmd3, read_all, &g->direct.qemu_devices,
+                                      CMD_STDOUT_FLAG_WHOLE_BUFFER);
++  guestfs___cmd_set_stdin_data (cmd3, "{ \"execute\": \"qmp_capabilities\" }\r\n{ \"execute\": \"query-devices\" }\r\n{ \"execute\": \"quit\" }\r\n");
+   r = guestfs___cmd_run (cmd3);
+   if (r == -1 || !WIFEXITED (r) || WEXITSTATUS (r) != 0)
+     goto error;
+@@ -901,19 +1007,6 @@
+   return strstr (g->direct.qemu_devices, device_name) != NULL;
+ }
+ 
+-/* Check if a file can be opened. */
+-static int
+-is_openable (guestfs_h *g, const char *path, int flags)
+-{
+-  int fd = open (path, flags);
+-  if (fd == -1) {
+-    debug (g, "is_openable: %s: %m", path);
+-    return 0;
+-  }
+-  close (fd);
+-  return 1;
+-}
+-
+ static int
+ old_or_broken_virtio_scsi (guestfs_h *g)
+ {
+@@ -1005,7 +1098,7 @@
+ }
+ 
+ static int
+-shutdown_direct (guestfs_h *g, int check_for_errors)
++shutdown_mingw (guestfs_h *g, int check_for_errors)
+ {
+   int ret = 0;
+   int status;
+@@ -1023,7 +1116,7 @@
+       perrorf (g, "waitpid (qemu)");
+       ret = -1;
+     }
+-    else if (!WIFEXITED (status) || WEXITSTATUS (status) != 0) {
++    else if (!WIFEXITED (status) || WEXITSTATUS (status) != SIGTERM) { // under mingw it exits with the code of the signal that terminated it
+       guestfs___external_command_failed (g, status, g->qemu, NULL);
+       ret = -1;
+     }
+@@ -1043,7 +1136,7 @@
+ }
+ 
+ static int
+-get_pid_direct (guestfs_h *g)
++get_pid_mingw (guestfs_h *g)
+ {
+   if (g->direct.pid > 0)
+     return g->direct.pid;
+@@ -1055,7 +1148,7 @@
+ 
+ /* Maximum number of disks. */
+ static int
+-max_disks_direct (guestfs_h *g)
++max_disks_mingw (guestfs_h *g)
+ {
+   if (qemu_supports_virtio_scsi (g))
+     return 255;
+@@ -1064,8 +1157,8 @@
+ }
+ 
+ struct backend_ops backend_ops_direct = {
+-  .launch = launch_direct,
+-  .shutdown = shutdown_direct,
+-  .get_pid = get_pid_direct,
+-  .max_disks = max_disks_direct,
++  .launch = launch_mingw,
++  .shutdown = shutdown_mingw,
++  .get_pid = get_pid_mingw,
++  .max_disks = max_disks_mingw,
+ };
+--- src/launch-libvirt.c	Wed Feb 12 22:29:51 2014
++++ src/launch-libvirt.c	Fri Apr 25 13:28:14 2014
+@@ -25,7 +25,6 @@
+ #include <unistd.h>
+ #include <fcntl.h>
+ #include <limits.h>
+-#include <grp.h>
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <sys/wait.h>
+@@ -72,7 +71,9 @@
+ 
+ #if defined(HAVE_LIBVIRT) && \
+   LIBVIR_VERSION_NUMBER >= MIN_LIBVIRT_VERSION
+-
++#ifndef _WIN32
++#include <grp.h>
++#endif
+ #ifndef HAVE_XMLBUFFERDETACH
+ /* Added in libxml2 2.8.0.  This is mostly a copy of the function from
+  * upstream libxml2, which is under a more permissive license.
+--- src/launch-unix.c	Wed Feb 12 22:29:51 2014
++++ src/launch-unix.c	Fri Apr 25 12:23:23 2014
+@@ -23,7 +23,6 @@
+ #include <unistd.h>
+ #include <fcntl.h>
+ #include <sys/socket.h>
+-#include <sys/un.h>
+ 
+ #include "guestfs.h"
+ #include "guestfs-internal.h"
+@@ -33,6 +32,16 @@
+ /* Alternate backend: instead of launching the appliance,
+  * connect to an existing unix socket.
+  */
++#if (defined _WIN32 || defined __WIN32__) && ! defined __CYGWIN__
++static int
++launch_unix (guestfs_h *g, const char *sockpath)
++{
++	return -1;
++}
++
++#else
++#include <sys/un.h>
++
+ static int
+ launch_unix (guestfs_h *g, const char *sockpath)
+ {
+@@ -102,6 +111,7 @@
+   }
+   return -1;
+ }
++#endif
+ 
+ static int
+ shutdown_unix (guestfs_h *g, int check_for_errors)
+--- src/launch.c	Wed Feb 12 22:29:51 2014
++++ src/launch.c	Fri Apr 25 12:23:40 2014
+@@ -80,7 +80,9 @@
+     debug (g, "launch: backend=%s", backend);
+     debug (g, "launch: tmpdir=%s", g->tmpdir);
+     debug (g, "launch: umask=0%03o", get_umask (g));
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+     debug (g, "launch: euid=%d", geteuid ());
++#endif
+   }
+ 
+   /* Launch the appliance. */
+--- src/Makefile.am	Wed Feb 12 22:29:51 2014
++++ src/Makefile.am	Mon May 19 07:11:04 2014
+@@ -156,8 +156,8 @@
+ # Force libtool to name the library 'libguestfs.so.0.$(MAX_PROC_NR).0'.
+ # Include the version script to limit which symbols are exported.
+ libguestfs_la_LDFLAGS = \
+-	-version-info $(MAX_PROC_NR):0:$(MAX_PROC_NR) \
+-	$(VERSION_SCRIPT_FLAGS)$(srcdir)/libguestfs.syms
++	-version-info $(MAX_PROC_NR):0:$(MAX_PROC_NR)
++#$(VERSION_SCRIPT_FLAGS)$(srcdir)/libguestfs.syms
+ 
+ if HAVE_FUSE
+ # XXX Unfortunately FUSE_CFLAGS defines _FILE_OFFSET_BITS=64.
+@@ -226,10 +226,10 @@
+ 
+ # Manual page.
+ 
+-man_MANS = guestfs.3 libguestfs.3
+-noinst_DATA = $(top_builddir)/html/guestfs.3.html
++man_MANS = 
++noinst_DATA = 
+ 
+-guestfs.3 $(top_builddir)/html/guestfs.3.html: stamp-guestfs.pod
++guestfs.3 $(top_builddir)/html/guestfs.3.html: 
+ 
+ stamp-guestfs.pod: guestfs.pod \
+ 		guestfs-actions.pod \
+--- src/proto.c	Wed Feb 12 22:29:51 2014
++++ src/proto.c	Mon May 19 06:49:49 2014
+@@ -167,10 +167,9 @@
+ 
+   assert (g->conn); /* callers must check this */
+ 
+- again:
++again:
+   if (! g->conn->ops->can_read_data (g, g->conn))
+     return 1;
+-
+   n = g->conn->ops->read_data (g, g->conn, buf, 4);
+   if (n <= 0) /* 0 or -1 */
+     return n;
+@@ -183,7 +182,6 @@
+   if (flag == GUESTFS_PROGRESS_FLAG) {
+     char buf[PROGRESS_MESSAGE_SIZE];
+     guestfs_progress message;
+-
+     n = g->conn->ops->read_data (g, g->conn, buf, PROGRESS_MESSAGE_SIZE);
+     if (n <= 0) /* 0 or -1 */
+       return n;
+@@ -328,7 +326,11 @@
+ 
+   g->user_cancel = 0;
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+   fd = open (filename, O_RDONLY|O_CLOEXEC);
++#else
++  fd = _open (filename, _O_RDONLY|_O_BINARY|_O_NOINHERIT|_O_SEQUENTIAL);
++#endif
+   if (fd == -1) {
+     perrorf (g, "open: %s", filename);
+     send_file_cancellation (g);
+@@ -339,7 +341,11 @@
+ 
+   /* Send file in chunked encoding. */
+   while (!g->user_cancel) {
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+     r = read (fd, buf, sizeof buf);
++#else
++    r = _read (fd, buf, sizeof buf);
++#endif
+     if (r == -1 && (errno == EINTR || errno == EAGAIN))
+       continue;
+     if (r <= 0) break;
+@@ -370,7 +376,11 @@
+   /* End of file, but before we send that, we need to close
+    * the file and check for errors.
+    */
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+   if (close (fd) == -1) {
++#else
++  if (_close (fd) == -1) {
++#endif
+     perrorf (g, "close: %s", filename);
+     send_file_cancellation (g);
+     return -1;
+@@ -734,7 +744,11 @@
+   int r;
+ 
+   while (len > 0) {
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+     r = write (fd, buf, len);
++#else
++    r = _write (fd, buf, len);
++#endif
+     if (r == -1)
+       return -1;
+ 
+@@ -756,7 +770,11 @@
+ 
+   g->user_cancel = 0;
+ 
++#if (!defined _WIN32 && !defined __WIN32__) || defined __CYGWIN__
+   fd = open (filename, O_WRONLY|O_CREAT|O_TRUNC|O_NOCTTY|O_CLOEXEC, 0666);
++#else
++  fd = _open (filename, _O_WRONLY|_O_CREAT|_O_BINARY|_O_TRUNC|_O_NOINHERIT, 0666);
++#endif
+   if (fd == -1) {
+     perrorf (g, "open: %s", filename);
+     goto cancel;
+--- src/utils.c	Wed Feb 12 22:29:51 2014
++++ src/utils.c	Sun May 18 22:31:22 2014
+@@ -117,6 +117,16 @@
+       snprintf (buffer, buflen, _("%s exited with error status %d"),
+                 cmd_name, WEXITSTATUS (status));
+   }
++#ifdef _WIN32
++  else if (WIFSIGNALED (status)) {
++    snprintf (buffer, buflen, _("%s killed by signal %d"),
++              cmd_name, WTERMSIG (status));
++  }
++  else if (WIFSTOPPED (status)) {
++    snprintf (buffer, buflen, _("%s stopped by signal %d"),
++              cmd_name, WSTOPSIG (status));
++  }
++#else
+   else if (WIFSIGNALED (status)) {
+     snprintf (buffer, buflen, _("%s killed by signal %d (%s)"),
+               cmd_name, WTERMSIG (status), strsignal (WTERMSIG (status)));
+@@ -125,6 +135,7 @@
+     snprintf (buffer, buflen, _("%s stopped by signal %d (%s)"),
+               cmd_name, WSTOPSIG (status), strsignal (WSTOPSIG (status)));
+   }
++#endif
+   else {
+     snprintf (buffer, buflen, _("%s exited for an unknown reason (status %d)"),
+               cmd_name, status);
+--- config.h.in	Wed Feb 12 22:30:37 2014
++++ config.h.in	Sun May 18 21:29:16 2014
+@@ -882,9 +882,6 @@
+ /* libmagic found at compile time. */
+ #undef HAVE_LIBMAGIC
+ 
+-/* Define to 1 if you have the `ncurses' library (-lncurses). */
+-#undef HAVE_LIBNCURSES
+-
+ /* Define to 1 if you have the `portablexdr' library (-lportablexdr). */
+ #undef HAVE_LIBPORTABLEXDR
+ 
+@@ -2136,9 +2133,6 @@
+ 
+ /* Define if the mbrtowc function returns a wrong return value. */
+ #undef MBRTOWC_RETVAL_BUG
+-
+-/* Define to 1 if your C compiler doesn't accept -c and -o together. */
+-#undef NO_MINUS_C_MINUS_O
+ 
+ /* Define to 1 if open() fails to recognize a trailing slash. */
+ #undef OPEN_TRAILING_SLASH_BUG
+--- configure.ac	Wed Feb 12 22:29:51 2014
++++ configure.ac	Sun May 18 21:27:56 2014
+@@ -324,20 +324,6 @@
+     statvfs \
+     sync])
+ 
+-dnl tgetent, tputs and UP [sic] are all required.  They come from libtinfo
+-dnl which is pulled in as a dependency of libncurses.
+-old_LIBS="$LIBS"
+-AC_CHECK_LIB([ncurses], [tgetent], [], [
+-    AC_MSG_ERROR(['ncurses' library not found, or it doesn't contain 'tgetent'])
+-])
+-AC_CHECK_LIB([ncurses], [tputs], [], [
+-    AC_MSG_ERROR(['ncurses' library not found, or it doesn't contain 'tputs'])
+-])
+-AC_CHECK_LIB([ncurses], [UP], [], [
+-    AC_MSG_ERROR(['ncurses' library not found, or it doesn't contain 'UP'])
+-])
+-LIBS="$old_LIBS"
+-
+ dnl GNU gettext tools (optional).
+ AC_CHECK_PROG([XGETTEXT],[xgettext],[xgettext],[no])
+ AC_CHECK_PROG([MSGCAT],[msgcat],[msgcat],[no])
