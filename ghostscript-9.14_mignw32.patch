@@ -1,0 +1,639 @@
+Build patch, and enable fontconfig
+
+--- base/gp_mswin.c	Wed Mar 26 19:53:47 2014
++++ base/gp_mswin.c	Sat Apr 05 16:00:11 2014
+@@ -60,6 +60,10 @@
+ #include "gp_mswin.h"
+ #include "winrtsup.h"
+ 
++#ifdef HAVE_FONTCONFIG
++#  include <fontconfig/fontconfig.h>
++#endif
++
+ /* Library routines not declared in a standard header */
+ extern char *getenv(const char *);
+ 
+@@ -801,18 +805,202 @@
+   * building a custom fontmap file.
+   */
+ 
++/* Mangle the FontConfig family and style information into a
++ * PostScript font name */
++#ifdef HAVE_FONTCONFIG
++static void makePSFontName(char* family, int weight, int slant, char *buf, int bufsize)
++{
++    int bytesCopied, length, i;
++    const char *slantname, *weightname;
++
++    switch (slant) {
++        case FC_SLANT_ROMAN:   slantname=""; break;;
++        case FC_SLANT_OBLIQUE: slantname="Oblique"; break;;
++        case FC_SLANT_ITALIC:  slantname="Italic"; break;;
++        default:               slantname="Unknown"; break;;
++    }
++
++    switch (weight) {
++        case FC_WEIGHT_MEDIUM:   weightname=""; break;;
++        case FC_WEIGHT_LIGHT:    weightname="Light"; break;;
++        case FC_WEIGHT_DEMIBOLD: weightname="Demi"; break;;
++        case FC_WEIGHT_BOLD:     weightname="Bold"; break;;
++        case FC_WEIGHT_BLACK:    weightname="Black"; break;;
++        default:                 weightname="Unknown"; break;;
++    }
++
++    length = strlen(family);
++    if (length >= bufsize)
++        length = bufsize;
++    /* Copy the family name, stripping spaces */
++    bytesCopied=0;
++    for (i = 0; i < length; i++)
++        if (family[i] != ' ')
++            buf[bytesCopied++] = family[i];
++
++    if ( ((slant != FC_SLANT_ROMAN) || (weight != FC_WEIGHT_MEDIUM)) \
++            && bytesCopied < bufsize )
++    {
++        buf[bytesCopied] = '-';
++        bytesCopied++;
++        if (weight != FC_WEIGHT_MEDIUM)
++        {
++            length = strlen(family);
++            if ((length + bytesCopied) >= bufsize)
++                length = bufsize - bytesCopied - 1;
++            strncpy(buf+bytesCopied, weightname, length);
++            bytesCopied += length;
++        }
++        if (slant != FC_SLANT_ROMAN)
++        {
++            length = strlen(family);
++            if ((length + bytesCopied) >= bufsize)
++                length = bufsize - bytesCopied - 1;
++            strncpy(buf+bytesCopied, slantname, length);
++            bytesCopied += length;
++        }
++    }
++    buf[bytesCopied] = '\0';
++}
++
++/* State struct for font iteration
++ * - passed as an opaque 'void*' through the rest of gs */
++
++typedef struct {
++    int index;              /* current index of iteration over font_list */
++    FcConfig* fc;           /* FontConfig library handle */
++    FcFontSet* font_list;   /* FontConfig font list */
++    char name[255];         /* name of last font */
++    gs_memory_t *mem;       /* Memory pointer */
++} unix_fontenum_t;
++#endif
++
+ void *gp_enumerate_fonts_init(gs_memory_t *mem)
+ {
++#ifdef HAVE_FONTCONFIG
++    unix_fontenum_t *state;
++    FcPattern *pat;
++    FcObjectSet *os;
++
++    state = (unix_fontenum_t *)malloc(sizeof(unix_fontenum_t));
++    if (state == NULL)
++        return NULL;    /* Failed to allocate state */
++
++    state->index     = 0;
++    state->fc        = NULL;
++    state->font_list = NULL;
++    state->mem       = mem;
++
++    /* Load the fontconfig library */
++    state->fc = FcInitLoadConfigAndFonts();
++    if (state->fc == NULL) {
++        free(state);
++        state = NULL;
++        dmlprintf(mem, "destroyed state - fontconfig init failed");
++        return NULL;  /* Failed to open fontconfig library */
++    }
++
++    /* load the font set that we'll iterate over */
++    pat = FcPatternBuild(NULL,
++            FC_OUTLINE, FcTypeBool, 1,
++            FC_SCALABLE, FcTypeBool, 1,
++            NULL);
++    os = FcObjectSetBuild(FC_FILE, FC_OUTLINE,
++            FC_FAMILY, FC_WEIGHT, FC_SLANT,
++            NULL);
++    state->font_list = FcFontList(0, pat, os);
++    FcPatternDestroy(pat);
++    FcObjectSetDestroy(os);
++    if (state->font_list == NULL) {
++        free(state);
++        state = NULL;
++        return NULL;  /* Failed to generate font list */
++    }
++    return (void *)state;
++#else
+     return NULL;
++#endif
+ }
+ 
+ int gp_enumerate_fonts_next(void *enum_state, char **fontname, char **path)
+ {
++#ifdef HAVE_FONTCONFIG
++    unix_fontenum_t* state = (unix_fontenum_t *)enum_state;
++    FcChar8 *file_fc = NULL;
++    FcChar8 *family_fc = NULL;
++    int outline_fc, slant_fc, weight_fc;
++    FcPattern *font;
++    FcResult result;
++
++    if (state == NULL) {
++        return 0;   /* gp_enumerate_fonts_init failed for some reason */
++    }
++
++    if (state->index == state->font_list->nfont) {
++        return 0; /* we've run out of fonts */
++    }
++
++    /* Bits of the following were borrowed from Red Hat's
++     * fontconfig patch for Ghostscript 7 */
++    font = state->font_list->fonts[state->index];
++
++    result = FcPatternGetString (font, FC_FAMILY, 0, &family_fc);
++    if (result != FcResultMatch || family_fc == NULL) {
++        dmlprintf(state->mem, "DEBUG: FC_FAMILY mismatch\n");
++        return 0;
++    }
++
++    result = FcPatternGetString (font, FC_FILE, 0, &file_fc);
++    if (result != FcResultMatch || file_fc == NULL) {
++        dmlprintf(state->mem, "DEBUG: FC_FILE mismatch\n");
++        return 0;
++    }
++
++    result = FcPatternGetBool (font, FC_OUTLINE, 0, &outline_fc);
++    if (result != FcResultMatch) {
++        dmlprintf1(state->mem, "DEBUG: FC_OUTLINE failed to match on %s\n", (char*)family_fc);
++        return 0;
++    }
++
++    result = FcPatternGetInteger (font, FC_SLANT, 0, &slant_fc);
++    if (result != FcResultMatch) {
++        dmlprintf(state->mem, "DEBUG: FC_SLANT didn't match\n");
++        return 0;
++    }
++
++    result = FcPatternGetInteger (font, FC_WEIGHT, 0, &weight_fc);
++    if (result != FcResultMatch) {
++        dmlprintf(state->mem, "DEBUG: FC_WEIGHT didn't match\n");
++        return 0;
++    }
++
++    /* Gross hack to work around Fontconfig's inability to tell
++     * us the font's PostScript name - generate it ourselves.
++     * We must free the memory allocated here next time around. */
++    makePSFontName((char *)family_fc, weight_fc, slant_fc,
++        (char *)&state->name, sizeof(state->name));
++    *fontname = (char *)&state->name;
++
++    /* return the font path straight out of fontconfig */
++    *path = (char*)file_fc;
++
++    state->index ++;
++    return 1;
++#else
+     return 0;
++#endif
+ }
+ 
+ void gp_enumerate_fonts_free(void *enum_state)
+ {
++#ifdef HAVE_FONTCONFIG
++    unix_fontenum_t* state = (unix_fontenum_t *)enum_state;
++    if (state != NULL) {
++        if (state->font_list != NULL)
++            FcFontSetDestroy(state->font_list);
++        free(state);
++    }
++#endif
+ }
+ 
+ /* --------- 64 bit file access ----------- */
+@@ -895,6 +1083,7 @@
+     return((bool)S_ISREG(s.st_mode));
+ }
+ 
++#ifndef __MINGW64_VERSION_MAJOR
+ /* -------------------------  _snprintf -----------------------------*/
+ 
+ /* Microsoft Visual C++ 2005  doesn't properly define snprintf,
+@@ -914,3 +1103,4 @@
+     } else
+         return 0;
+ }
++#endif
+--- base/gp_mswin.h	Wed Mar 26 19:53:47 2014
++++ base/gp_mswin.h	Sat Apr 05 13:29:43 2014
+@@ -56,4 +56,13 @@
+ 
+ #endif /* !defined(RC_INVOKED) */
+ 
++// in gp_mswin.c, mswin_popen is called 
++// before it is implemented, so we must
++// provide a prototype (at least with GCC) to
++// avoid implicit definition with the wrong return type
++
++#ifdef __GNUC__
++FILE *mswin_popen(const char *cmd, const char *mode);
++#endif
++
+ #endif /* gp_mswin_INCLUDED */
+--- base/gs.mak	Wed Mar 26 19:53:47 2014
++++ base/gs.mak	Sat Apr 05 13:29:43 2014
+@@ -440,6 +440,7 @@
+ # save our set of makefile variables that are defined in every build (paths, etc.)
+ $(gconfigd_h) : $(ECHOGS_XE) $(GS_MAK) $(TOP_MAKEFILES) $(GLSRCDIR)$(D)version.mak
+ 	$(EXP)$(ECHOGS_XE) -w $(gconfigd_h) -x 23 define -s -u GS_LIB_DEFAULT -x 2022 $(GS_LIB_DEFAULT) -x 22
++	$(MINGW_FONTPATH_PATCH_OR_EMPTY_COMMAND)
+ 	$(EXP)$(ECHOGS_XE) -a $(gconfigd_h) -x 23 define -s -u GS_DEV_DEFAULT -x 2022 $(GS_DEV_DEFAULT) -x 22
+ 	$(EXP)$(ECHOGS_XE) -a $(gconfigd_h) -x 23 define -s -u GS_CACHE_DIR -x 2022 $(GS_CACHE_DIR) -x 22
+ 	$(EXP)$(ECHOGS_XE) -a $(gconfigd_h) -x 23 define -s -u SEARCH_HERE_FIRST -s $(SEARCH_HERE_FIRST)
+--- base/lib.mak	Wed Mar 26 19:53:47 2014
++++ base/lib.mak	Sat Apr 05 13:29:43 2014
+@@ -41,13 +41,13 @@
+ # We can't use $(CC_) for GLLCMSCC becuase that includes /Za on
+ # msvc builds, and lcms configures itself to depend on msvc extensions
+ # (inline asm, including windows.h) when compiled under msvc.
+-GLLCMSCC=$(CC) $(CFLAGS) $(I_)$(GLI_) $(II)$(LCMSSRCDIR)$(D)include$(_I) $(GLF_)
++GLLCMSCC=$(CC) $(CFLAGS) $(I_)$(GLI_) $(GLF_)
+ lcms_h=$(LCMSSRCDIR)$(D)include$(D)lcms.h
+ icc34_h=$(GLSRC)icc34.h
+ # We can't use $(CC_) for GLLCMS2CC becuase that includes /Za on
+ # msvc builds, and lcms configures itself to depend on msvc extensions
+ # (inline asm, including windows.h) when compiled under msvc.
+-GLLCMS2CC=$(CC) $(CFLAGS) $(I_)$(GLI_) $(II)$(LCMS2SRCDIR)$(D)include$(_I) $(GLF_)
++GLLCMS2CC=$(CC) $(CFLAGS) $(I_)$(GLI_) $(GLF_)
+ lcms2_h=$(LCMS2SRCDIR)$(D)include$(D)lcms2.h
+ lcms2_plugin_h=$(LCMS2SRCDIR)$(D)include$(D)lcms2_plugin.h
+ 
+--- base/time_.h	Wed Mar 26 19:53:47 2014
++++ base/time_.h	Sat Apr 05 13:29:43 2014
+@@ -78,7 +78,7 @@
+ #endif
+ 
+ /* Some System V environments, and Posix environments, need <sys/times.h>. */
+-#if defined(HAVE_SYS_TIMES_H) && HAVE_SYS_TIMES_H == 1
++#if defined(HAVE_SYS_TIMES_H) && HAVE_SYS_TIMES_H == 1 && !defined(__MINGW32__)
+ #  include <sys/times.h>
+ #  define use_times_for_usertime 1
+                 /* Posix 1003.1b-1993 section 4.8.1.5 says that
+--- base/unix-aux.mak	Wed Mar 26 19:53:47 2014
++++ base/unix-aux.mak	Sat Apr 05 13:29:43 2014
+@@ -66,6 +66,13 @@
+  $(MAKEDIRS)
+ 	$(GLCC) $(GLO_)gp_sysv.$(OBJ) $(C_) $(GLSRC)gp_sysv.c
+ 
++# the MINGW platform / build environment, joining unix for the ride 
++mingw__=$(GLOBJ)gp_wgetv.$(OBJ) $(GLOBJ)gp_wpapr.$(OBJ) $(GLOBJ)gp_win32.$(OBJ) $(GLOBJ)gp_mswin.$(OBJ) $(GLOBJ)gp_ntfs.$(OBJ) $(GLOBJ)gp_stdia.$(OBJ) $(GLOBJ)gp_wutf8.$(OBJ)
++$(GLGEN)mingw_.dev: $(mingw__) $(GLD)nosync.dev $(GLD)smd5.dev
++	$(SETMOD) $(GLGEN)mingw_ $(mingw__) -include $(GLD)nosync
++	$(ADDMOD) $(GLGEN)mingw_ -include $(GLD)smd5
++
++
+ # -------------------------- Auxiliary programs --------------------------- #
+ 
+ $(ECHOGS_XE): $(GLSRC)echogs.c $(AK) $(stdpre_h) $(MAKEDIRS)
+@@ -88,18 +95,31 @@
+ # To get GS to use the system zlib, you remove/hide the gs/zlib directory
+ # which means that the mkromfs build can't find the zlib source it needs.
+ # So it's split into two targets, one using the zlib source directly.....
+-MKROMFS_OBJS_0=$(MKROMFS_ZLIB_OBJS) $(AUX)gpmisc.$(OBJ) $(AUX)gp_getnv.$(OBJ) \
+- $(AUX)gscdefs.$(OBJ) $(AUX)gp_unix.$(OBJ) $(AUX)gp_unifs.$(OBJ) $(AUX)gp_unifn.$(OBJ) \
+- $(AUX)gp_stdia.$(OBJ) $(AUX)gsutil.$(OBJ) $(AUX)memento.$(OBJ)
++ifeq ($(MINGW_BUILD), 1)
++    MKROMFS_OBJS_0=$(MKROMFS_ZLIB_OBJS) $(AUX)gpmisc.$(OBJ) $(AUX)gp_getnv.$(OBJ) \
++        $(AUX)gscdefs.$(OBJ)  $(AUX)gp_ntfs.$(OBJ) $(AUX)gp_mswin.$(OBJ) \
++        $(AUX)gp_stdia.$(OBJ) $(AUX)gsutil.$(OBJ) $(AUX)memento.$(OBJ)
++else
++    MKROMFS_OBJS_0=$(MKROMFS_ZLIB_OBJS) $(AUX)gpmisc.$(OBJ) $(AUX)gp_getnv.$(OBJ) \
++        $(AUX)gscdefs.$(OBJ) $(AUX)gp_unix.$(OBJ) $(AUX)gp_unifs.$(OBJ) $(AUX)gp_unifn.$(OBJ) \
++        $(AUX)gp_stdia.$(OBJ) $(AUX)gsutil.$(OBJ) $(AUX)memento.$(OBJ)
++endif
+ 
+ $(MKROMFS_XE)_0: $(GLSRC)mkromfs.c $(MKROMFS_COMMON_DEPS) $(MKROMFS_OBJS_0)
+ 	$(CCAUX_) $(GENOPT) $(CFLAGS) $(I_)$(GLSRCDIR)$(_I) $(I_)$(GLOBJ)$(_I) $(I_)$(ZSRCDIR)$(_I) $(GLSRC)mkromfs.c $(O_)$(MKROMFS_XE)_0 $(MKROMFS_OBJS_0) $(AUXEXTRALIBS)
+ 
+ # .... and one using the zlib library linked via the command line
+-MKROMFS_OBJS_1=$(AUX)gscdefs.$(OBJ) \
+- $(AUX)gpmisc.$(OBJ) $(AUX)gp_getnv.$(OBJ) \
+- $(AUX)gp_unix.$(OBJ) $(AUX)gp_unifs.$(OBJ) $(AUX)gp_unifn.$(OBJ) \
+- $(AUX)gp_stdia.$(OBJ) $(AUX)gsutil.$(OBJ)
++# (here two, MINGW has a different set of dependencies,
++# most notably gp_ntfs and gp_wutf8)
++ifeq ($(MINGW_BUILD), 1)
++    MKROMFS_OBJS_1=$(GLOBJ)gp_ntfs.$(OBJ) $(GLOBJ)gp_wutf8.$(OBJ) \
++        $(GLOBJ)gpmisc.$(OBJ) $(GLOBJ)gp_wgetv.$(OBJ) $(GLOBJ)gscdefs.$(OBJ)
++else
++    MKROMFS_OBJS_1=$(AUX)gscdefs.$(OBJ) \
++        $(AUX)gpmisc.$(OBJ) $(AUX)gp_getnv.$(OBJ) \
++        $(AUX)gp_unix.$(OBJ) $(AUX)gp_unifs.$(OBJ) $(AUX)gp_unifn.$(OBJ) \
++        $(AUX)gp_stdia.$(OBJ) $(AUX)gsutil.$(OBJ)
++endif
+ 
+ $(MKROMFS_XE)_1: $(GLSRC)mkromfs.c $(MKROMFS_COMMON_DEPS) $(MKROMFS_OBJS_1)
+ 	$(CCAUX_) $(GENOPT) $(CFLAGS) $(I_)$(GLSRCDIR)$(_I) $(I_)$(GLOBJ)$(_I) $(I_)$(ZSRCDIR)$(_I) $(GLSRC)mkromfs.c $(O_)$(MKROMFS_XE)_1 $(MKROMFS_OBJS_1) $(AUXEXTRALIBS)
+--- base/unix-dll.mak	Wed Mar 26 19:53:47 2014
++++ base/unix-dll.mak	Sat Apr 05 13:29:43 2014
+@@ -33,17 +33,38 @@
+ # Shared object names
+ 
+ # simple loader (no support for display device)
+-GSSOC_XENAME=$(GS_SO_BASE)c$(XE)
++ifeq ($(MINGW_WITH_WINLIB_NAMES), 1)
++    GSSOC_XENAME=gswin$(MINGW_PLATFORM_BITS)c$(XE)
++else
++    GSSOC_XENAME=$(GS_SO_BASE)c$(XE)
++endif
++
+ GSSOC_XE=$(BINDIR)/$(GSSOC_XENAME)
+ GSSOC=$(BINDIR)/$(GSSOC_XENAME)
+ 
+ # loader suporting display device using Gtk+
+-GSSOX_XENAME=$(GS_SO_BASE)x$(XE)
++ifeq ($(MINGW_WITH_WINLIB_NAMES), 1)
++    GSSOX_XENAME=gswin$(MINGW_PLATFORM_BITS)$(XE)
++else
++    GSSOX_XENAME=$(GS_SO_BASE)x$(XE)
++endif
++
+ GSSOX_XE=$(BINDIR)/$(GSSOX_XENAME)
+ GSSOX=$(BINDIR)/$(GSSOX_XENAME)
+ 
+-# shared library
+-GS_SONAME_BASE=lib$(GS_SO_BASE)
++# shared library: handle unix and mingw library names
++ifeq ($(MINGW_BUILD), 1)
++    ifeq ($(MINGW_WITH_WINLIB_NAMES), 1)
++        GS_SONAME_BASE=gsdll$(MINGW_PLATFORM_BITS)
++        GS_SONAME_LINK=$(GS_SONAME_BASE)
++    else
++        GS_SONAME_BASE=lib$(GS_SO_BASE)
++        GS_SONAME_LINK=lib$(GS_SO_BASE)
++    endif
++else
++    GS_SONAME_BASE=lib$(GS_SO_BASE)
++    GS_SONAME_LINK=$(GS_SO_BASE)
++endif
+ 
+ # GNU/Linux
+ GS_SOEXT=$(SO_LIB_EXT)
+@@ -80,27 +101,27 @@
+ 
+ # Create symbolic links to the Ghostscript interpreter library
+ 
+-$(GS_SO): $(GS_SO_MAJOR)
++$(GS_SO): $(GS_SO_MAJOR_MINOR)
+ 	$(RM_) $(GS_SO)
+-	ln -s $(GS_SONAME_MAJOR_MINOR) $(GS_SO)
++	ln -s $(GS_SONAME_MAJOR) $(GS_SO)
+ 
+-$(GS_SO_MAJOR): $(GS_SO_MAJOR_MINOR)
+-	$(RM_) $(GS_SO_MAJOR)
+-	ln -s $(GS_SONAME_MAJOR_MINOR) $(GS_SO_MAJOR)
++$(GS_SO_MAJOR_MINOR): $(GS_SO_MAJOR)
++	$(RM_) $(GS_SO_MAJOR_MINOR)
++	ln -s $(GS_SONAME_MAJOR) $(GS_SO_MAJOR_MINOR)
+ 
+ # Build the small Ghostscript loaders, with Gtk+ and without
+ $(GSSOC_XE): $(GS_SO) $(PSSRC)$(SOC_LOADER)
+-	$(GLCC) -g -o $(GSSOC_XE) $(PSSRC)dxmainc.c \
+-	-L$(BINDIR) -l$(GS_SO_BASE)
++	$(GLCC) -g -o $(GSSOC_XE) $(PSSRC)$(SOC_LOADER_PLAIN) \
++	-L$(BINDIR) -l$(GS_SONAME_LINK)
+ 
+ $(GSSOX_XE): $(GS_SO) $(PSSRC)$(SOC_LOADER)
+ 	$(GLCC) -g $(SOC_CFLAGS) -o $(GSSOX_XE) $(PSSRC)$(SOC_LOADER) \
+-	-L$(BINDIR) -l$(GS_SO_BASE) $(SOC_LIBS)
++	-L$(BINDIR) -l$(GS_SONAME_LINK) $(SOC_LIBS)
+ 
+ # ------------------------- Recursive make targets ------------------------- #
+ 
+ SODEFS=\
+- GS_XE=$(BINDIR)/$(GS_SONAME_MAJOR_MINOR)\
++ GS_XE=$(BINDIR)/$(GS_SONAME_MAJOR)\
+  DISPLAY_DEV=$(DD)display.dev\
+  STDIO_IMPLEMENTATION=c\
+  BUILDDIRPREFIX=$(BUILDDIRPREFIX)
+@@ -158,11 +179,16 @@
+ 	-mkdir -p $(DESTDIR)$(gsincludedir)
+ 	$(INSTALL_PROGRAM) $(GSSOC) $(DESTDIR)$(bindir)/$(GSSOC_XENAME)
+ 	$(INSTALL_PROGRAM) $(GSSOX) $(DESTDIR)$(bindir)/$(GSSOX_XENAME)
+-	$(INSTALL_PROGRAM) $(BINDIR)/$(GS_SONAME_MAJOR_MINOR) $(DESTDIR)$(libdir)/$(GS_SONAME_MAJOR_MINOR)
+-	$(RM_) $(DESTDIR)$(libdir)/$(GS_SONAME)
+-	ln -s $(GS_SONAME_MAJOR_MINOR) $(DESTDIR)$(libdir)/$(GS_SONAME)
+-	$(RM_) $(DESTDIR)$(libdir)/$(GS_SONAME_MAJOR)
+-	ln -s $(GS_SONAME_MAJOR_MINOR) $(DESTDIR)$(libdir)/$(GS_SONAME_MAJOR)
++	@if test "$(MINGW_BUILD)" = "1" ; then \
++	  $(INSTALL_PROGRAM) $(BINDIR)/$(GS_SONAME_MAJOR) $(DESTDIR)$(bindir)/$(GS_SONAME_MAJOR) ; \
++	  $(INSTALL_PROGRAM) $(BINDIR)/$(GS_SONAME_LINK).dll.a $(DESTDIR)$(libdir)/$(GS_SONAME_LINK).dll.a ; \
++	else \
++	  $(INSTALL_PROGRAM) $(BINDIR)/$(GS_SONAME_MAJOR) $(DESTDIR)$(libdir)/$(GS_SONAME_MAJOR) ; \
++	  $(RM_) $(DESTDIR)$(libdir)/$(GS_SONAME) ; \
++	  ln -s $(GS_SONAME_MAJOR) $(DESTDIR)$(libdir)/$(GS_SONAME) ; \
++	  $(RM_) $(DESTDIR)$(libdir)/$(GS_SONAME_MAJOR) ; \
++	  ln -s $(GS_SONAME_MAJOR) $(DESTDIR)$(libdir)/$(GS_SONAME_MAJOR_MINOR) ; \
++	fi
+ 	$(INSTALL_DATA) $(PSSRC)iapi.h $(DESTDIR)$(gsincludedir)iapi.h
+ 	$(INSTALL_DATA) $(PSSRC)ierrors.h $(DESTDIR)$(gsincludedir)ierrors.h
+ 	$(INSTALL_DATA) $(DEVSRC)gdevdsp.h $(DESTDIR)$(gsincludedir)gdevdsp.h
+--- base/unix-gcc.mak	Wed Mar 26 19:53:47 2014
++++ base/unix-gcc.mak	Sat Apr 05 13:29:43 2014
+@@ -57,13 +57,13 @@
+ INSTALL_PROGRAM = $(INSTALL) -m 755
+ INSTALL_DATA = $(INSTALL) -m 644
+ 
+-prefix = /usr/local
++prefix = /usr
+ exec_prefix = $(prefix)
+ bindir = $(exec_prefix)/bin
+ scriptdir = $(bindir)
+ includedir = $(prefix)/include
+ libdir = $(exec_prefix)/lib
+-mandir = $(prefix)/man
++mandir = $(prefix)/share/man
+ man1ext = 1
+ datadir = $(prefix)/share
+ gsdir = $(datadir)/ghostscript
+@@ -71,7 +71,7 @@
+ gssharedir = $(libdir)/ghostscript/$(GS_DOT_VERSION)
+ gsincludedir = $(includedir)/ghostscript/
+ 
+-docdir=$(gsdatadir)/doc
++docdir=$(gsdatadir)/doc/ghostscript-$(GS_DOT_VERSION)
+ exdir=$(gsdatadir)/examples
+ GS_DOCDIR=$(docdir)
+ 
+--- base/unixhead.mak	Wed Mar 26 19:53:47 2014
++++ base/unixhead.mak	Sat Apr 05 13:29:43 2014
+@@ -22,7 +22,12 @@
+ # Define the platform name.  For a "stock" System V platform,
+ # use sysv_ instead of unix_.
+ 
+-GSPLATFORM=unix_
++# select platform: unix or mingw
++ifeq ($(MINGW_BUILD), 1)
++	GSPLATFORM=mingw_
++else	
++	GSPLATFORM=unix_
++endif
+ 
+ # Define the syntax for command, object, and executable files.
+ 
+@@ -65,3 +70,9 @@
+ # Define the compilation rules and flags.
+ 
+ BEGINFILES=
++
++ifeq ($(MINGW_BUILD), 1)
++	MINGW_FONTPATH_PATCH_OR_EMPTY_COMMAND=$(SH) $(GLSRCDIR)/mingw-fp.sh $(gconfigd_h)
++else
++	MINGW_FONTPATH_PATCH_OR_EMPTY_COMMAND=
++endif
+--- psi/iapi.h	Wed Mar 26 19:53:47 2014
++++ psi/iapi.h	Sat Apr 05 17:24:30 2014
+@@ -229,6 +229,7 @@
+     int argc, char **argv);
+ 
+ #ifdef __WIN32__
++#include <wchar.h>
+ GSDLLEXPORT int GSDLLAPI gsapi_init_with_argsA(void *instance,
+     int argc, char **argv);
+ 
+--- configure.ac	Wed Mar 26 19:53:48 2014
++++ configure.ac	Sat Apr 05 13:31:12 2014
+@@ -187,6 +187,26 @@
+             SET_DT_SONAME="so"
+         fi
+         ;;
++		MINGW*)
++		MINGW_BUILD=1
++		MINGW_PLATFORM=`uname`
++		MINGW_XTLIBS="-lwinspool"
++
++		# inner MINGW case statement: 32/64 bits
++		case $MINGW_PLATFORM in
++            MINGW32*)
++            MINGW_PLATFORM_BITS=32
++            ;;
++            MINGW64*)
++            MINGW_PLATFORM_BITS=64
++            ;;
++        esac
++
++		AC_SUBST(MINGW_BUILD)
++		AC_SUBST(MINGW_PLATFORM)
++		AC_SUBST(MINGW_PLATFORM_BITS)
++		AC_SUBST(MINGW_XTLIBS)
++		;;
+ esac
+ 
+ AC_SUBST(SET_DT_SONAME)
+@@ -854,7 +874,7 @@
+ dnl zlib is needed for language level 3, and libpng
+ # we must define ZLIBDIR regardless because png.mak does a -I$(ZLIBDIR)
+ # this seems a harmless default
+-ZLIBDIR=src
++ZLIBDIR=$includedir
+ AUX_SHARED_ZLIB=
+ 
+ if test -d $srcdir/zlib; then
+@@ -1445,12 +1465,41 @@
+ AC_SUBST(SHARE_JPX)
+ AC_SUBST(JPXDEVS)
+ 
++dnl checks for MinGW shared object name and gdi must precede the gtk checks
++dnl check whether MinGW should use the MSVC dll names
++AC_ARG_WITH([winlib-names], AC_HELP_STRING([--with-winlib-names],
++                                             [MSys/MinGW only: dll and executable names should be gsdll32.dll (gsdll64.dll), gswin32.exe (gswin64.exe), and gswin32c.exe (gswin64c.exe)]),
++            [], [with_winlib_names=no])
++if test "x$with_winlib_names" = "xyes"; then
++    MINGW_WITH_WINLIB_NAMES=1
++fi
++
++dnl check whether MinGW should use the gdi-based (dwmain.c, dwmainc.c) front end
++AC_ARG_WITH([gdi], AC_HELP_STRING([--with-gdi],
++                                             [MSys/MinGW only: use the gdi-based Shared Object loaders (dwmain.c & dwmainc.c; implies --with-winlib-names=yes): not yet implemented]),
++            [], [with_gdi=no])
++if test "x$with_gdi" = "xyes"; then
++    MINGW_WITH_WINLIB_NAMES=1
++    MINGW_WITH_GDI=1
++    # SOC_LOADER value will be set after the initial gtk test
++fi
++
++AC_SUBST(MINGW_WITH_WINLIB_NAMES)
++AC_SUBST(MINGW_WITH_GDI)
++
+ dnl check if we can/should build the gtk loader
+ AC_ARG_ENABLE([gtk], AC_HELP_STRING([--disable-gtk],
+     [Do not build the gtk loader]))
+ SOC_CFLAGS=""
+ SOC_LIBS=""
+-SOC_LOADER=""
++SOC_LOADER="" # default may not be set before the gtk+-2.0 test
++SOC_LOADER_PLAIN=""
++
++if test "x$with_gdi" = "xyes"; then
++    AC_MSG_WARN([the gdi front end under MSys/MinGW is not yet implemented])
++    enable_gtk=yes # try to use gtk+ instead
++fi
++
+ if test "x$enable_gtk" != "xno"; then
+     # Try GTK+ 3.x first...
+     if test "x$PKGCONFIG" != x; then
+@@ -1483,9 +1532,15 @@
+   SOC_LOADER="dxmainc.c"
+ fi
+ 
++dnl set default SOC_LOADER_PLAIN as necessary
++if test "x$SOC_LOADER_PLAIN" = x; then
++	SOC_LOADER_PLAIN="dxmainc.c"
++fi
++
+ AC_SUBST(SOC_CFLAGS)
+ AC_SUBST(SOC_LIBS)
+ AC_SUBST(SOC_LOADER)
++AC_SUBST(SOC_LOADER_PLAIN)
+ 
+ dnl look for omni implementation
+ AC_ARG_WITH([omni], AC_HELP_STRING([--with-omni],
+@@ -1958,6 +2013,12 @@
+           fi
+           SO_LIB_EXT=".so"
+         ;;
++        MINGW*)
++        DYNAMIC_CFLAGS="-fPIC"
++        DYNAMIC_LDFLAGS="-fPIC -shared"
++        DYNAMIC_LIBS=""
++        DYNANIC_LIB_EXT="dll"
++        ;;
+ esac
+ 
+ AC_ARG_ENABLE([dynamic], AC_HELP_STRING([--enable-dynamic],
+@@ -2030,6 +2091,20 @@
+ fi
+ 
+ dnl Fix "fontpath" variable...
++if test $MINGW_BUILD = 1; then
++    # Add a reference to the Windows Fonts directory.
++    # This must take place priot to the test below,
++    # as it is also our way to avoid inclusion
++    # of the various unix font directories.
++    # Since gs uses here a colon as delimiter,
++    # we must refer to %windir% as /c/Windows
++    if test "x$fontpath" = "x"; then
++        fontpath="/c/Windows/Fonts"
++    else
++        fontpath="${fontpath}:/c/Windows/Fonts"
++    fi
++fi
++
+ if test "x$fontpath" = "x"; then
+         # These font directories are used by various Linux distributions...
+         fontpath="$datadir/fonts/default/ghostscript"
