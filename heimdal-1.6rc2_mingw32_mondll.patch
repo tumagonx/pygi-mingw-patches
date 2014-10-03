@@ -1,3 +1,22 @@
+Awful mingw32 patch for heimdal-1.6
+
+Note that heimdal source distro is lacking of necessary win32 source files
+somehow they are available at other online source repo such www.opensource.apple.com (look for heimdal)
+
+First is to observe NTMakefile see which can be build and which win32 files excluded from makefile.in
+Then observe the definition flags to use.
+
+This patch intended to build single dll (gssapi) and exclude two other buildables but not needed (kadm5 and hdb)
+
+configure --prefix=$IPATH --includedir=$IPATH/include/heimdal --disable-heimdal-documentation --enable-pthread-support --disable-mmap --disable-kcm --disable-ndbm-db --enable-littleendian --with-libedit --without-readline  --disable-afs-string-to-key --with-libedit-lib=$IPATH/lib --with-libedit-include=$IPATH/include --with-sqlite --with-sqlite3-lib=$IPATH/lib --with-sqlite3-include=$IPATH/include LIBS="-lws2_32 -lshlwapi -lsecur32 -lsqlite3"
+
+During configure it ask for libedit and curses, I use wineditline and pdcurses. 
+Don't know if they are actually used anyway.
+
+I have a problem with the declspec thats scattered here and there (some even generated) and cause error
+so I don't use it at all, and use a def file (based on heimdal msvc dlls) instead.
+
+
 --- include/config.h.in	Tue Feb 18 23:37:14 2014
 +++ include/config.h.in	Fri Sep 26 15:12:47 2014
 @@ -9,11 +9,22 @@
