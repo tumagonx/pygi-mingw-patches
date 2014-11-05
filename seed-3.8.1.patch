@@ -1,0 +1,458 @@
+407c407
+< 	$(FFI_LDFLAGS)
+---
+> 	-no-undefined $(FFI_LDFLAGS) -lgmodule-2.0
+21a22
+> #ifndef _WIN32
+22a24
+> #endif
+21a22
+> #ifndef _WIN32
+22a24
+> #endif
+23a24
+> #ifndef _WIN32
+24a26
+> #endif
+30a33,49
+> #ifdef _WIN32
+> #include <shlobj.h>
+> #undef interface
+> HMODULE seed_dll = NULL;
+> gchar *SeedInclude;
+> BOOL WINAPI
+> DllMain (HINSTANCE hinstDLL,
+> 	 DWORD     fdwReason,
+> 	 LPVOID    lpvReserved)
+> {
+>   if (fdwReason == DLL_PROCESS_ATTACH)
+>       seed_dll = hinstDLL;
+> 
+>   return TRUE;
+> }
+> #endif
+> 
+1797,1798c1816,1823
+<   defaults_script =
+<     JSStringCreateWithUTF8CString ("Seed.include(\"" SEED_PREFIX_PATH
+---
+> #ifdef _WIN32
+>     SeedInclude = g_strconcat("Seed.include(\"",g_strjoinv ("\\\\", \
+>                   g_strsplit (g_build_filename(g_win32_get_package_installation_directory_of_module (seed_dll), \
+>                   "share","seed-gtk3","extensions","Seed.js", NULL), "\\", -1)),"\");",NULL);
+>     defaults_script = JSStringCreateWithUTF8CString(SeedInclude);
+>     g_free(SeedInclude);
+> #else
+>     defaults_script = JSStringCreateWithUTF8CString ("Seed.include(\"" SEED_PREFIX_PATH
+1800c1825
+< 
+---
+> #endif
+1983a2009,2057
+> 
+> GSList *
+> seed_importer_get_search_path (JSContextRef ctx, JSValueRef * exception)
+> {
+>   GSList *path = NULL;
+>   gchar *entry;
+>   JSValueRef search_path_ref, length_ref;
+>   guint length, i;
+> #ifdef _WIN32
+> /* internal relocatable lookup */
+>   path = g_slist_append (path, g_build_filename \
+>     (g_win32_get_package_installation_directory_of_module (seed_dll), \
+>     "lib","gnome-js", NULL));
+>   path = g_slist_append (path, g_build_filename \
+>     (g_win32_get_package_installation_directory_of_module (seed_dll), \
+>     "lib","seed-gtk3",NULL));
+>   path = g_slist_append (path, g_build_filename \
+>     (g_win32_get_package_installation_directory_of_module (seed_dll), \
+>     "share","seed-gtk3",NULL));
+> #endif
+>   search_path_ref = seed_object_get_property (ctx, importer, "searchPath");
+>   if (!JSValueIsObject (ctx, search_path_ref))
+>     {
+>       seed_make_exception (ctx, exception, "ArgumentError",
+> 			   "Importer searchPath object is not an array");
+>       return NULL;
+>     }
+> 
+>   length_ref =
+>     seed_object_get_property (ctx, (JSObjectRef) search_path_ref, "length");
+>   length = seed_value_to_uint (ctx, length_ref, exception);
+> 
+>   for (i = 0; i < length; i++)
+>     {
+>       JSValueRef entry_ref;
+> 
+>       entry_ref =
+> 	JSObjectGetPropertyAtIndex (ctx, (JSObjectRef) search_path_ref, i,
+> 				    exception);
+>       entry = seed_value_to_string (ctx, entry_ref, exception);
+> 
+>       if (g_file_test (entry, G_FILE_TEST_EXISTS) == TRUE)
+>         path = g_slist_append (path, entry);
+>     }
+> 
+>   return path;
+> }
+> 
+> 
+84a85,87
+> GSList *
+> seed_importer_get_search_path (JSContextRef ctx, JSValueRef * exception);
+> 
+20a21
+> #ifndef G_OS_WIN32
+21a23
+> #endif
+25a26,36
+> #ifdef G_OS_WIN32
+> #include <windows.h>
+> static char *realpath(const char *path, char *resolved_path)
+> {
+>     DWORD res = GetFullPathName(path, MAX_PATH, resolved_path, NULL);
+>     if (res == 0 || res > MAX_PATH - 1)
+>         return strdup(path);
+>     else
+>         return resolved_path;
+> }
+> #endif
+545,581d555
+< }
+< 
+< 
+< GSList *
+< seed_importer_get_search_path (JSContextRef ctx, JSValueRef * exception)
+< {
+<   GSList *path = NULL;
+<   gchar *entry;
+<   JSValueRef search_path_ref, length_ref;
+<   guint length, i;
+< 
+<   search_path_ref = seed_object_get_property (ctx, importer, "searchPath");
+<   if (!JSValueIsObject (ctx, search_path_ref))
+<     {
+<       seed_make_exception (ctx, exception, "ArgumentError",
+< 			   "Importer searchPath object is not an array");
+<       return NULL;
+<     }
+< 
+<   length_ref =
+<     seed_object_get_property (ctx, (JSObjectRef) search_path_ref, "length");
+<   length = seed_value_to_uint (ctx, length_ref, exception);
+< 
+<   for (i = 0; i < length; i++)
+<     {
+<       JSValueRef entry_ref;
+< 
+<       entry_ref =
+< 	JSObjectGetPropertyAtIndex (ctx, (JSObjectRef) search_path_ref, i,
+< 				    exception);
+<       entry = seed_value_to_string (ctx, entry_ref, exception);
+< 
+<       if (g_file_test (entry, G_FILE_TEST_EXISTS) == TRUE)
+<         path = g_slist_append (path, entry);
+<     }
+< 
+<   return path;
+399c399
+< @BUILD_CAIRO_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_CAIRO_MODULE_TRUE@	-no-undefined -module -avoid-version \
+402c402,403
+< @BUILD_CAIRO_MODULE_TRUE@	$(CAIRO_LDFLAGS)
+---
+> @BUILD_CAIRO_MODULE_TRUE@	$(CAIRO_LDFLAGS) \
+> @BUILD_CAIRO_MODULE_TRUE@	$(GIO_LIBS)
+375c375
+< @BUILD_CANVAS_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_CANVAS_MODULE_TRUE@	-no-undefined -module -avoid-version \
+377c377,378
+< @BUILD_CANVAS_MODULE_TRUE@	$(CAIRO_LDFLAGS)
+---
+> @BUILD_CANVAS_MODULE_TRUE@	$(CAIRO_LDFLAGS) \
+> @BUILD_CANVAS_MODULE_TRUE@	$(GIO_LIBS)
+436c436
+< @BUILD_DBUS_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_DBUS_MODULE_TRUE@	-no-undefined -module -avoid-version \
+440c440
+< @BUILD_DBUS_MODULE_TRUE@	-L/lib
+---
+> @BUILD_DBUS_MODULE_TRUE@	$(GIO_LIBS)
+371c371,372
+< @BUILD_DYNAMICOBJECT_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_DYNAMICOBJECT_MODULE_TRUE@	-no-undefined -module -avoid-version \
+> @BUILD_DYNAMICOBJECT_MODULE_TRUE@	$(top_builddir)/libseed/libseed@SEED_GTK_VERSION@.la \
+373c374,375
+< @BUILD_DYNAMICOBJECT_MODULE_TRUE@	$(SEED_PROFILE_LIBS)
+---
+> @BUILD_DYNAMICOBJECT_MODULE_TRUE@	$(SEED_PROFILE_LIBS) \
+> @BUILD_DYNAMICOBJECT_MODULE_TRUE@	$(GIO_LIBS)
+372,373c372,374
+< @BUILD_EXAMPLE_MODULE_TRUE@	-module -avoid-version \
+< @BUILD_EXAMPLE_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS)
+---
+> @BUILD_EXAMPLE_MODULE_TRUE@	-no-undefined -module -avoid-version \
+> @BUILD_EXAMPLE_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS) \
+> @BUILD_EXAMPLE_MODULE_TRUE@	$(GIO_LIBS)
+379c379
+< @BUILD_FFI_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_FFI_MODULE_TRUE@	-no-undefined -module -avoid-version \
+381c381,384
+< @BUILD_FFI_MODULE_TRUE@	$(FFI_LDFLAGS)
+---
+> @BUILD_FFI_MODULE_TRUE@	$(FFI_LDFLAGS) \
+> @BUILD_FFI_MODULE_TRUE@	$(FFI_LIBS) \
+> @BUILD_FFI_MODULE_TRUE@	$(GIO_LIBS) \
+> @BUILD_FFI_MODULE_TRUE@	-lgmodule-2.0
+372,373c372,374
+< @BUILD_GETTEXT_MODULE_TRUE@	-module -avoid-version \
+< @BUILD_GETTEXT_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS)
+---
+> @BUILD_GETTEXT_MODULE_TRUE@	-no-undefined -module -avoid-version \
+> @BUILD_GETTEXT_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS) \
+> @BUILD_GETTEXT_MODULE_TRUE@	$(GIO_LIBS)
+24a25,33
+> #ifdef G_OS_WIN32
+> #define LC_PAPER 7
+> #define LC_NAME 8
+> #define LC_ADDRESS 9
+> #define LC_MEASUREMENT 11
+> #define LC_IDENTIFICATION 12
+> #define LC_TELEPHONE 10
+> #endif
+> 
+374c374
+< @BUILD_GTKBUILDER_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_GTKBUILDER_MODULE_TRUE@	-no-undefined -module -avoid-version \
+376c376,377
+< @BUILD_GTKBUILDER_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS)
+---
+> @BUILD_GTKBUILDER_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS) \
+> @BUILD_GTKBUILDER_MODULE_TRUE@	$(GIO_LIBS)
+378c378
+< @BUILD_LIBXML_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_LIBXML_MODULE_TRUE@	-no-undefined -module -avoid-version \
+380c380,381
+< @BUILD_LIBXML_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS)
+---
+> @BUILD_LIBXML_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS) \
+> @BUILD_LIBXML_MODULE_TRUE@	$(GIO_LIBS)
+378,379c378,380
+< @BUILD_MPFR_MODULE_TRUE@	-module -avoid-version \
+< @BUILD_MPFR_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS)
+---
+> @BUILD_MPFR_MODULE_TRUE@	-no-undefined -module -avoid-version \
+> @BUILD_MPFR_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS) \
+> @BUILD_MPFR_MODULE_TRUE@	$(GIO_LIBS)
+373,374c373,375
+< @BUILD_MULTIPROCESSING_MODULE_TRUE@	-module -avoid-version \
+< @BUILD_MULTIPROCESSING_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS)
+---
+> @BUILD_MULTIPROCESSING_MODULE_TRUE@	-no-undefined -module -avoid-version \
+> @BUILD_MULTIPROCESSING_MODULE_TRUE@	$(GOBJECT_INTROSPECTION_LDFLAGS) \
+> @BUILD_MULTIPROCESSING_MODULE_TRUE@	$(GIO_LIBS)
+24a25,33
+> #ifdef G_OS_WIN32
+> #include <fcntl.h>
+> #include <process.h>
+> int pipe (int *fds)
+> {
+>   return _pipe(fds, 4096, _O_BINARY);
+> }
+> #endif
+> 
+370c370
+< @BUILD_OS_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_OS_MODULE_TRUE@	-no-undefined -module -avoid-version \
+372c372,373
+< @BUILD_OS_MODULE_TRUE@	$(SEED_DEBUG_LDFLAGS)
+---
+> @BUILD_OS_MODULE_TRUE@	$(SEED_DEBUG_LDFLAGS) \
+> @BUILD_OS_MODULE_TRUE@	$(GIO_LIBS)
+372c372
+< @BUILD_READLINE_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_READLINE_MODULE_TRUE@	-no-undefined -module -avoid-version \
+374c374,375
+< @BUILD_READLINE_MODULE_TRUE@	$(FFI_LDFLAGS)
+---
+> @BUILD_READLINE_MODULE_TRUE@	$(FFI_LDFLAGS) \
+> @BUILD_READLINE_MODULE_TRUE@	$(GIO_LIBS)
+25a26,171
+> #ifdef G_OS_WIN32
+> #include <windows.h>
+> #include <errno.h>
+> #include <io.h>
+> 
+> typedef int Function ();
+> 
+> #define PROT_NONE       0
+> #define PROT_READ       1
+> #define PROT_WRITE      2
+> #define PROT_EXEC       4
+> 
+> #define MAP_FILE        0
+> #define MAP_SHARED      1
+> #define MAP_PRIVATE     2
+> #define MAP_TYPE        0xf
+> #define MAP_FIXED       0x10
+> #define MAP_ANONYMOUS   0x20
+> #define MAP_ANON        MAP_ANONYMOUS
+> 
+> #define MAP_FAILED      ((void *)-1)
+> 
+> /* Flags for msync. */
+> #define MS_ASYNC        1
+> #define MS_SYNC         2
+> #define MS_INVALIDATE   4
+> 
+> void*   mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off);
+> 
+> static int __map_mman_error(const DWORD err, const int deferr)
+> {
+>     if (err == 0)
+>         return 0;
+>     //TODO: implement
+>     return err;
+> }
+> 
+> static DWORD __map_mmap_prot_page(const int prot)
+> {
+>     DWORD protect = 0;
+>     
+>     if (prot == PROT_NONE)
+>         return protect;
+>         
+>     if ((prot & PROT_EXEC) != 0)
+>     {
+>         protect = ((prot & PROT_WRITE) != 0) ? 
+>                     PAGE_EXECUTE_READWRITE : PAGE_EXECUTE_READ;
+>     }
+>     else
+>     {
+>         protect = ((prot & PROT_WRITE) != 0) ?
+>                     PAGE_READWRITE : PAGE_READONLY;
+>     }
+>     
+>     return protect;
+> }
+> 
+> static DWORD __map_mmap_prot_file(const int prot)
+> {
+>     DWORD desiredAccess = 0;
+>     
+>     if (prot == PROT_NONE)
+>         return desiredAccess;
+>         
+>     if ((prot & PROT_READ) != 0)
+>         desiredAccess |= FILE_MAP_READ;
+>     if ((prot & PROT_WRITE) != 0)
+>         desiredAccess |= FILE_MAP_WRITE;
+>     if ((prot & PROT_EXEC) != 0)
+>         desiredAccess |= FILE_MAP_EXECUTE;
+>     
+>     return desiredAccess;
+> }
+> 
+> void* mmap(void *addr, size_t len, int prot, int flags, int fildes, off_t off)
+> {
+>     HANDLE fm, h;
+>     
+>     void * map = MAP_FAILED;
+>     
+> #ifdef _MSC_VER
+> #pragma warning(push)
+> #pragma warning(disable: 4293)
+> #endif
+> 
+>     const DWORD dwFileOffsetLow = (sizeof(off_t) <= sizeof(DWORD)) ? 
+>                     (DWORD)off : (DWORD)(off & 0xFFFFFFFFL);
+>     const DWORD dwFileOffsetHigh = (sizeof(off_t) <= sizeof(DWORD)) ?
+>                     (DWORD)0 : (DWORD)((off >> 32) & 0xFFFFFFFFL);
+>     const DWORD protect = __map_mmap_prot_page(prot);
+>     const DWORD desiredAccess = __map_mmap_prot_file(prot);
+> 
+>     const off_t maxSize = off + (off_t)len;
+> 
+>     const DWORD dwMaxSizeLow = (sizeof(off_t) <= sizeof(DWORD)) ? 
+>                     (DWORD)maxSize : (DWORD)(maxSize & 0xFFFFFFFFL);
+>     const DWORD dwMaxSizeHigh = (sizeof(off_t) <= sizeof(DWORD)) ?
+>                     (DWORD)0 : (DWORD)((maxSize >> 32) & 0xFFFFFFFFL);
+> 
+> #ifdef _MSC_VER
+> #pragma warning(pop)
+> #endif
+> 
+>     errno = 0;
+>     
+>     if (len == 0 
+>         /* Unsupported flag combinations */
+>         || (flags & MAP_FIXED) != 0
+>         /* Usupported protection combinations */
+>         || prot == PROT_EXEC)
+>     {
+>         errno = EINVAL;
+>         return MAP_FAILED;
+>     }
+>     
+>     h = ((flags & MAP_ANONYMOUS) == 0) ? 
+>                     (HANDLE)_get_osfhandle(fildes) : INVALID_HANDLE_VALUE;
+> 
+>     if ((flags & MAP_ANONYMOUS) == 0 && h == INVALID_HANDLE_VALUE)
+>     {
+>         errno = EBADF;
+>         return MAP_FAILED;
+>     }
+> 
+>     fm = CreateFileMapping(h, NULL, protect, dwMaxSizeHigh, dwMaxSizeLow, NULL);
+> 
+>     if (fm == NULL)
+>     {
+>         errno = __map_mman_error(GetLastError(), EPERM);
+>         return MAP_FAILED;
+>     }
+>   
+>     map = MapViewOfFile(fm, desiredAccess, dwFileOffsetHigh, dwFileOffsetLow, len);
+> 
+>     CloseHandle(fm);
+>   
+>     if (map == NULL)
+>     {
+>         errno = __map_mman_error(GetLastError(), EPERM);
+>         return MAP_FAILED;
+>     }
+> 
+>     return map;
+> }
+> #else
+26a173
+> #endif
+369,370c369,371
+< 	-module -avoid-version \
+< 	$(GOBJECT_INTROSPECTION_LDFLAGS)
+---
+> 	-no-undefined -module -avoid-version \
+> 	$(GOBJECT_INTROSPECTION_LDFLAGS) \
+> 	$(GIO_LIBS)
+375c375
+< @BUILD_SQLITE_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_SQLITE_MODULE_TRUE@	-no-undefined -module -avoid-version \
+378c378,379
+< @BUILD_SQLITE_MODULE_TRUE@	$(SEED_DEBUG_LDFLAGS)
+---
+> @BUILD_SQLITE_MODULE_TRUE@	$(SEED_DEBUG_LDFLAGS) \
+> @BUILD_SQLITE_MODULE_TRUE@	$(GIO_LIBS)
+374c374
+< @BUILD_XORG_MODULE_TRUE@	-module -avoid-version \
+---
+> @BUILD_XORG_MODULE_TRUE@	-no-undefined -module -avoid-version \
