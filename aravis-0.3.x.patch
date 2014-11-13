@@ -1,0 +1,390 @@
+--- gst/Makefile.in	Wed Aug 20 05:13:46 2014
++++ gst/Makefile.in	Wed Nov 12 07:26:03 2014
+@@ -411,7 +411,7 @@
+ 	$(ARAVIS_GST_PLUGIN_LIBS) 			\
+ 	$(top_builddir)/src/libaravis-@ARAVIS_API_VERSION@.la
+ 
+-libgstaravis_@ARAVIS_API_VERSION@_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
++libgstaravis_@ARAVIS_API_VERSION@_la_LDFLAGS = -no-undefined $(GST_PLUGIN_LDFLAGS)
+ libgstaravis_@ARAVIS_API_VERSION@_la_LIBTOOLFLAGS = --tag=disable-static
+ libgstaravis_@ARAVIS_API_VERSION@_ladir = $(includedir)/aravis-@ARAVIS_API_VERSION@
+ noinst_HEADERS = gstaravis.h
+--- src/arvfakecamera.c	Tue Aug 19 17:15:40 2014
++++ src/arvfakecamera.c	Wed Nov 12 07:15:37 2014
+@@ -408,10 +408,22 @@
+ 	arv_g_mutex_lock (&mutex);
+ 
+ 	if (genicam_file == NULL ) {
+-		char *filename;
++		char *filename = NULL;
+ 
+ 		if (arv_fake_camera_genicam_filename == NULL)
++#ifdef G_OS_WIN32
++		{
++			const gchar * const *dirs = g_get_system_data_dirs();
++			int i;
++			for (i = 0; dirs[i]; ++i) {
++				filename = g_build_filename (dirs[i], "aravis-0.4", "arv-fake-camera.xml", NULL);
++				if (!g_file_test (filename, G_FILE_TEST_IS_REGULAR))
++					g_free (filename);
++			}
++		}
++#else
+ 			filename = g_build_filename (ARAVIS_DATA_DIR, "arv-fake-camera.xml", NULL);
++#endif
+ 		else
+ 			filename = g_strdup (arv_fake_camera_genicam_filename);
+ 
+--- src/arvfakegvcamera.c	Tue Aug 19 17:15:40 2014
++++ src/arvfakegvcamera.c	Wed Nov 12 06:40:08 2014
+@@ -26,8 +26,33 @@
+ #include <arvgvsp.h>
+ #include <stdlib.h>
+ #include <string.h>
++#ifdef G_OS_WIN32
++#include <ws2tcpip.h>
++#include <winsock2.h>
++#define IFF_POINTOPOINT IFF_POINTTOPOINT
++#undef ifa_dstaddr
++
++struct ifaddrs {
++    struct ifaddrs *ifa_next;
++    char *ifa_name;
++    unsigned int ifa_flags;
++    struct sockaddr *ifa_addr;
++    struct sockaddr *ifa_netmask;
++    struct sockaddr *ifa_dstaddr;
++    void *ifa_data;
++};
++
++#ifndef ifa_broadaddr
++#define ifa_broadaddr ifa_dstaddr
++#endif
++
++int getifaddrs(struct ifaddrs **ifpp);
++void freeifaddrs(struct ifaddrs *ifp);
++
++#else
+ #include <net/if.h>
+ #include <ifaddrs.h>
++#endif
+ 
+ #define ARV_FAKE_GV_CAMERA_BUFFER_SIZE	65536
+ 
+--- src/arvgvinterface.c	Wed Jun 04 13:35:17 2014
++++ src/arvgvinterface.c	Wed Nov 12 07:45:06 2014
+@@ -34,9 +34,185 @@
+ #include <glib/gprintf.h>
+ #include <gio/gio.h>
+ #include <sys/types.h>
++#ifdef G_OS_WIN32
++#define interface interface_windows
++#include <ws2tcpip.h>
++#include <winsock2.h>
++#undef interface
++#define IFF_POINTOPOINT IFF_POINTTOPOINT
++
++/*
++ * Copyright (c) 2000 - 2002, 2005 Kungliga Tekniska Högskolan
++ * (Royal Institute of Technology, Stockholm, Sweden).
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ *
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ *
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * 3. Neither the name of the Institute nor the names of its contributors
++ *    may be used to endorse or promote products derived from this software
++ *    without specific prior written permission.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE INSTITUTE AND CONTRIBUTORS ``AS IS'' AND
++ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
++ * ARE DISCLAIMED.  IN NO EVENT SHALL THE INSTITUTE OR CONTRIBUTORS BE LIABLE
++ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
++ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
++ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
++ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
++ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
++ * SUCH DAMAGE.
++ */
++
++#undef ifa_dstaddr
++
++struct ifaddrs {
++    struct ifaddrs *ifa_next;
++    char *ifa_name;
++    unsigned int ifa_flags;
++    struct sockaddr *ifa_addr;
++    struct sockaddr *ifa_netmask;
++    struct sockaddr *ifa_dstaddr;
++    void *ifa_data;
++};
++
++#ifndef ifa_broadaddr
++#define ifa_broadaddr ifa_dstaddr
++#endif
++
++static struct sockaddr *
++dupaddr(const sockaddr_gen * src)
++{
++    sockaddr_gen * d = malloc(sizeof(*d));
++
++    if (d) {
++	memcpy(d, src, sizeof(*d));
++    }
++
++    return (struct sockaddr *) d;
++}
++
++int getifaddrs(struct ifaddrs **ifpp)
++{
++    SOCKET s = INVALID_SOCKET;
++    size_t il_len = 8192;
++    int ret = -1;
++    INTERFACE_INFO *il = NULL;
++
++    *ifpp = NULL;
++
++    s = socket(AF_INET, SOCK_DGRAM, 0);
++    if (s == INVALID_SOCKET)
++	return -1;
++
++    for (;;) {
++	DWORD cbret = 0;
++
++	il = malloc(il_len);
++	if (!il)
++	    break;
++
++	ZeroMemory(il, il_len);
++
++	if (WSAIoctl(s, SIO_GET_INTERFACE_LIST, NULL, 0,
++		     (LPVOID) il, (DWORD) il_len, &cbret,
++		     NULL, NULL) == 0) {
++	    il_len = cbret;
++	    break;
++	}
++
++	free (il);
++	il = NULL;
++
++	if (WSAGetLastError() == WSAEFAULT && cbret > il_len) {
++	    il_len = cbret;
++	} else {
++	    break;
++	}
++    }
++
++    if (!il)
++	goto _exit;
++
++    /* il is an array of INTERFACE_INFO structures.  il_len has the
++       actual size of the buffer.  The number of elements is
++       il_len/sizeof(INTERFACE_INFO) */
++
++    {
++	size_t n = il_len / sizeof(INTERFACE_INFO);
++	size_t i;
++
++	for (i = 0; i < n; i++ ) {
++	    struct ifaddrs *ifp;
++
++	    ifp = malloc(sizeof(*ifp));
++	    if (ifp == NULL)
++		break;
++
++	    ZeroMemory(ifp, sizeof(*ifp));
++
++	    ifp->ifa_next = NULL;
++	    ifp->ifa_name = NULL;
++	    ifp->ifa_flags = il[i].iiFlags;
++	    ifp->ifa_addr = dupaddr(&il[i].iiAddress);
++	    ifp->ifa_netmask = dupaddr(&il[i].iiNetmask);
++	    ifp->ifa_broadaddr = dupaddr(&il[i].iiBroadcastAddress);
++	    ifp->ifa_data = NULL;
++
++	    *ifpp = ifp;
++	    ifpp = &ifp->ifa_next;
++	}
++
++	if (i == n)
++	    ret = 0;
++    }
++
++ _exit:
++
++    if (s != INVALID_SOCKET)
++	closesocket(s);
++
++    if (il)
++	free (il);
++
++    return ret;
++}
++
++void freeifaddrs(struct ifaddrs *ifp)
++{
++    struct ifaddrs *p, *q;
++
++    for(p = ifp; p; ) {
++	if (p->ifa_name)
++	    free(p->ifa_name);
++	if(p->ifa_addr)
++	    free(p->ifa_addr);
++	if(p->ifa_dstaddr)
++	    free(p->ifa_dstaddr);
++	if(p->ifa_netmask)
++	    free(p->ifa_netmask);
++	if(p->ifa_data)
++	    free(p->ifa_data);
++	q = p;
++	p = p->ifa_next;
++	free(q);
++    }
++}
++#else
+ #include <sys/socket.h>
+ #include <net/if.h>
+ #include <ifaddrs.h>
++#endif
+ #include <stdlib.h>
+ #include <string.h>
+ 
+@@ -467,6 +643,10 @@
+ static void
+ arv_gv_interface_init (ArvGvInterface *gv_interface)
+ {
++#ifdef G_OS_WIN32
++  WSADATA wsaData = {0};
++  WSAStartup (MAKEWORD (2,2), &wsaData);
++#endif
+ 	gv_interface->priv = G_TYPE_INSTANCE_GET_PRIVATE (gv_interface, ARV_TYPE_GV_INTERFACE, ArvGvInterfacePrivate);
+ 
+ 	gv_interface->priv->devices = g_hash_table_new_full (g_str_hash, g_str_equal, NULL,
+@@ -482,6 +662,9 @@
+ 	gv_interface->priv->devices = NULL;
+ 
+ 	parent_class->finalize (object);
++#ifdef G_OS_WIN32
++   WSACleanup ();
++#endif
+ }
+ 
+ static void
+--- src/arvgvstream.c	Wed Aug 20 05:01:09 2014
++++ src/arvgvstream.c	Wed Nov 12 06:54:21 2014
+@@ -34,7 +34,11 @@
+ #include <arvmisc.h>
+ #include <arvenumtypes.h>
+ #include <string.h>
++#ifdef G_OS_WIN32
++#include <winsock2.h>
++#else
+ #include <sys/socket.h>
++#endif
+ 
+ #define ARV_GV_STREAM_INCOMING_BUFFER_SIZE	65536
+ 
+@@ -175,7 +179,11 @@
+ 	}
+ 
+ 	if (buffer_size != thread_data->current_socket_buffer_size) {
++#ifdef G_OS_WIN32
++		setsockopt (fd, SOL_SOCKET, SO_RCVBUF, (const char *)&buffer_size, sizeof (buffer_size));
++#else
+ 		setsockopt (fd, SOL_SOCKET, SO_RCVBUF, &buffer_size, sizeof (buffer_size));
++#endif
+ 		thread_data->current_socket_buffer_size = buffer_size;
+ 		arv_debug_stream_thread ("[GvStream::update_socket] Socket buffer size set to %d", buffer_size);
+ 	}
+--- src/Makefile.in	Wed Aug 20 05:01:19 2014
++++ src/Makefile.in	Wed Nov 12 06:42:45 2014
+@@ -206,7 +206,7 @@
+ am__v_CC_1 = 
+ CCLD = $(CC)
+ LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+-	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
++	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) -no-undefined \
+ 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
+ am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
+--- viewer/arvviewer.c	Tue Aug 19 20:00:11 2014
++++ viewer/arvviewer.c	Wed Nov 12 07:15:23 2014
+@@ -25,7 +25,14 @@
+ #include <gst/gst.h>
+ #include <gst/app/gstappsrc.h>
+ #include <gst/video/videooverlay.h>
++#ifdef GDK_WINDOWING_X11
+ #include <gdk/gdkx.h>
++#endif
++#ifdef GDK_WINDOWING_WIN32
++#define interface interface_windows
++#include <gdk/gdkwin32.h>
++#undef interface
++#endif
+ #include <arv.h>
+ #include <stdlib.h>
+ #include <math.h>
+@@ -723,7 +730,11 @@
+ static void
+ drawing_area_realize_cb (GtkWidget * widget, ArvViewer *viewer)
+ {
++#ifdef G_OS_WIN32
++	viewer->video_window_xid = GDK_WINDOW_HWND (gtk_widget_get_window (widget));
++#else
+ 	viewer->video_window_xid = GDK_WINDOW_XID (gtk_widget_get_window (widget));
++#endif
+ }
+ 
+ ArvViewer *
+@@ -732,14 +743,22 @@
+ 	GtkBuilder *builder;
+ 	GtkCellRenderer *cell;
+ 	ArvViewer *viewer;
+-	char *ui_filename;
++	char *ui_filename = NULL;
+ 
+ 	viewer = g_new0 (ArvViewer, 1);
+ 
+ 	builder = gtk_builder_new ();
+-
++#ifdef G_OS_WIN32
++	const gchar * const *dirs = g_get_system_data_dirs();
++	int i;
++	for (i = 0; dirs[i]; ++i) {
++		ui_filename = g_build_filename (dirs[i], "aravis-0.4", "arv-viewer.ui", NULL);
++		if (!g_file_test (ui_filename, G_FILE_TEST_IS_REGULAR))
++			g_free (ui_filename);
++	}
++#else
+ 	ui_filename = g_build_filename (ARAVIS_DATA_DIR, "arv-viewer.ui", NULL);
+-
++#endif
+ 	if (!gtk_builder_add_from_file (builder, ui_filename, NULL))
+ 		g_error ("The user interface file is missing ('%s')", ui_filename);
+ 
+@@ -869,8 +888,14 @@
+ 	ArvViewer *viewer;
+ 	GOptionContext *context;
+ 	GError *error = NULL;
+-
++#ifdef G_OS_WIN32
++      gchar *_glib_get_locale_dir (void);
++      gchar *localedir = _glib_get_locale_dir ();
++      bindtextdomain (GETTEXT_PACKAGE, localedir);
++      g_free (localedir);
++#else
+ 	bindtextdomain (GETTEXT_PACKAGE, PACKAGE_LOCALE_DIR);
++#endif
+ 	bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ 	textdomain (GETTEXT_PACKAGE);
+ 

@@ -1,0 +1,88 @@
+--- config/exiv2.pc.in	Fri Jul 29 19:11:16 2011
++++ config/exiv2.pc.in	Wed Mar 12 10:22:35 2014
+@@ -6,6 +6,6 @@
+ Name: exiv2
+ Description: Image metadata library and tools
+ Version: @PACKAGE_VERSION@
+-Libs: -L${libdir} -lexiv2 @EXV_LIB_STATIC@
+-Libs.private: @EXPAT_LDFLAGS@ @LTLIBINTL@ @LTLIBICONV@ @LIBS@ @EXPAT_LIBS@
++Libs: -L${libdir} -lexiv2 @EXV_LIB_STATIC@ @EXPAT_LDFLAGS@ @LTLIBINTL@ @LTLIBICONV@ @LIBS@ @EXPAT_LIBS@
++Libs.private: 
+ Cflags: -I${includedir}
+--- src/futils.cpp	Thu Mar 22 22:19:35 2012
++++ src/futils.cpp	Thu Nov 13 06:23:12 2014
+@@ -37,6 +37,13 @@
+ # include "exv_conf.h"
+ #endif
+ 
++#ifdef __MINGW32__
++#ifdef WIN_PTHREADS_H
++#undef WIN_PTHREADS_H
++#endif
++#include <string.h>
++#endif
++
+ #include "futils.hpp"
+ 
+ // + standard includes
+--- src/types.cpp	Thu Mar 22 22:19:35 2012
++++ src/types.cpp	Thu Nov 13 06:22:33 2014
+@@ -50,6 +50,14 @@
+ #include <cassert>
+ #include <cstring>
+ 
++#ifdef EXV_ENABLE_NLS
++// ugly fix for localization intended only for gexiv2
++#include <glib.h>
++extern "C" {
++gchar *_glib_get_locale_dir (void);
++}
++#endif
++
+ // *****************************************************************************
+ namespace {
+ 
+@@ -637,7 +645,13 @@
+     static bool exvGettextInitialized = false;
+ 
+     if (!exvGettextInitialized) {
++#ifdef G_OS_WIN32
++        gchar *localedir = _glib_get_locale_dir();
++        bindtextdomain(EXV_PACKAGE, localedir);
++        g_free(localedir);
++#else
+         bindtextdomain(EXV_PACKAGE, EXV_LOCALEDIR);
++#endif
+ # ifdef EXV_HAVE_BIND_TEXTDOMAIN_CODESET
+         bind_textdomain_codeset (EXV_PACKAGE, "UTF-8");
+ # endif
+--- src/utils.cpp	Thu Mar 22 22:19:35 2012
++++ src/utils.cpp	Thu Nov 13 06:23:26 2014
+@@ -41,6 +41,9 @@
+ // + standard includes
+ #include <sys/types.h>
+ #include <sys/stat.h>
++#ifdef __MINGW32__
++#include <string.h>
++#endif
+ #ifdef _MSC_VER
+ # include "getopt_win32.h"
+ # define S_ISREG(m)      (((m) & S_IFMT) == S_IFREG)
+--- xmpsdk/src/XMPIterator.cpp	Wed Oct 19 15:32:15 2011
++++ xmpsdk/src/XMPIterator.cpp	Thu Nov 13 06:25:42 2014
+@@ -12,8 +12,14 @@
+ #include "XMPIterator.hpp"
+ 
+ #include <string>
++#ifdef __MINGW64_VERSION_MAJOR == 2
++// stdio.h strangely cause miscompile with mingw-w64 v2
++extern "C" {
++int __cdecl snprintf(char * __restrict__ s, size_t n, const char * __restrict__  format, ...);
++}
++#else
+ #include <stdio.h>	// For snprintf.
+-
++#endif
+ #if XMP_WinBuild
+     #ifdef _MSC_VER
+         #pragma warning ( disable : 4702 )	// unreachable code
