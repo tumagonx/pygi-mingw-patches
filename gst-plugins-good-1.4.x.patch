@@ -1,0 +1,138 @@
+localization patch
+
+--- ext/flac/gstflac.c	Mon Jul 21 15:24:26 2014
++++ ext/flac/gstflac.c	Thu Oct 02 07:51:33 2014
+@@ -34,7 +34,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- ext/pulse/plugin.c	Mon Jul 21 15:24:26 2014
++++ ext/pulse/plugin.c	Thu Oct 02 07:51:46 2014
+@@ -37,7 +37,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- ext/shout2/gstshout2.c	Mon Jul 21 15:24:27 2014
++++ ext/shout2/gstshout2.c	Thu Oct 02 07:52:00 2014
+@@ -822,7 +822,14 @@
+ plugin_init (GstPlugin * plugin)
+ {
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 
+--- ext/soup/gstsoup.c	Mon Jul 21 15:24:27 2014
++++ ext/soup/gstsoup.c	Thu Oct 02 07:53:34 2014
+@@ -30,7 +30,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- ext/wavpack/gstwavpack.c	Mon Jul 21 15:24:27 2014
++++ ext/wavpack/gstwavpack.c	Thu Oct 02 07:53:41 2014
+@@ -39,7 +39,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- gst/avi/gstavi.c	Mon Jul 21 15:24:27 2014
++++ gst/avi/gstavi.c	Thu Oct 02 07:53:49 2014
+@@ -35,7 +35,14 @@
+   gst_riff_init ();
+ 
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 
+--- gst/isomp4/isomp4-plugin.c	Mon Jul 21 15:24:27 2014
++++ gst/isomp4/isomp4-plugin.c	Thu Oct 02 07:54:00 2014
+@@ -35,7 +35,14 @@
+ plugin_init (GstPlugin * plugin)
+ {
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 
+--- gst/rtsp/gstrtsp.c	Mon Jul 21 15:24:27 2014
++++ gst/rtsp/gstrtsp.c	Thu Oct 02 07:54:12 2014
+@@ -54,7 +54,14 @@
+ plugin_init (GstPlugin * plugin)
+ {
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 

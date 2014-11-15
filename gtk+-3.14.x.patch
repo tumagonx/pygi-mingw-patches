@@ -1,0 +1,55 @@
+--- gtk/gtkiconcache.c	Fri Aug 15 21:38:05 2014
++++ gtk/gtkiconcache.c	Sun Oct 05 07:54:42 2014
+@@ -106,13 +106,14 @@
+     goto done;
+ 
+ #ifdef G_OS_WIN32
+-
++#ifndef __MINGW32__
+ /* Bug 660730: _fstat32 is only defined in msvcrt80.dll+/VS 2005+ */
+ /*             or possibly in the msvcrt.dll linked to by the Windows DDK */
+ /*             (will need to check on the Windows DDK part later) */
+ #if (_MSC_VER >= 1400 || __MSVCRT_VERSION__ >= 0x0800)
+ #undef fstat /* Just in case */
+ #define fstat _fstat32  
++#endif
+ #endif
+ #endif
+ 
+--- gtk/gtksettings.c	Fri Sep 26 01:54:02 2014
++++ gtk/gtksettings.c	Tue Sep 30 18:23:59 2014
+@@ -563,7 +563,11 @@
+                                              g_param_spec_string ("gtk-xft-hintstyle",
+                                                                   P_("Xft Hint Style"),
+                                                                   P_("What degree of hinting to use; hintnone, hintslight, hintmedium, or hintfull"),
++#ifdef G_OS_WIN32
++                                                                  "hintfull",
++#else
+                                                                   NULL,
++#endif
+                                                                   GTK_PARAM_READWRITE),
+                                               NULL);
+ 
+@@ -573,7 +577,11 @@
+                                              g_param_spec_string ("gtk-xft-rgba",
+                                                                   P_("Xft RGBA"),
+                                                                   P_("Type of subpixel antialiasing; none, rgb, bgr, vrgb, vbgr"),
++#ifdef G_OS_WIN32
++                                                                  "rgb",
++#else
+                                                                   NULL,
++#endif
+                                                                   GTK_PARAM_READWRITE),
+                                              NULL);
+ 
+--- Makefile.in	Tue Sep 30 08:38:27 2014
++++ Makefile.in	Tue Sep 30 19:09:46 2014
+@@ -540,7 +540,7 @@
+ 	|| { echo "Gtk+Tests:ERROR: Failed to start Xvfb environment for X11 target tests."; exit 1; } \
+ 	&& DISPLAY=:$$XID && export DISPLAY
+ 
+-SRC_SUBDIRS = util gdk gtk libgail-util modules demos tests testsuite examples
++SRC_SUBDIRS = util gdk gtk libgail-util modules demos
+ SUBDIRS = po po-properties $(SRC_SUBDIRS) docs m4macros build
+ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
+ MAINTAINERCLEANFILES = \
