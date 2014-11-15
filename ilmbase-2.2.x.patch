@@ -1,0 +1,72 @@
+--- IlmThread/IlmThread.h	Sun Aug 10 09:03:38 2014
++++ IlmThread/IlmThread.h	Tue Nov 11 06:28:10 2014
+@@ -101,7 +101,8 @@
+     #define NOMINMAX
+     #include <windows.h>
+     #include <process.h>
+-#elif HAVE_PTHREAD
++#endif
++#if HAVE_PTHREAD
+     #include <pthread.h>
+ #endif
+ 
+@@ -127,7 +128,7 @@
+     
+   private:
+ 
+-    #if defined _WIN32 || defined _WIN64
++    #if (defined _WIN32 || defined _WIN64) && !defined HAVE_PTHREAD
+ 	HANDLE _thread;
+     #elif HAVE_PTHREAD
+ 	pthread_t _thread;
+--- IlmThread/IlmThreadMutex.h	Sun Aug 10 09:03:38 2014
++++ IlmThread/IlmThreadMutex.h	Tue Nov 11 06:28:10 2014
+@@ -76,7 +76,8 @@
+     #endif
+     #define NOMINMAX
+     #include <windows.h>
+-#elif HAVE_PTHREAD
++#endif
++#if HAVE_PTHREAD
+     #include <pthread.h>
+ #endif
+ 
+@@ -97,9 +98,9 @@
+     void	lock () const;
+     void	unlock () const;
+ 
+-    #if defined _WIN32 || defined _WIN64
++    #if (defined _WIN32 || defined _WIN64) && !defined HAVE_PTHREAD
+ 	mutable CRITICAL_SECTION _mutex;
+-    #elif HAVE_PTHREAD
++    #else
+ 	mutable pthread_mutex_t _mutex;
+     #endif
+ 
+--- IlmThread/IlmThreadSemaphore.h	Sun Aug 10 09:03:38 2014
++++ IlmThread/IlmThreadSemaphore.h	Tue Nov 11 06:28:10 2014
+@@ -52,7 +52,8 @@
+     #endif
+     #define NOMINMAX
+     #include <windows.h>
+-#elif HAVE_PTHREAD && !HAVE_POSIX_SEMAPHORES
++#endif
++#if HAVE_PTHREAD && !HAVE_POSIX_SEMAPHORES
+     #include <pthread.h>
+ #elif HAVE_PTHREAD && HAVE_POSIX_SEMAPHORES
+     #include <semaphore.h>
+@@ -75,11 +76,12 @@
+ 
+   private:
+ 
+-    #if defined _WIN32 || defined _WIN64
++    #if (defined _WIN32 || defined _WIN64) && !defined HAVE_PTHREAD
+ 
+ 	mutable HANDLE _semaphore;
++	  #endif
+ 
+-    #elif HAVE_PTHREAD && !HAVE_POSIX_SEMAPHORES
++    #if HAVE_PTHREAD && !HAVE_POSIX_SEMAPHORES
+ 
+ 	//
+ 	// If the platform has Posix threads but no semapohores,

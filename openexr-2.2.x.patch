@@ -1,0 +1,41 @@
+--- IlmImf/ImfSystemSpecific.h	Sun Aug 10 11:23:57 2014
++++ IlmImf/ImfSystemSpecific.h	Wed Nov 12 16:37:39 2014
+@@ -54,7 +54,7 @@
+ 
+ #ifdef IMF_HAVE_SSE2
+ 
+-#ifdef __GNUC__
++#if defined __GNUC__ && !defined __MINGW32__
+ // Causes issues on certain gcc versions
+ //#define EXR_FORCEINLINE inline __attribute__((always_inline))
+ #define EXR_FORCEINLINE inline
+@@ -73,7 +73,13 @@
+     free(ptr);
+ }
+ 
+-#elif defined _MSC_VER
++#elif defined _MSC_VER || defined __MINGW32__
++#if defined __MINGW32__ && defined __cplusplus
++extern "C" {
++  _CRTIMP void __cdecl _aligned_free(void *_Memory);
++  _CRTIMP void *__cdecl _aligned_malloc(size_t _Size,size_t _Alignment);
++}
++#endif
+ 
+ #define EXR_FORCEINLINE __forceinline
+ #define EXR_RESTRICT __restrict
+--- IlmImf/Makefile.in	Sun Aug 10 11:48:23 2014
++++ IlmImf/Makefile.in	Tue Nov 11 14:20:20 2014
+@@ -906,10 +906,10 @@
+ 	uninstall-libLTLIBRARIES
+ 
+ 
+-b44ExpLogTable.h: b44ExpLogTable
++b44ExpLogTable.h: b44ExpLogTable$(EXEEXT)
+ 	./b44ExpLogTable > b44ExpLogTable.h
+ 
+-dwaLookups.h: dwaLookups
++dwaLookups.h: dwaLookups$(EXEEXT)
+ 	./dwaLookups > dwaLookups.h
+ 
+ # Tell versions [3.59,3.63) of GNU make to not export all variables.
