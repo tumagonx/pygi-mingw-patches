@@ -1,0 +1,14 @@
+more mingw ssize_t detection
+
+--- util/cairo-missing/cairo-missing.h	Mon Aug 26 22:07:21 2013
++++ util/cairo-missing/cairo-missing.h	Mon Nov 04 04:42:29 2013
+@@ -42,7 +42,9 @@
+ #include <windows.h>
+ 
+ #ifndef _SSIZE_T_DEFINED
++#ifndef _SSIZE_T_
+ typedef SSIZE_T ssize_t;
++#endif
+ #endif
+ #endif
+ 
