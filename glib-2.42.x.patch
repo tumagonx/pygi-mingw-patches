@@ -1,3 +1,9 @@
+Patches for glib 2.42
+gapplication.c : gnome bugzilla #734095
+gdbusaddress.c : send the correct path to rundll32
+gspawn-win32-helper.c : specific patch for gspawner when compiled with mingw but linked to newer msvcrt
+gwin32.c : revert to glib <= 2.40 where root path might not have 'bin' folder.
+the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it could be just aliased at pygobject)
 --- gio/gapplication.c	Mon Sep 22 20:42:12 2014
 +++ gio/gapplication.c	Thu Oct 23 13:27:33 2014
 @@ -2132,7 +2132,8 @@

@@ -3,12 +3,10 @@ configure: workaround for 64bit mode g-ir-scanner
 
 --- gst/gst.c	Mon Jul 21 15:20:56 2014
 +++ gst/gst.c	Thu Oct 02 08:04:09 2014
-@@ -474,7 +474,16 @@
+@@ -474,7 +474,14 @@
  #endif
  
  #ifdef ENABLE_NLS
-+  GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
-+      LOCALEDIR);
 +#ifdef G_OS_WIN32
 +    gchar *_glib_get_locale_dir (void);
 +    gchar *localedir = _glib_get_locale_dir ();
@@ -22,12 +20,10 @@ configure: workaround for 64bit mode g-ir-scanner
  
 --- tools/gst-inspect.c	Mon Jul 21 15:20:56 2014
 +++ tools/gst-inspect.c	Thu Oct 02 08:04:45 2014
-@@ -1479,7 +1479,16 @@
+@@ -1479,7 +1479,14 @@
    setlocale (LC_ALL, "");
  
  #ifdef ENABLE_NLS
-+  GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
-+      LOCALEDIR);
 +#ifdef G_OS_WIN32
 +    gchar *_glib_get_locale_dir (void);
 +    gchar *localedir = _glib_get_locale_dir ();
@@ -41,12 +37,10 @@ configure: workaround for 64bit mode g-ir-scanner
  #endif
 --- tools/gst-launch.c	Mon Jul 21 15:20:56 2014
 +++ tools/gst-launch.c	Thu Oct 02 08:05:04 2014
-@@ -933,7 +933,16 @@
+@@ -933,7 +933,14 @@
    setlocale (LC_ALL, "");
  
  #ifdef ENABLE_NLS
-+  GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
-+      LOCALEDIR);
 +#ifdef G_OS_WIN32
 +    gchar *_glib_get_locale_dir (void);
 +    gchar *localedir = _glib_get_locale_dir ();
@@ -60,12 +54,10 @@ configure: workaround for 64bit mode g-ir-scanner
  #endif
 --- tools/gst-typefind.c	Mon Jul 21 15:20:56 2014
 +++ tools/gst-typefind.c	Thu Oct 02 08:05:16 2014
-@@ -150,7 +150,16 @@
+@@ -150,7 +150,14 @@
    setlocale (LC_ALL, "");
  
  #ifdef ENABLE_NLS
-+  GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
-+      LOCALEDIR);
 +#ifdef G_OS_WIN32
 +    gchar *_glib_get_locale_dir (void);
 +    gchar *localedir = _glib_get_locale_dir ();

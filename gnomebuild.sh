@@ -442,7 +442,6 @@ cp $IPATH/lib/pkgconfig/libopenraw-0.1.pc $IPATH/lib/pkgconfig/libopenraw-1.0.pc
 rm $IPATH/lib/*.la
 
 cd $SPATH/gdk-pixbuf-2.30.8
-# gir fix: new_from_file -> animation_new_from_file
 configure $INTROSPECT --disable-static --with-included-loaders  --with-gdiplus --with-libjasper --with-libtiff --with-libjpeg --disable-modules CPPFLAGS="$CPPFLAGS -I$IPATH/include/librsvg-2.0/librsvg -I$IPATH/include/cairo -I$IPATH/include/libopenraw-0.1" LIBS="-lopenraw -lrsvg-2 -lwebp -ljpeg -lgdiplus"
 make clean
 make $PJOBS
