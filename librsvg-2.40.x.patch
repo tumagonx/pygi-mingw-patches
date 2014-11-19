@@ -1,3 +1,7 @@
+configure: disable gio-unix
+rsvg-size-callback.c : resizing patch
+rsvg-base.c : missing realpath
+rsvg-convert : use win32 stream and skip mime check
 --- configure	Wed Sep 17 15:29:02 2014
 +++ configure	Tue Oct 14 04:14:44 2014
 @@ -13662,12 +13662,12 @@
@@ -73,13 +77,16 @@
   * This is configurable at runtime
   */
 --- rsvg-convert.c	Wed Sep 17 15:28:09 2014
-+++ rsvg-convert.c	Tue Nov 18 16:23:35 2014
-@@ -36,8 +36,11 @@
++++ rsvg-convert.c	Wed Nov 19 12:50:59 2014
+@@ -36,8 +36,14 @@
  #include <locale.h>
  #include <glib/gi18n.h>
  #include <gio/gio.h>
 +#ifdef G_OS_WIN32
 +#include <gio/gwin32inputstream.h>
++#include <io.h>
++#include <windows.h>
++int reader_pipe[2];
 +#else
  #include <gio/gunixinputstream.h>
 -
@@ -87,72 +94,40 @@
  #include "rsvg-css.h"
  #include "rsvg.h"
  #include "rsvg-size-callback.h"
-@@ -67,6 +70,44 @@
-     }
- }
- 
-+static RsvgHandle *
-+rsvg_handle_new_from_stdio_file (FILE * f, GError ** error)
-+{
-+    RsvgHandle *handle;
-+    gchar *current_dir;
-+    gchar *base_uri;
-+
-+    handle = rsvg_handle_new ();
-+
-+    while (!feof (f)) {
-+        guchar buffer[4096];
-+        gsize length = fread (buffer, 1, sizeof (buffer), f);
-+
-+        if (length > 0) {
-+            if (!rsvg_handle_write (handle, buffer, length, error)) {
-+                g_object_unref (handle);
-+                return NULL;
-+            }
-+        } else if (ferror (f)) {
-+            g_object_unref (handle);
-+            return NULL;
-+        }
-+    }
-+
-+    if (!rsvg_handle_close (handle, error)) {
-+        g_object_unref (handle);
-+        return NULL;
-+    }
-+
-+    current_dir = g_get_current_dir ();
-+    base_uri = g_build_filename (current_dir, "file.svg", NULL);
-+    rsvg_handle_set_base_uri (handle, base_uri);
-+    g_free (base_uri);
-+    g_free (current_dir);
-+
-+    return handle;
-+}
-+
- static void
- rsvg_cairo_size_callback (int *width, int *height, gpointer data)
- {
-@@ -213,7 +254,11 @@
+@@ -213,7 +219,20 @@
  
          if (using_stdin) {
              file = NULL;
 +#ifdef G_OS_WIN32
-+            rsvg = rsvg_handle_new_from_stdio_file (stdin, &error);
++            //rsvg = rsvg_handle_new_from_stdio_file (stdin, &error);
++            HANDLE in_handle;
++            g_assert (DuplicateHandle (GetCurrentProcess (),
++                         (HANDLE) (gintptr) _get_osfhandle (reader_pipe[0]),
++                         GetCurrentProcess (),
++                         &in_handle,
++                         0, FALSE,
++                         DUPLICATE_SAME_ACCESS));
++            close (reader_pipe[0]);
++            stream = g_win32_input_stream_new (in_handle, FALSE);
 +#else
              stream = g_unix_input_stream_new (STDIN_FILENO, FALSE);
 +#endif
          } else {
              GFileInfo *file_info;
              gboolean compressed = FALSE;
-@@ -230,9 +275,15 @@
-                 char *gz_content_type;
- 
+@@ -227,12 +246,17 @@
+                                                 NULL,
+                                                 NULL))) {
+                 const char *content_type;
+-                char *gz_content_type;
+-
                  content_type = g_file_info_get_content_type (file_info);
 +#ifdef G_OS_WIN32
 +/* Seems win32 don't have svgz mime registry, just verify the extension */
 +                if (!stricmp (content_type, ".svgz"))
 +                    compressed = TRUE;
 +#else
++                char *gz_content_type;
                  gz_content_type = g_content_type_from_mime_type ("application/x-gzip");
                  compressed = (content_type != NULL && g_content_type_is_a (content_type, gz_content_type));
                  g_free (gz_content_type);
@@ -160,23 +135,6 @@
                  g_object_unref (file_info);
              }
  
-@@ -248,12 +299,13 @@
- 
-             if (stream == NULL)
-                 goto done;
-+            rsvg = rsvg_handle_new_from_stream_sync (stream, file, flags, NULL, &error);
-         }
- 
--        rsvg = rsvg_handle_new_from_stream_sync (stream, file, flags, NULL, &error);
--
-+        
-     done:
--        g_clear_object (&stream);
-+        if (!using_stdin)
-+            g_clear_object (&stream);
-         g_clear_object (&file);
- 
-         if (error != NULL) {
 --- rsvg-size-callback.c	Tue Feb 07 02:44:12 2012
 +++ rsvg-size-callback.c	Tue Nov 18 16:20:20 2014
 @@ -93,11 +93,19 @@
