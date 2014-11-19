@@ -1,0 +1,382 @@
+libgnutls.map: combine gnutls dll with gpg-error, gcrypt, and tasn
+system.c: use time64 for newer msvcrt
+the rest is security fixes
+--- lib/x509/verify.c	Thu May 24 23:19:05 2012
++++ lib/x509/verify.c	Tue Nov 18 16:02:12 2014
+@@ -141,7 +141,7 @@
+   if (result < 0)
+     {
+       gnutls_assert ();
+-      goto cleanup;
++      goto fail;
+     }
+ 
+   result =
+@@ -150,7 +150,7 @@
+   if (result < 0)
+     {
+       gnutls_assert ();
+-      goto cleanup;
++      goto fail;
+     }
+ 
+   result =
+@@ -158,7 +158,7 @@
+   if (result < 0)
+     {
+       gnutls_assert ();
+-      goto cleanup;
++      goto fail;
+     }
+ 
+   result =
+@@ -166,7 +166,7 @@
+   if (result < 0)
+     {
+       gnutls_assert ();
+-      goto cleanup;
++      goto fail;
+     }
+ 
+   /* If the subject certificate is the same as the issuer
+@@ -206,6 +206,7 @@
+   else
+     gnutls_assert ();
+ 
++fail:
+   result = 0;
+ 
+ cleanup:
+@@ -330,7 +331,7 @@
+   gnutls_datum_t cert_signed_data = { NULL, 0 };
+   gnutls_datum_t cert_signature = { NULL, 0 };
+   gnutls_x509_crt_t issuer = NULL;
+-  int issuer_version, result;
++  int issuer_version, result = 0;
+ 
+   if (output)
+     *output = 0;
+@@ -363,7 +364,7 @@
+   if (issuer_version < 0)
+     {
+       gnutls_assert ();
+-      return issuer_version;
++      return 0;
+     }
+ 
+   if (!(flags & GNUTLS_VERIFY_DISABLE_CA_SIGN) &&
+@@ -385,6 +386,7 @@
+   if (result < 0)
+     {
+       gnutls_assert ();
++      result = 0;
+       goto cleanup;
+     }
+ 
+@@ -393,6 +395,7 @@
+   if (result < 0)
+     {
+       gnutls_assert ();
++      result = 0;
+       goto cleanup;
+     }
+ 
+@@ -410,6 +413,7 @@
+   else if (result < 0)
+     {
+       gnutls_assert();
++      result = 0;
+       goto cleanup;
+     }
+ 
+@@ -645,7 +649,10 @@
+        * certificates can exist in a supplied chain.
+        */
+       if (!(flags & GNUTLS_VERIFY_ALLOW_ANY_X509_V1_CA_CRT))
+-        flags &= ~(GNUTLS_VERIFY_ALLOW_X509_V1_CA_CRT);
++        {
++          flags &= ~(GNUTLS_VERIFY_ALLOW_X509_V1_CA_CRT);
++          flags |= GNUTLS_VERIFY_DO_NOT_ALLOW_X509_V1_CA_CRT;
++        }
+       if ((ret =
+            _gnutls_verify_certificate2 (certificate_list[i - 1],
+                                         &certificate_list[i], 1, flags,
+--- lib/gnutls_cipher.c	Mon Feb 04 15:53:03 2013
++++ lib/gnutls_cipher.c	Tue Nov 18 16:02:11 2014
+@@ -561,6 +561,8 @@
+           return GNUTLS_E_DECRYPTION_FAILED;
+         }
+       pad = ciphertext.data[ciphertext.size - 1];   /* pad */
++      if (pad+1 > ciphertext.size-hash_size)
++        pad_failed = GNUTLS_E_DECRYPTION_FAILED;
+ 
+       /* Check the pading bytes (TLS 1.x). 
+        * Note that we access all 256 bytes of ciphertext for padding check
+--- lib/libgnutls.map	Thu Mar 01 23:44:10 2012
++++ lib/libgnutls.map	Tue Nov 26 07:06:13 2013
+@@ -532,6 +532,250 @@
+     gnutls_x509_rdn_get;
+     gnutls_x509_rdn_get_by_oid;
+     gnutls_x509_rdn_get_oid;
++    asn1_array2tree;
++    asn1_bit_der;
++    asn1_check_version;
++    asn1_copy_node;
++    asn1_create_element;
++    asn1_delete_element;
++    asn1_delete_structure;
++    asn1_der_coding;
++    asn1_der_decoding;
++    asn1_der_decoding_element;
++    asn1_der_decoding_startEnd;
++    asn1_expand_any_defined_by;
++    asn1_expand_octet_string;
++    asn1_find_node;
++    asn1_find_structure_from_oid;
++    asn1_get_bit_der;
++    asn1_get_length_ber;
++    asn1_get_length_der;
++    asn1_get_octet_der;
++    asn1_get_tag_der;
++    asn1_length_der;
++    asn1_number_of_elements;
++    asn1_octet_der;
++    asn1_parser2array;
++    asn1_parser2tree;
++    asn1_perror;
++    asn1_print_structure;
++    asn1_read_node_value;
++    asn1_read_tag;
++    asn1_read_value;
++    asn1_strerror;
++    asn1_write_value;
++    libtasn1_perror;
++    libtasn1_strerror;
++    gcry_ac_close;
++    gcry_ac_data_clear;
++    gcry_ac_data_copy;
++    gcry_ac_data_decrypt;
++    gcry_ac_data_decrypt_scheme;
++    gcry_ac_data_destroy;
++    gcry_ac_data_encrypt;
++    gcry_ac_data_encrypt_scheme;
++    gcry_ac_data_from_sexp;
++    gcry_ac_data_get_index;
++    gcry_ac_data_get_name;
++    gcry_ac_data_length;
++    gcry_ac_data_new;
++    gcry_ac_data_set;
++    gcry_ac_data_sign;
++    gcry_ac_data_sign_scheme;
++    gcry_ac_data_to_sexp;
++    gcry_ac_data_verify;
++    gcry_ac_data_verify_scheme;
++    gcry_ac_id_to_name;
++    gcry_ac_io_init;
++    gcry_ac_io_init_va;
++    gcry_ac_key_data_get;
++    gcry_ac_key_destroy;
++    gcry_ac_key_get_grip;
++    gcry_ac_key_get_nbits;
++    gcry_ac_key_init;
++    gcry_ac_key_pair_destroy;
++    gcry_ac_key_pair_extract;
++    gcry_ac_key_pair_generate;
++    gcry_ac_key_test;
++    gcry_ac_name_to_id;
++    gcry_ac_open;
++    gcry_calloc;
++    gcry_calloc_secure;
++    gcry_check_version;
++    gcry_cipher_algo_info;
++    gcry_cipher_algo_name;
++    gcry_cipher_close;
++    gcry_cipher_ctl;
++    gcry_cipher_decrypt;
++    gcry_cipher_encrypt;
++    gcry_cipher_get_algo_blklen;
++    gcry_cipher_get_algo_keylen;
++    gcry_cipher_info;
++    gcry_cipher_list;
++    gcry_cipher_map_name;
++    gcry_cipher_mode_from_oid;
++    gcry_cipher_open;
++    gcry_cipher_register;
++    gcry_cipher_setctr;
++    gcry_cipher_setiv;
++    gcry_cipher_setkey;
++    gcry_cipher_unregister;
++    gcry_control;
++    gcry_create_nonce;
++    gcry_err_code_from_errno;
++    gcry_err_code_to_errno;
++    gcry_err_make_from_errno;
++    gcry_error_from_errno;
++    gcry_free;
++    gcry_is_secure;
++    gcry_kdf_derive;
++    gcry_malloc;
++    gcry_malloc_secure;
++    gcry_md_algo_info;
++    gcry_md_algo_name;
++    gcry_md_close;
++    gcry_md_copy;
++    gcry_md_ctl;
++    gcry_md_debug;
++    gcry_md_enable;
++    gcry_md_get_algo;
++    gcry_md_get_algo_dlen;
++    gcry_md_hash_buffer;
++    gcry_md_info;
++    gcry_md_is_enabled;
++    gcry_md_is_secure;
++    gcry_md_list;
++    gcry_md_map_name;
++    gcry_md_open;
++    gcry_md_read;
++    gcry_md_register;
++    gcry_md_reset;
++    gcry_md_setkey;
++    gcry_md_unregister;
++    gcry_md_write;
++    gcry_mpi_add;
++    gcry_mpi_add_ui;
++    gcry_mpi_addm;
++    gcry_mpi_aprint;
++    gcry_mpi_clear_bit;
++    gcry_mpi_clear_flag;
++    gcry_mpi_clear_highbit;
++    gcry_mpi_cmp;
++    gcry_mpi_cmp_ui;
++    gcry_mpi_copy;
++    gcry_mpi_div;
++    gcry_mpi_dump;
++    gcry_mpi_gcd;
++    gcry_mpi_get_flag;
++    gcry_mpi_get_nbits;
++    gcry_mpi_get_opaque;
++    gcry_mpi_invm;
++    gcry_mpi_lshift;
++    gcry_mpi_mod;
++    gcry_mpi_mul;
++    gcry_mpi_mul_2exp;
++    gcry_mpi_mul_ui;
++    gcry_mpi_mulm;
++    gcry_mpi_new;
++    gcry_mpi_powm;
++    gcry_mpi_print;
++    gcry_mpi_randomize;
++    gcry_mpi_release;
++    gcry_mpi_rshift;
++    gcry_mpi_scan;
++    gcry_mpi_set;
++    gcry_mpi_set_bit;
++    gcry_mpi_set_flag;
++    gcry_mpi_set_highbit;
++    gcry_mpi_set_opaque;
++    gcry_mpi_set_ui;
++    gcry_mpi_snew;
++    gcry_mpi_sub;
++    gcry_mpi_sub_ui;
++    gcry_mpi_subm;
++    gcry_mpi_swap;
++    gcry_mpi_test_bit;
++    gcry_pk_algo_info;
++    gcry_pk_algo_name;
++    gcry_pk_ctl;
++    gcry_pk_decrypt;
++    gcry_pk_encrypt;
++    gcry_pk_genkey;
++    gcry_pk_get_curve;
++    gcry_pk_get_keygrip;
++    gcry_pk_get_nbits;
++    gcry_pk_get_param;
++    gcry_pk_list;
++    gcry_pk_map_name;
++    gcry_pk_register;
++    gcry_pk_sign;
++    gcry_pk_testkey;
++    gcry_pk_unregister;
++    gcry_pk_verify;
++    gcry_prime_check;
++    gcry_prime_generate;
++    gcry_prime_group_generator;
++    gcry_prime_release_factors;
++    gcry_random_add_bytes;
++    gcry_random_bytes;
++    gcry_random_bytes_secure;
++    gcry_randomize;
++    gcry_realloc;
++    gcry_set_allocation_handler;
++    gcry_set_fatalerror_handler;
++    gcry_set_gettext_handler;
++    gcry_set_log_handler;
++    gcry_set_outofcore_handler;
++    gcry_set_progress_handler;
++    gcry_sexp_alist;
++    gcry_sexp_append;
++    gcry_sexp_build;
++    gcry_sexp_build_array;
++    gcry_sexp_cadr;
++    gcry_sexp_canon_len;
++    gcry_sexp_car;
++    gcry_sexp_cdr;
++    gcry_sexp_cons;
++    gcry_sexp_create;
++    gcry_sexp_dump;
++    gcry_sexp_find_token;
++    gcry_sexp_length;
++    gcry_sexp_new;
++    gcry_sexp_nth;
++    gcry_sexp_nth_data;
++    gcry_sexp_nth_mpi;
++    gcry_sexp_nth_string;
++    gcry_sexp_prepend;
++    gcry_sexp_release;
++    gcry_sexp_sprint;
++    gcry_sexp_sscan;
++    gcry_sexp_vlist;
++    gcry_strdup;
++    gcry_strerror;
++    gcry_strsource;
++    gcry_xcalloc;
++    gcry_xcalloc_secure;
++    gcry_xmalloc;
++    gcry_xmalloc_secure;
++    gcry_xrealloc;
++    gcry_xstrdup;
++    gpg_err_code_from_errno;
++    gpg_err_code_from_syserror;
++    gpg_err_code_to_errno;
++    gpg_err_deinit;
++    gpg_err_init;
++    gpg_err_set_errno;
++    gpg_error_check_version;
++    gpg_strerror;
++    gpg_strerror_r;
++    gpg_strsource;
++    _gpg_w32_bindtextdomain;
++    _gpg_w32_dgettext;
++    _gpg_w32_dngettext;
++    _gpg_w32_gettext;
++    _gpg_w32_gettext_localename;
++    _gpg_w32_gettext_use_utf8;
++    _gpg_w32_textdomain;
+ 
+   local:
+     *;
+--- lib/system.c	Sat Jan 07 02:06:24 2012
++++ lib/system.c	Wed Nov 19 07:27:43 2014
+@@ -258,8 +258,11 @@
+ }
+ 
+ #endif /* NO_LOCKS */
+-
++#if defined __MINGW32__ && __MSVCRT_VERSION__ > 0x0800 && !defined (_USE_32BIT_TIME_T)
++gnutls_time_func gnutls_time = _time64;
++#else
+ gnutls_time_func gnutls_time = time;
++#endif
+ mutex_init_func gnutls_mutex_init = gnutls_system_mutex_init;
+ mutex_deinit_func gnutls_mutex_deinit = gnutls_system_mutex_deinit;
+ mutex_lock_func gnutls_mutex_lock = gnutls_system_mutex_lock;
