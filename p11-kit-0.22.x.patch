@@ -1,0 +1,148 @@
+--- p11-kit/modules.c	Mon Oct 06 12:29:32 2014
++++ p11-kit/modules.c	Tue Nov 18 18:31:02 2014
+@@ -34,7 +34,9 @@
+  */
+ 
+ #include "config.h"
+-
++#ifdef _WIN32
++char * getpkcsroot (const char *mode);
++#endif
+ /* We use and define deprecated functions here */
+ #define P11_KIT_NO_DEPRECATIONS
+ #define P11_DEBUG_FLAG P11_DEBUG_LIB
+@@ -356,7 +358,11 @@
+ 
+ 	if (!p11_path_absolute (path)) {
+ 		p11_debug ("module path is relative, loading from: %s", P11_MODULE_PATH);
++#ifdef _WIN32
++		path = expand = p11_path_build (getpkcsroot("module"), path, NULL);
++#else
+ 		path = expand = p11_path_build (P11_MODULE_PATH, path, NULL);
++#endif
+ 		return_val_if_fail (path != NULL, CKR_HOST_MEMORY);
+ 	}
+ 
+@@ -560,7 +566,11 @@
+ 	assert (mode != CONF_USER_INVALID);
+ 
+ 	configs = _p11_conf_load_modules (mode,
++#ifdef _WIN32
++	                                  getpkcsroot("config"),
++#else
+ 	                                  p11_config_package_modules,
++#endif
+ 	                                  p11_config_system_modules,
+ 	                                  p11_config_user_modules);
+ 	if (configs == NULL) {
+--- p11-kit/test-transport.c	Mon Oct 06 12:29:32 2014
++++ p11-kit/test-transport.c	Tue Nov 18 18:42:31 2014
+@@ -49,6 +49,38 @@
+ #endif
+ #include <stdlib.h>
+ #include <stdio.h>
++#ifdef _WIN32
++/*
++ * Contributors:
++ *   Prof. A Olowofoyeku (The African Chief) <African_Chief@bigfoot.com>
++ *   Frank Heckenbach <frank@g-n-u.de>
++ *
++ *
++ *  THIS SOFTWARE IS NOT COPYRIGHTED
++ *
++ *  This source code is offered for use in the public domain. You may
++ *  use, modify or distribute it freely.
++ *
++ *  This code is distributed in the hope that it will be useful but
++ *  WITHOUT ANY WARRANTY. ALL WARRANTIES, EXPRESS OR IMPLIED ARE HEREBY
++ *  DISCLAMED. This includes but is not limited to warranties of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
++ *
++ *
++*/
++#include <windows.h>
++int setenv(const char* name, const char* value, int bOverwrite);
++int setenv(const char* name, const char* value, int bOverwrite)
++{
++    int result;
++    if (bOverwrite == 0 && getenv (name))
++        result = 0;
++    else
++        result = SetEnvironmentVariable (name,value);
++
++    return result;
++}
++#endif
+ 
+ struct {
+ 	char *directory;
+--- p11-kit/util.c	Mon Sep 22 12:23:57 2014
++++ p11-kit/util.c	Tue Nov 18 18:30:16 2014
+@@ -266,7 +266,7 @@
+ #endif /* OS_UNIX */
+ 
+ #ifdef OS_WIN32
+-
++HMODULE pkcs_dll = NULL;
+ BOOL WINAPI DllMain (HINSTANCE, DWORD, LPVOID);
+ 
+ BOOL WINAPI
+@@ -276,6 +276,7 @@
+ {
+ 	switch (reason) {
+ 	case DLL_PROCESS_ATTACH:
++		pkcs_dll = instance;
+ 		p11_library_init ();
+ 		break;
+ 	case DLL_THREAD_DETACH:
+@@ -291,5 +292,21 @@
+ 
+ 	return TRUE;
+ }
++char filename[MAX_PATH+1]; 
+ 
++char *
++getpkcsroot (const char *mode);
++char *
++getpkcsroot (const char *mode)
++{
++  char drive[MAX_PATH]; 
++  char dir[MAX_PATH]; 
++  GetModuleFileNameA(pkcs_dll,filename,MAX_PATH); 
++  _splitpath(filename,drive,dir,NULL,NULL); 
++  if (strcasecmp(mode,"config") == 0)
++  _makepath(filename,drive,dir,"share\\p11-kit\\modules",NULL);
++  else if (strcasecmp(mode,"module") == 0)
++  _makepath(filename,drive,dir,"lib\\pkcs11",NULL);
++  return filename;
++}
+ #endif /* OS_WIN32 */
+--- trust/p11-kit-trust.module	Mon Sep 22 12:23:57 2014
++++ trust/p11-kit-trust.module	Tue Nov 18 18:06:13 2014
+@@ -1,7 +1,7 @@
+ # See pkcs11.conf(5) to understand this file
+ 
+ # This is a module config for the 'included' p11-kit trust module
+-module: p11-kit-trust.so
++module: p11-kit-trust.dll
+ 
+ # This setting affects the order that trust policy and other information
+ # is looked up when going across various modules. Other trust policy modules
+--- trust/test-token.c	Mon Oct 06 12:29:32 2014
++++ trust/test-token.c	Tue Nov 18 18:03:56 2014
+@@ -31,7 +31,7 @@
+  *
+  * Author: Stef Walter <stefw@gnome.org>
+  */
+-
++#ifndef _WIN32
+ #include "config.h"
+ #include "test.h"
+ #include "test-trust.h"
+@@ -791,3 +791,6 @@
+ 
+ 	return p11_test_run (argc, argv);
+ }
++#else
++int main(){}
++#endif
