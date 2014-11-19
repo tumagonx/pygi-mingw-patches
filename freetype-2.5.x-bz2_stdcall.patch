@@ -1,0 +1,23 @@
+--- builds/unix/configure	Fri Mar 07 05:13:50 2014
++++ builds/unix/configure	Tue Nov 18 22:57:33 2014
+@@ -12810,11 +12810,20 @@
+ #ifdef __cplusplus
+ extern "C"
+ #endif
++#ifndef _WIN32
+ char BZ2_bzDecompress ();
+ int
+ main ()
+ {
+ return BZ2_bzDecompress ();
++#else
++__stdcall char BZ2_bzDecompress (char a);
++char a;
++int
++main ()
++{
++return BZ2_bzDecompress (a);
++#endif
+   ;
+   return 0;
+ }
