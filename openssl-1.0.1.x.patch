@@ -1,0 +1,33 @@
+x86_64-xlate.pl: cross-compile patch
+configure: enable unicode for mingw64 32bit, enable applink for mingw64 SEH
+--- crypto/perlasm/x86_64-xlate.pl	Thu Aug 07 04:10:56 2014
++++ crypto/perlasm/x86_64-xlate.pl	Fri Sep 26 09:03:31 2014
+@@ -79,7 +79,7 @@
+ my $nasm=0;
+ 
+ if    ($flavour eq "mingw64")	{ $gas=1; $elf=0; $win64=1;
+-				  $prefix=`echo __USER_LABEL_PREFIX__ | $ENV{CC} -E -P -`;
++				  $prefix=`echo __USER_LABEL_PREFIX__ | $ENV{CC} -m64 -E -P -`;
+ 				  chomp($prefix);
+ 				}
+ elsif ($flavour eq "macosx")	{ $gas=1; $elf=0; $prefix="_"; $decor="L\$"; }
+--- Configure	Thu Aug 07 04:10:56 2014
++++ Configure	Sat Nov 01 11:41:20 2014
+@@ -533,7 +533,7 @@
+ "BC-32","bcc32::::WIN32::BN_LLONG DES_PTR RC4_INDEX EXPORT_VAR_AS_FN:${no_asm}:win32",
+ 
+ # MinGW
+-"mingw", "gcc:-mno-cygwin -DL_ENDIAN -DWIN32_LEAN_AND_MEAN -fomit-frame-pointer -O3 -march=i486 -Wall::-D_MT:MINGW32:-lws2_32 -lgdi32 -lcrypt32:BN_LLONG ${x86_gcc_des} ${x86_gcc_opts} EXPORT_VAR_AS_FN:${x86_asm}:coff:win32:cygwin-shared:-D_WINDLL -DOPENSSL_USE_APPLINK:-mno-cygwin:.dll.a",
++"mingw", "gcc:-mno-cygwin -DL_ENDIAN -DWIN32_LEAN_AND_MEAN -fomit-frame-pointer -DUNICODE -D_UNICODE -Wall::-D_MT:MINGW32:-lws2_32 -lgdi32 -lcrypt32:BN_LLONG ${x86_gcc_des} ${x86_gcc_opts} EXPORT_VAR_AS_FN:${x86_asm}:coff:win32:cygwin-shared:-D_WINDLL -DOPENSSL_USE_APPLINK:-mno-cygwin:.dll.a",
+ # As for OPENSSL_USE_APPLINK. Applink makes it possible to use .dll
+ # compiled with one compiler with application compiled with another
+ # compiler. It's possible to engage Applink support in mingw64 build,
+@@ -541,7 +541,7 @@
+ # handling, one can't seriously consider its binaries for using with
+ # non-mingw64 run-time environment. And as mingw64 is always consistent
+ # with itself, Applink is never engaged and can as well be omitted.
+-"mingw64", "gcc:-mno-cygwin -DL_ENDIAN -O3 -Wall -DWIN32_LEAN_AND_MEAN -DUNICODE -D_UNICODE::-D_MT:MINGW64:-lws2_32 -lgdi32 -lcrypt32:SIXTY_FOUR_BIT RC4_CHUNK_LL DES_INT EXPORT_VAR_AS_FN:${x86_64_asm}:mingw64:win32:cygwin-shared:-D_WINDLL:-mno-cygwin:.dll.a",
++"mingw64", "gcc:-mno-cygwin -DL_ENDIAN -Wall -DWIN32_LEAN_AND_MEAN -DUNICODE -D_UNICODE::-D_MT:MINGW64:-lws2_32 -lgdi32 -lcrypt32:SIXTY_FOUR_BIT RC4_CHUNK_LL DES_INT EXPORT_VAR_AS_FN:${x86_64_asm}:mingw64:win32:cygwin-shared:-D_WINDLL -DOPENSSL_USE_APPLINK:-mno-cygwin:.dll.a",
+ 
+ # UWIN 
+ "UWIN", "cc:-DTERMIOS -DL_ENDIAN -O -Wall:::UWIN::BN_LLONG ${x86_gcc_des} ${x86_gcc_opts}:${no_asm}:win32",

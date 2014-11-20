@@ -1,5 +1,5 @@
-Build patch, and enable fontconfig
-
+gp_mswin.c: enable fontconfig support under windows
+the rest is makefile patches
 --- base/gp_mswin.c	Wed Mar 26 19:53:47 2014
 +++ base/gp_mswin.c	Sat Apr 05 16:00:11 2014
 @@ -60,6 +60,10 @@
