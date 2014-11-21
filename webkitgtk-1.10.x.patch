@@ -1,0 +1,610 @@
+mostly string reinterpretation patches
+preprocessor.pm,make_names.pl: dont harcode gcc
+webp*: enable webp
+configure,gnumakefile: build patches, override cxxflags
+--- Source/JavaScriptCore/API/JSStringRef.cpp	Sun May 13 02:43:42 2012
++++ Source/JavaScriptCore/API/JSStringRef.cpp	Sat Mar 01 15:03:57 2014
+@@ -36,7 +36,7 @@
+ JSStringRef JSStringCreateWithCharacters(const JSChar* chars, size_t numChars)
+ {
+     initializeThreading();
+-    return OpaqueJSString::create(chars, numChars).leakRef();
++    return OpaqueJSString::create(reinterpret_cast<const UChar*>(chars), numChars).leakRef();
+ }
+ 
+ JSStringRef JSStringCreateWithUTF8CString(const char* string)
+@@ -72,7 +72,7 @@
+ 
+ const JSChar* JSStringGetCharactersPtr(JSStringRef string)
+ {
+-    return string->characters();
++    return reinterpret_cast<const JSChar*>(string->characters());
+ }
+ 
+ size_t JSStringGetMaximumUTF8CStringSize(JSStringRef string)
+--- Source/JavaScriptCore/runtime/DateConversion.cpp	Sat Nov 24 03:12:16 2012
++++ Source/JavaScriptCore/runtime/DateConversion.cpp	Sat Mar 01 15:03:57 2014
+@@ -115,7 +115,7 @@
+ #endif
+             if (timeZoneName[0]) {
+                 builder.append(" (");
+-                builder.append(timeZoneName);
++                builder.append(reinterpret_cast<const UChar*>(timeZoneName));
+                 builder.append(')');
+             }
+         }
+--- Source/JavaScriptCore/runtime/DatePrototype.cpp	Sat Nov 24 03:12:16 2012
++++ Source/JavaScriptCore/runtime/DatePrototype.cpp	Sat Mar 01 15:03:57 2014
+@@ -235,16 +235,16 @@
+ 
+     if (format == LocaleDate) {
+         buffer.resize(GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, &systemTime, 0, 0, 0));
+-        length = GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, &systemTime, 0, buffer.data(), buffer.size());
++        length = GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, &systemTime, 0, reinterpret_cast<LPWSTR>(buffer.data()), buffer.size());
+     } else if (format == LocaleTime) {
+         buffer.resize(GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &systemTime, 0, 0, 0));
+-        length = GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &systemTime, 0, buffer.data(), buffer.size());
++        length = GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &systemTime, 0, reinterpret_cast<LPWSTR>(buffer.data()), buffer.size());
+     } else if (format == LocaleDateAndTime) {
+         buffer.resize(GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, &systemTime, 0, 0, 0) + GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &systemTime, 0, 0, 0));
+-        length = GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, &systemTime, 0, buffer.data(), buffer.size());
++        length = GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, &systemTime, 0, reinterpret_cast<LPWSTR>(buffer.data()), buffer.size());
+         if (length) {
+             buffer[length - 1] = ' ';
+-            length += GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &systemTime, 0, buffer.data() + length, buffer.size() - length);
++            length += GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &systemTime, 0, reinterpret_cast<LPWSTR>(buffer.data() + length), buffer.size() - length);
+         }
+     } else
+         ASSERT_NOT_REACHED();
+--- Source/ThirdParty/gtest/include/gtest/internal/gtest-port.h	Sun May 13 02:43:43 2012
++++ Source/ThirdParty/gtest/include/gtest/internal/gtest-port.h	Fri Sep 26 19:36:35 2014
+@@ -168,7 +168,11 @@
+ //   BoolFromGTestEnv()   - parses a bool environment variable.
+ //   Int32FromGTestEnv()  - parses an Int32 environment variable.
+ //   StringFromGTestEnv() - parses a string environment variable.
+-
++#ifdef __MINGW32__
++#undef GTEST_HAS_PTHREAD
++#include <unistd.h>
++#include <time.h>
++#endif
+ #include <stddef.h>  // For ptrdiff_t
+ #include <stdlib.h>
+ #include <stdio.h>
+--- Source/WebCore/bindings/scripts/preprocessor.pm	Sat Nov 24 03:12:16 2012
++++ Source/WebCore/bindings/scripts/preprocessor.pm	Sat Mar 01 15:05:29 2014
+@@ -50,7 +50,7 @@
+         } elsif (($Config::Config{'osname'}) =~ /solaris/i) {
+             $preprocessor = "/usr/sfw/bin/gcc";
+         } else {
+-            $preprocessor = "/usr/bin/gcc";
++            $preprocessor = "gcc";
+         }
+         push(@args, qw(-E -P -x c++));
+     }
+--- Source/WebCore/dom/make_names.pl	Sat Nov 24 03:12:17 2012
++++ Source/WebCore/dom/make_names.pl	Sat Mar 01 15:05:29 2014
+@@ -67,7 +67,7 @@
+ } elsif (($Config::Config{'osname'}) =~ /solaris/i) {
+     $gccLocation = "/usr/sfw/bin/gcc";
+ } else {
+-    $gccLocation = "/usr/bin/gcc";
++    $gccLocation = "gcc";
+ }
+ my $preprocessor = $gccLocation . " -E -x c++";
+ 
+--- Source/WebCore/platform/image-decoders/webp/WEBPImageDecoder.cpp	Sat Nov 24 03:12:17 2012
++++ Source/WebCore/platform/image-decoders/webp/WEBPImageDecoder.cpp	Sat Mar 01 15:03:58 2014
+@@ -29,8 +29,6 @@
+ #include "config.h"
+ #include "WEBPImageDecoder.h"
+ 
+-#if USE(WEBP)
+-
+ #include "PlatformInstrumentation.h"
+ #include "webp/decode.h"
+ 
+@@ -164,4 +162,3 @@
+ 
+ } // namespace WebCore
+ 
+-#endif
+--- Source/WebCore/platform/image-decoders/webp/WEBPImageDecoder.h	Sat Nov 24 03:12:17 2012
++++ Source/WebCore/platform/image-decoders/webp/WEBPImageDecoder.h	Sat Mar 01 15:03:58 2014
+@@ -31,8 +31,6 @@
+ 
+ #include "ImageDecoder.h"
+ 
+-#if USE(WEBP)
+-
+ typedef struct WebPIDecoder WebPIDecoder;
+ 
+ namespace WebCore {
+@@ -54,7 +52,5 @@
+ };
+ 
+ } // namespace WebCore
+-
+-#endif
+ 
+ #endif
+--- Source/WebCore/platform/image-decoders/ImageDecoder.cpp	Sat Nov 24 03:12:17 2012
++++ Source/WebCore/platform/image-decoders/ImageDecoder.cpp	Sat Mar 01 15:03:57 2014
+@@ -31,9 +31,7 @@
+ #include "JPEGImageDecoder.h"
+ #include "PNGImageDecoder.h"
+ #include "SharedBuffer.h"
+-#if USE(WEBP)
+ #include "WEBPImageDecoder.h"
+-#endif
+ 
+ #include <algorithm>
+ #include <cmath>
+@@ -74,12 +72,11 @@
+     return !memcmp(contents, "\xFF\xD8\xFF", 3);
+ }
+ 
+-#if USE(WEBP)
++
+ bool matchesWebPSignature(char* contents)
+ {
+     return !memcmp(contents, "RIFF", 4) && !memcmp(contents + 8, "WEBPVP", 6);
+ }
+-#endif
+ 
+ bool matchesBMPSignature(char* contents)
+ {
+@@ -122,10 +119,8 @@
+         return new JPEGImageDecoder(alphaOption, gammaAndColorProfileOption);
+ #endif
+ 
+-#if USE(WEBP)
+     if (matchesWebPSignature(contents))
+         return new WEBPImageDecoder(alphaOption, gammaAndColorProfileOption);
+-#endif
+ 
+     if (matchesBMPSignature(contents))
+         return new BMPImageDecoder(alphaOption, gammaAndColorProfileOption);
+--- Source/WebCore/platform/text/gtk/TextBreakIteratorGtk.cpp	Sat Nov 24 03:12:17 2012
++++ Source/WebCore/platform/text/gtk/TextBreakIteratorGtk.cpp	Sat Mar 01 15:03:57 2014
+@@ -233,7 +233,7 @@
+ NonSharedCharacterBreakIterator::~NonSharedCharacterBreakIterator()
+ {
+     if (!weakCompareAndSwap(reinterpret_cast<void**>(&nonSharedCharacterBreakIterator), 0, m_iterator))
+-        ubrk_close(m_iterator);
++        delete m_iterator;
+ }
+ 
+ TextBreakIterator* cursorMovementIterator(const UChar* string, int length)
+--- Source/WebCore/plugins/win/PluginDatabaseWin.cpp	Sat Nov 24 03:12:17 2012
++++ Source/WebCore/plugins/win/PluginDatabaseWin.cpp	Sat Mar 01 15:03:57 2014
+@@ -33,7 +33,10 @@
+ #include "PluginPackage.h"
+ #include <windows.h>
+ #include <shlwapi.h>
+-
++#if defined (__MINGW32__) && !defined (__MINGW64_VERSION_MAJOR)
++template <typename _CountofType,size_t _SizeOfArray> char (*__countof_helper(UNALIGNED _CountofType (&_Array)[_SizeOfArray]))[_SizeOfArray];
++#define _countof(_Array) sizeof(*__countof_helper(_Array))
++#endif
+ #if OS(WINCE)
+ // WINCE doesn't support Registry Key Access Rights. The parameter should always be 0
+ #ifndef KEY_ENUMERATE_SUB_KEYS
+@@ -98,15 +101,15 @@
+         if (result != ERROR_SUCCESS)
+             break;
+ 
+-        WCHAR pathStr[_MAX_PATH];
++        UChar pathStr[_MAX_PATH];
+         DWORD pathStrSize = sizeof(pathStr);
+         DWORD type;
+ 
+-        result = SHGetValue(key, name, TEXT("Path"), &type, (LPBYTE)pathStr, &pathStrSize);
++        result = SHGetValueW(key, name, L"Path", &type, (LPBYTE)pathStr, &pathStrSize);
+         if (result != ERROR_SUCCESS || type != REG_SZ)
+             continue;
+ 
+-        paths.add(String(pathStr, pathStrSize / sizeof(WCHAR) - 1));
++        paths.add(String(pathStr, pathStrSize / sizeof(UChar) - 1));
+     }
+ 
+     RegCloseKey(key);
+@@ -127,7 +130,7 @@
+     for (Vector<String>::const_iterator it = m_pluginDirectories.begin(); it != end; ++it) {
+         String pattern = *it + "\\*";
+ 
+-        hFind = FindFirstFileW(pattern.charactersWithNullTermination(), &findFileData);
++        hFind = FindFirstFileW(reinterpret_cast<LPCWSTR>(pattern.charactersWithNullTermination()), &findFileData);
+ 
+         if (hFind == INVALID_HANDLE_VALUE)
+             continue;
+@@ -136,7 +139,7 @@
+             if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+                 continue;
+ 
+-            String filename = String(findFileData.cFileName, wcslen(findFileData.cFileName));
++            String filename = String(reinterpret_cast<UChar*>(findFileData.cFileName), wcslen(findFileData.cFileName));
+             if ((!filename.startsWith("np", false) || !filename.endsWith("dll", false)) &&
+                 (!equalIgnoringCase(filename, "Plugin.dll") || !it->endsWith("Shockwave 10", false)))
+                 continue;
+@@ -210,15 +213,15 @@
+     HKEY key;
+     LONG result;
+     
+-    result = RegOpenKeyEx(HKEY_LOCAL_MACHINE, TEXT("Software\\Mozilla"), 0, KEY_READ, &key);
++    result = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Mozilla", 0, KEY_READ, &key);
+     if (result == ERROR_SUCCESS) {
+-        WCHAR name[128];
++        UChar name[128];
+         FILETIME lastModified;
+ 
+         // Enumerate subkeys
+         for (int i = 0;; i++) {
+-            DWORD nameLen = sizeof(name) / sizeof(WCHAR);
+-            result = RegEnumKeyExW(key, i, name, &nameLen, 0, 0, 0, &lastModified);
++            DWORD nameLen = sizeof(name) / sizeof(UChar);
++            result = RegEnumKeyExW(key, i, reinterpret_cast<LPWSTR>(name), &nameLen, 0, 0, 0, &lastModified);
+ 
+             if (result != ERROR_SUCCESS)
+                 break;
+@@ -227,18 +230,18 @@
+             HKEY extensionsKey;
+ 
+             // Try opening the key
+-            result = RegOpenKeyEx(key, extensionsPath.charactersWithNullTermination(), 0, KEY_READ, &extensionsKey);
++            result = RegOpenKeyExW(key, reinterpret_cast<LPCWSTR>(extensionsPath.charactersWithNullTermination()), 0, KEY_READ, &extensionsKey);
+ 
+             if (result == ERROR_SUCCESS) {
+                 // Now get the plugins directory
+-                WCHAR pluginsDirectoryStr[_MAX_PATH];
++                UChar pluginsDirectoryStr[_MAX_PATH];
+                 DWORD pluginsDirectorySize = sizeof(pluginsDirectoryStr);
+                 DWORD type;
+ 
+-                result = RegQueryValueEx(extensionsKey, TEXT("Plugins"), 0, &type, (LPBYTE)&pluginsDirectoryStr, &pluginsDirectorySize);
++                result = RegQueryValueExW(extensionsKey, L"Plugins", 0, &type, (LPBYTE)&pluginsDirectoryStr, &pluginsDirectorySize);
+ 
+                 if (result == ERROR_SUCCESS && type == REG_SZ)
+-                    directories.append(String(pluginsDirectoryStr, pluginsDirectorySize / sizeof(WCHAR) - 1));
++                    directories.append(String(pluginsDirectoryStr, pluginsDirectorySize / sizeof(UChar) - 1));
+ 
+                 RegCloseKey(extensionsKey);
+             }
+@@ -252,33 +255,32 @@
+ {
+ #if !OS(WINCE)
+     // The new WMP Firefox plugin is installed in \PFiles\Plugins if it can't find any Firefox installs
+-    WCHAR pluginDirectoryStr[_MAX_PATH + 1];
+-    DWORD pluginDirectorySize = ::ExpandEnvironmentStringsW(TEXT("%SYSTEMDRIVE%\\PFiles\\Plugins"), pluginDirectoryStr, WTF_ARRAY_LENGTH(pluginDirectoryStr));
+-
++    UChar pluginDirectoryStr[_MAX_PATH + 1];
++    DWORD pluginDirectorySize = ::ExpandEnvironmentStringsW(L"%SYSTEMDRIVE%\\PFiles\\Plugins", reinterpret_cast<LPWSTR>(pluginDirectoryStr), _countof(pluginDirectoryStr));
+     if (pluginDirectorySize > 0 && pluginDirectorySize <= WTF_ARRAY_LENGTH(pluginDirectoryStr))
+         directories.append(String(pluginDirectoryStr, pluginDirectorySize - 1));
+ #endif
+ 
+     DWORD type;
+-    WCHAR installationDirectoryStr[_MAX_PATH];
++    UChar installationDirectoryStr[_MAX_PATH];
+     DWORD installationDirectorySize = sizeof(installationDirectoryStr);
+ 
+-    HRESULT result = SHGetValue(HKEY_LOCAL_MACHINE, TEXT("Software\\Microsoft\\MediaPlayer"), TEXT("Installation Directory"), &type, (LPBYTE)&installationDirectoryStr, &installationDirectorySize);
++    HRESULT result = SHGetValueW(HKEY_LOCAL_MACHINE, L"Software\\Microsoft\\MediaPlayer", L"Installation Directory", &type, (LPBYTE)&installationDirectoryStr, &installationDirectorySize);
+ 
+     if (result == ERROR_SUCCESS && type == REG_SZ)
+-        directories.append(String(installationDirectoryStr, installationDirectorySize / sizeof(WCHAR) - 1));
++        directories.append(String(installationDirectoryStr, installationDirectorySize / sizeof(UChar) - 1));
+ }
+ 
+ static inline void addQuickTimePluginDirectory(Vector<String>& directories)
+ {
+     DWORD type;
+-    WCHAR installationDirectoryStr[_MAX_PATH];
++    UChar installationDirectoryStr[_MAX_PATH];
+     DWORD installationDirectorySize = sizeof(installationDirectoryStr);
+ 
+-    HRESULT result = SHGetValue(HKEY_LOCAL_MACHINE, TEXT("Software\\Apple Computer, Inc.\\QuickTime"), TEXT("InstallDir"), &type, (LPBYTE)&installationDirectoryStr, &installationDirectorySize);
++    HRESULT result = SHGetValueW(HKEY_LOCAL_MACHINE, L"Software\\Apple Computer, Inc.\\QuickTime", L"InstallDir", &type, (LPBYTE)&installationDirectoryStr, &installationDirectorySize);
+ 
+     if (result == ERROR_SUCCESS && type == REG_SZ) {
+-        String pluginDir = String(installationDirectoryStr, installationDirectorySize / sizeof(WCHAR) - 1) + "\\plugins";
++        String pluginDir = String(installationDirectoryStr, installationDirectorySize / sizeof(UChar) - 1) + "\\plugins";
+         directories.append(pluginDir);
+     }
+ }
+@@ -286,11 +288,11 @@
+ static inline void addAdobeAcrobatPluginDirectory(Vector<String>& directories)
+ {
+     HKEY key;
+-    HRESULT result = RegOpenKeyEx(HKEY_LOCAL_MACHINE, TEXT("Software\\Adobe\\Acrobat Reader"), 0, KEY_READ, &key);
++    HRESULT result = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\Adobe\\Acrobat Reader", 0, KEY_READ, &key);
+     if (result != ERROR_SUCCESS)
+         return;
+ 
+-    WCHAR name[128];
++    UChar name[128];
+     FILETIME lastModified;
+ 
+     Vector<int> latestAcrobatVersion;
+@@ -298,8 +300,8 @@
+ 
+     // Enumerate subkeys
+     for (int i = 0;; i++) {
+-        DWORD nameLen = sizeof(name) / sizeof(WCHAR);
+-        result = RegEnumKeyExW(key, i, name, &nameLen, 0, 0, 0, &lastModified);
++        DWORD nameLen = sizeof(name) / sizeof(UChar);
++        result = RegEnumKeyExW(key, i, reinterpret_cast<LPWSTR>(name), &nameLen, 0, 0, 0, &lastModified);
+ 
+         if (result != ERROR_SUCCESS)
+             break;
+@@ -313,14 +315,14 @@
+ 
+     if (!latestAcrobatVersionString.isNull()) {
+         DWORD type;
+-        WCHAR acrobatInstallPathStr[_MAX_PATH];
++        UChar acrobatInstallPathStr[_MAX_PATH];
+         DWORD acrobatInstallPathSize = sizeof(acrobatInstallPathStr);
+ 
+         String acrobatPluginKeyPath = "Software\\Adobe\\Acrobat Reader\\" + latestAcrobatVersionString + "\\InstallPath";
+-        result = SHGetValue(HKEY_LOCAL_MACHINE, acrobatPluginKeyPath.charactersWithNullTermination(), 0, &type, (LPBYTE)acrobatInstallPathStr, &acrobatInstallPathSize);
++        result = SHGetValueW(HKEY_LOCAL_MACHINE, reinterpret_cast<LPCWSTR>(acrobatPluginKeyPath.charactersWithNullTermination()), 0, &type, (LPBYTE)acrobatInstallPathStr, &acrobatInstallPathSize);
+ 
+         if (result == ERROR_SUCCESS) {
+-            String acrobatPluginDirectory = String(acrobatInstallPathStr, acrobatInstallPathSize / sizeof(WCHAR) - 1) + "\\browser";
++            String acrobatPluginDirectory = String(acrobatInstallPathStr, acrobatInstallPathSize / sizeof(UChar) - 1) + "\\browser";
+             directories.append(acrobatPluginDirectory);
+         }
+     }
+@@ -331,11 +333,11 @@
+ static inline void addJavaPluginDirectory(Vector<String>& directories)
+ {
+     HKEY key;
+-    HRESULT result = RegOpenKeyEx(HKEY_LOCAL_MACHINE, TEXT("Software\\JavaSoft\\Java Plug-in"), 0, KEY_READ, &key);
++    HRESULT result = RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"Software\\JavaSoft\\Java Plug-in", 0, KEY_READ, &key);
+     if (result != ERROR_SUCCESS)
+         return;
+ 
+-    WCHAR name[128];
++    UChar name[128];
+     FILETIME lastModified;
+ 
+     Vector<int> latestJavaVersion;
+@@ -343,8 +345,8 @@
+ 
+     // Enumerate subkeys
+     for (int i = 0;; i++) {
+-        DWORD nameLen = sizeof(name) / sizeof(WCHAR);
+-        result = RegEnumKeyExW(key, i, name, &nameLen, 0, 0, 0, &lastModified);
++        DWORD nameLen = sizeof(name) / sizeof(UChar);
++        result = RegEnumKeyExW(key, i, reinterpret_cast<LPWSTR>(name), &nameLen, 0, 0, 0, &lastModified);
+ 
+         if (result != ERROR_SUCCESS)
+             break;
+@@ -358,18 +360,18 @@
+ 
+     if (!latestJavaVersionString.isEmpty()) {
+         DWORD type;
+-        WCHAR javaInstallPathStr[_MAX_PATH];
++        UChar javaInstallPathStr[_MAX_PATH];
+         DWORD javaInstallPathSize = sizeof(javaInstallPathStr);
+         DWORD useNewPluginValue;
+         DWORD useNewPluginSize;
+ 
+         String javaPluginKeyPath = "Software\\JavaSoft\\Java Plug-in\\" + latestJavaVersionString;
+-        result = SHGetValue(HKEY_LOCAL_MACHINE, javaPluginKeyPath.charactersWithNullTermination(), TEXT("UseNewJavaPlugin"), &type, (LPVOID)&useNewPluginValue, &useNewPluginSize);
++        result = SHGetValueW(HKEY_LOCAL_MACHINE, reinterpret_cast<LPCWSTR>(javaPluginKeyPath.charactersWithNullTermination()), L"UseNewJavaPlugin", &type, (LPVOID)&useNewPluginValue, &useNewPluginSize);
+ 
+         if (result == ERROR_SUCCESS && useNewPluginValue == 1) {
+-            result = SHGetValue(HKEY_LOCAL_MACHINE, javaPluginKeyPath.charactersWithNullTermination(), TEXT("JavaHome"), &type, (LPBYTE)javaInstallPathStr, &javaInstallPathSize);
++            result = SHGetValueW(HKEY_LOCAL_MACHINE, reinterpret_cast<LPCWSTR>(javaPluginKeyPath.charactersWithNullTermination()), L"JavaHome", &type, (LPBYTE)javaInstallPathStr, &javaInstallPathSize);
+             if (result == ERROR_SUCCESS) {
+-                String javaPluginDirectory = String(javaInstallPathStr, javaInstallPathSize / sizeof(WCHAR) - 1) + "\\bin\\new_plugin";
++                String javaPluginDirectory = String(javaInstallPathStr, javaInstallPathSize / sizeof(UChar) - 1) + "\\bin\\new_plugin";
+                 directories.append(javaPluginDirectory);
+             }
+         }
+@@ -380,19 +382,19 @@
+ 
+ static inline String safariPluginsDirectory()
+ {
+-    WCHAR moduleFileNameStr[_MAX_PATH];
++    UChar moduleFileNameStr[_MAX_PATH];
+     static String pluginsDirectory;
+     static bool cachedPluginDirectory = false;
+ 
+     if (!cachedPluginDirectory) {
+         cachedPluginDirectory = true;
+ 
+-        int moduleFileNameLen = GetModuleFileName(0, moduleFileNameStr, _MAX_PATH);
++        int moduleFileNameLen = GetModuleFileNameW(0, reinterpret_cast<LPWSTR>(moduleFileNameStr), _MAX_PATH);
+ 
+         if (!moduleFileNameLen || moduleFileNameLen == _MAX_PATH)
+             goto exit;
+ 
+-        if (!PathRemoveFileSpec(moduleFileNameStr))
++        if (!PathRemoveFileSpecW(reinterpret_cast<LPWSTR>(moduleFileNameStr)))
+             goto exit;
+ 
+         pluginsDirectory = String(moduleFileNameStr) + "\\Plugins";
+@@ -404,17 +406,17 @@
+ static inline void addMacromediaPluginDirectories(Vector<String>& directories)
+ {
+ #if !OS(WINCE)
+-    WCHAR systemDirectoryStr[MAX_PATH];
++    UChar systemDirectoryStr[MAX_PATH];
+ 
+-    if (!GetSystemDirectory(systemDirectoryStr, WTF_ARRAY_LENGTH(systemDirectoryStr)))
++    if (!GetSystemDirectoryW(reinterpret_cast<LPWSTR>(systemDirectoryStr), WTF_ARRAY_LENGTH(systemDirectoryStr)))
+         return;
+ 
+-    WCHAR macromediaDirectoryStr[MAX_PATH];
++    UChar macromediaDirectoryStr[MAX_PATH];
+ 
+-    PathCombine(macromediaDirectoryStr, systemDirectoryStr, TEXT("macromed\\Flash"));
++    PathCombineW(reinterpret_cast<LPWSTR>(macromediaDirectoryStr), reinterpret_cast<LPWSTR>(systemDirectoryStr), L"macromed\\Flash");
+     directories.append(macromediaDirectoryStr);
+ 
+-    PathCombine(macromediaDirectoryStr, systemDirectoryStr, TEXT("macromed\\Shockwave 10"));
++    PathCombineW(reinterpret_cast<LPWSTR>(macromediaDirectoryStr), reinterpret_cast<LPWSTR>(systemDirectoryStr), L"macromed\\Shockwave 10");
+     directories.append(macromediaDirectoryStr);
+ #endif
+ }
+--- Source/WebCore/plugins/win/PluginPackageWin.cpp	Sun May 13 02:43:47 2012
++++ Source/WebCore/plugins/win/PluginPackageWin.cpp	Sat Mar 01 15:03:57 2014
+@@ -47,7 +47,7 @@
+     UINT bufferLength;
+     String subInfo = "\\StringfileInfo\\040904E4\\" + info;
+     bool retval = VerQueryValueW(versionInfoData,
+-        const_cast<UChar*>(subInfo.charactersWithNullTermination()),
++        reinterpret_cast<LPCWSTR>(subInfo.charactersWithNullTermination()),
+         &buffer, &bufferLength);
+     if (!retval || bufferLength == 0)
+         return String();
+@@ -167,13 +167,13 @@
+ bool PluginPackage::fetchInfo()
+ {
+     DWORD versionInfoSize, zeroHandle;
+-    versionInfoSize = GetFileVersionInfoSizeW(const_cast<UChar*>(m_path.charactersWithNullTermination()), &zeroHandle);
++    versionInfoSize = GetFileVersionInfoSizeW(reinterpret_cast<LPCWSTR>(m_path.charactersWithNullTermination()), &zeroHandle);
+     if (versionInfoSize == 0)
+         return false;
+ 
+     OwnArrayPtr<char> versionInfoData = adoptArrayPtr(new char[versionInfoSize]);
+ 
+-    if (!GetFileVersionInfoW(const_cast<UChar*>(m_path.charactersWithNullTermination()),
++    if (!GetFileVersionInfoW(reinterpret_cast<LPCWSTR>(m_path.charactersWithNullTermination()),
+             0, versionInfoSize, versionInfoData.get()))
+         return false;
+ 
+@@ -247,11 +247,11 @@
+ 
+         String path = m_path.substring(0, m_path.reverseFind('\\'));
+ 
+-        if (!::SetCurrentDirectoryW(path.charactersWithNullTermination()))
++        if (!::SetCurrentDirectoryW(reinterpret_cast<LPCWSTR>(path.charactersWithNullTermination())))
+             return false;
+ 
+         // Load the library
+-        m_module = ::LoadLibraryExW(m_path.charactersWithNullTermination(), 0, LOAD_WITH_ALTERED_SEARCH_PATH);
++        m_module = ::LoadLibraryExW(reinterpret_cast<LPCWSTR>(m_path.charactersWithNullTermination()), 0, LOAD_WITH_ALTERED_SEARCH_PATH);
+ 
+         if (!::SetCurrentDirectoryW(currentPath)) {
+             if (m_module)
+--- Source/WebCore/plugins/win/PluginViewWin.cpp	Sat Nov 24 03:12:17 2012
++++ Source/WebCore/plugins/win/PluginViewWin.cpp	Sat Mar 01 15:03:58 2014
+@@ -886,13 +886,13 @@
+ 
+     // Get file info
+     WIN32_FILE_ATTRIBUTE_DATA attrs;
+-    if (GetFileAttributesExW(filename.charactersWithNullTermination(), GetFileExInfoStandard, &attrs) == 0)
++    if (GetFileAttributesExW(reinterpret_cast<LPCWSTR>(filename.charactersWithNullTermination()), GetFileExInfoStandard, &attrs) == 0)
+         return NPERR_FILE_NOT_FOUND;
+ 
+     if (attrs.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+         return NPERR_FILE_NOT_FOUND;
+ 
+-    HANDLE fileHandle = CreateFileW(filename.charactersWithNullTermination(), FILE_READ_DATA, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
++    HANDLE fileHandle = CreateFileW(reinterpret_cast<LPCWSTR>(filename.charactersWithNullTermination()), FILE_READ_DATA, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
+     
+     if (fileHandle == INVALID_HANDLE_VALUE)
+         return NPERR_FILE_NOT_FOUND;
+--- Source/WebKit/gtk/JSCore.gir.in	Sun May 13 02:43:48 2012
++++ Source/WebKit/gtk/JSCore.gir.in	Mon Apr 07 10:34:15 2014
+@@ -2,7 +2,7 @@
+ <repository version="1.2"
+             xmlns="http://www.gtk.org/introspection/core/1.0"
+             xmlns:c="http://www.gtk.org/introspection/c/1.0">
+-  <namespace name="JSCore" version="@WEBKITGTK_API_VERSION@" shared-library="webkitgtk-@WEBKITGTK_API_VERSION@">
++  <namespace name="JSCore" version="@WEBKITGTK_API_VERSION@" shared-library="libwebkitgtk-@WEBKITGTK_API_VERSION@-0.dll">
+     <alias name="GlobalContextRef" target="none">
+       <type name="JSGlobalContextRef" c:type="JSGlobalContextRef"/>
+     </alias>
+--- Source/WTF/wtf/gobject/GlibUtilities.cpp	Sat Nov 24 03:12:16 2012
++++ Source/WTF/wtf/gobject/GlibUtilities.cpp	Sat Mar 01 15:03:58 2014
+@@ -54,7 +54,7 @@
+     if (!length || (length == MAX_PATH && GetLastError() == ERROR_INSUFFICIENT_BUFFER))
+         return CString();
+ 
+-    String path(buffer, length);
++    String path(reinterpret_cast<UChar*>(buffer), length);
+     return path.utf8();
+ }
+ #endif
+--- configure	Mon Dec 10 01:20:20 2012
++++ configure	Tue Apr 22 08:16:00 2014
+@@ -21266,8 +21266,8 @@
+ 
+ # Add the appropriate 'O' level for optimized builds
+ if test "$enable_optimizations" = "yes"; then
+-   CXXFLAGS="$CXXFLAGS -O2"
+-   CFLAGS="$CFLAGS -O2"
++   CXXFLAGS="-O2 $CXXFLAGS"
++   CFLAGS="-O2 $CFLAGS"
+ else
+    CXXFLAGS="$CXXFLAGS -O0"
+    CFLAGS="$CFLAGS -O0"
+@@ -22318,7 +22318,7 @@
+ fi
+ 
+ if test "$with_acceleration_backend" = "opengl"; then
+-    OPENGL_LIBS="-lGL -ldl"
++    OPENGL_LIBS="-lopenGL32 -ldl"
+ fi
+ 
+ 
+--- GNUmakefile.in	Mon Dec 10 01:20:20 2012
++++ GNUmakefile.in	Fri Oct 17 21:53:27 2014
+@@ -124,7 +124,8 @@
+ 	Programs/unittests/testwebview$(EXEEXT) \
+ 	Programs/unittests/testkeyevents$(EXEEXT) \
+ 	Programs/unittests/testcopyandpaste$(EXEEXT) \
+-	Programs/DumpRenderTree$(EXEEXT) Programs/GtkLauncher$(EXEEXT) \
++	Programs/GtkLauncher$(EXEEXT)
++bin_PROGRAMS = 	Programs/DumpRenderTree$(EXEEXT) \
+ 	Programs/ImageDiff$(EXEEXT) $(am__EXEEXT_6) $(am__EXEEXT_7) \
+ 	$(am__EXEEXT_8) Programs/TestWebKitAPI/TestWTF$(EXEEXT) \
+ 	Programs/TestWebKitAPI/TestGtk$(EXEEXT) $(am__EXEEXT_9)
+@@ -21174,6 +21175,7 @@
+ 
+ Programs_LLIntOffsetsExtractor_CPPFLAGS = \
+ 	$(global_cppflags) \
++	$(PANGO_CFLAGS) \
+ 	$(javascriptcore_cppflags)
+ 
+ Programs_LLIntOffsetsExtractor_CFLAGS = \
+@@ -21246,6 +21248,7 @@
+ @ENABLE_SVG_TRUE@       $(webcoregtk_cppflags) \
+ @ENABLE_SVG_TRUE@       $(javascriptcore_cppflags) \
+ @ENABLE_SVG_TRUE@       -fno-strict-aliasing \
++@ENABLE_SVG_TRUE@       $(PANGO_CFLAGS) \
+ @ENABLE_SVG_TRUE@       $(CAIRO_CFLAGS) \
+ @ENABLE_SVG_TRUE@       $(LIBSOUP_CFLAGS)
+ 
+@@ -21563,7 +21566,7 @@
+ 	$(GSTREAMER_LIBS) $(GTK_LIBS) $(JPEG_LIBS) $(LIBSOUP_LIBS) \
+ 	$(LIBXML_LIBS) $(LIBXSLT_LIBS) $(OPENGL_LIBS) $(PANGO_LIBS) \
+ 	$(PNG_LIBS) $(SQLITE3_LIBS) $(UNICODE_LIBS) $(XCOMPOSITE_LIBS) \
+-	$(XDAMAGE_LIBS) $(XRENDER_LIBS) $(XT_LIBS) $(WINMM_LIBS) \
++	$(XDAMAGE_LIBS) $(XRENDER_LIBS) $(XT_LIBS) $(WINMM_LIBS) -lwebp \
+ 	$(SHLWAPI_LIBS) $(OLE32_LIBS) $(ZLIB_LIBS)
+ @ENABLE_INTROSPECTION_TRUE@girdir = $(datadir)/gir-1.0
+ @ENABLE_INTROSPECTION_TRUE@gir_DATA = $(WEBKIT_GIRSOURCES) $(JSCORE_GIRSOURCES)
+@@ -79581,8 +79584,8 @@
+ @ENABLE_INTROSPECTION_TRUE@	     --include=Gtk-@GTK_API_VERSION@ \
+ @ENABLE_INTROSPECTION_TRUE@	     --include=JSCore-@WEBKITGTK_API_VERSION@ \
+ @ENABLE_INTROSPECTION_TRUE@	     --include=Soup-2.4 \
+-@ENABLE_INTROSPECTION_TRUE@	     --library=webkitgtk-@WEBKITGTK_API_VERSION@ \
+-@ENABLE_INTROSPECTION_TRUE@	     --library=javascriptcoregtk-@WEBKITGTK_API_VERSION@ \
++@ENABLE_INTROSPECTION_TRUE@	     --library=libwebkitgtk-@WEBKITGTK_API_VERSION@.la \
++@ENABLE_INTROSPECTION_TRUE@	     --library=libjavascriptcoregtk-@WEBKITGTK_API_VERSION@.la \
+ @ENABLE_INTROSPECTION_TRUE@	     --libtool="$(LIBTOOL)" \
+ @ENABLE_INTROSPECTION_TRUE@	     --pkg=gobject-2.0 \
+ @ENABLE_INTROSPECTION_TRUE@	     --pkg=gtk+-@GTK_API_VERSION@ \
+@@ -79772,7 +79775,6 @@
+ @ENABLE_WEBKIT2_TRUE@	      $${installdir}/webkit2gtk-$(DOC_MODULE_VERSION).devhelp2; \
+ @ENABLE_WEBKIT2_TRUE@	  fi; \
+ @ENABLE_WEBKIT2_TRUE@	fi
+-	@$(AM_V_GEN)$(PYTHON) $(srcdir)/Tools/gtk/generate-gtkdoc --rebase --virtual-root=$${DESTDIR}
+ 
+ uninstall-local:
+ 	@DOC_MODULE_VERSION=`cat ./Documentation/webkitgtk/version.xml`; \
