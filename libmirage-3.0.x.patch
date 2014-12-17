@@ -1,0 +1,341 @@
+--- filters/filter-cso/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ filters/filter-cso/CMakeLists.txt	Sat Nov 01 07:07:30 2014
+@@ -19,7 +19,7 @@
+         filter-stream.c
+         plugin.c
+     )
+-    target_link_libraries(${filter_name} ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES})
++    target_link_libraries(${filter_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${filter_name} PROPERTIES PREFIX "")
+--- filters/filter-daa/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ filters/filter-daa/CMakeLists.txt	Sat Nov 01 07:01:27 2014
+@@ -25,7 +25,7 @@
+         lzma-sdk/Bra86.c
+         lzma-sdk/LzmaDec.c
+     )
+-    target_link_libraries(${filter_name} ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES})
++    target_link_libraries(${filter_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${filter_name} PROPERTIES PREFIX "")
+--- filters/filter-dmg/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ filters/filter-dmg/CMakeLists.txt	Sat Nov 01 07:01:36 2014
+@@ -23,7 +23,7 @@
+         plugin.c
+         resource-fork.c
+     )
+-    target_link_libraries(${filter_name} ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES} ${BZIP2_LIBRARIES})
++    target_link_libraries(${filter_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES} ${BZIP2_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${filter_name} PROPERTIES PREFIX "")
+--- filters/filter-dmg/filter-dmg.h	Mon Sep 29 02:19:13 2014
++++ filters/filter-dmg/filter-dmg.h	Sat Nov 01 07:11:17 2014
+@@ -38,7 +38,9 @@
+ G_BEGIN_DECLS
+ 
+ #define DMG_SECTOR_SIZE 512
+-
++#ifdef G_OS_WIN32
++#undef IGNORE
++#endif
+ /* Block types */
+ typedef enum {
+     ADC     = G_MININT32+4,
+--- filters/filter-ecm/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ filters/filter-ecm/CMakeLists.txt	Sat Nov 01 07:01:45 2014
+@@ -10,7 +10,7 @@
+         filter-stream.c
+         plugin.c
+     )
+-    target_link_libraries(${filter_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${filter_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${filter_name} PROPERTIES PREFIX "")
+--- filters/filter-gzip/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ filters/filter-gzip/CMakeLists.txt	Sat Nov 01 07:01:58 2014
+@@ -19,7 +19,7 @@
+         filter-stream.c
+         plugin.c
+     )
+-    target_link_libraries(${filter_name} ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES})
++    target_link_libraries(${filter_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${filter_name} PROPERTIES PREFIX "")
+--- filters/filter-isz/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ filters/filter-isz/CMakeLists.txt	Sat Nov 01 07:02:05 2014
+@@ -21,7 +21,7 @@
+         filter-stream.c
+         plugin.c
+     )
+-    target_link_libraries(${filter_name} ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES} ${BZIP2_LIBRARIES})
++    target_link_libraries(${filter_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES} ${ZLIB_LIBRARIES} ${BZIP2_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${filter_name} PROPERTIES PREFIX "")
+--- filters/filter-macbinary/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ filters/filter-macbinary/CMakeLists.txt	Sat Nov 01 07:02:11 2014
+@@ -12,7 +12,7 @@
+         ../filter-dmg/resource-fork.c
+         ../filter-dmg/adc.c
+     )
+-    target_link_libraries(${filter_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${filter_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${filter_name} PROPERTIES PREFIX "")
+--- filters/filter-sndfile/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ filters/filter-sndfile/CMakeLists.txt	Sat Nov 01 07:02:17 2014
+@@ -22,7 +22,7 @@
+         filter-stream.c
+         plugin.c
+     )
+-    target_link_libraries(${filter_name} ${GLIB_LIBRARIES} ${SNDFILE_LIBRARIES} ${SAMPLERATE_LIBRARIES})
++    target_link_libraries(${filter_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES} ${SNDFILE_LIBRARIES} ${SAMPLERATE_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${filter_name} PROPERTIES PREFIX "")
+--- filters/filter-xz/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ filters/filter-xz/CMakeLists.txt	Sat Nov 01 07:02:23 2014
+@@ -19,7 +19,7 @@
+         filter-stream.c
+         plugin.c
+     )
+-    target_link_libraries(${filter_name} ${GLIB_LIBRARIES} ${LIBLZMA_LIBRARIES})
++    target_link_libraries(${filter_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES} ${LIBLZMA_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${filter_name} PROPERTIES PREFIX "")
+--- images/image-b6t/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-b6t/CMakeLists.txt	Sat Nov 01 07:04:33 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-c2d/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-c2d/CMakeLists.txt	Sat Nov 01 07:04:26 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-ccd/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-ccd/CMakeLists.txt	Sat Nov 01 07:04:19 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-cdi/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-cdi/CMakeLists.txt	Sat Nov 01 07:04:13 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-cif/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-cif/CMakeLists.txt	Sat Nov 01 07:04:01 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-cue/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-cue/CMakeLists.txt	Sat Nov 01 07:03:52 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-harddisk/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-harddisk/CMakeLists.txt	Sat Nov 01 07:03:44 2014
+@@ -10,7 +10,7 @@
+         partition-tables.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-iso/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-iso/CMakeLists.txt	Sat Nov 01 07:03:34 2014
+@@ -10,7 +10,7 @@
+         plugin.c
+         writer.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-mds/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-mds/CMakeLists.txt	Sat Nov 01 07:03:24 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-mdx/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-mdx/CMakeLists.txt	Sat Nov 01 07:03:16 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-nrg/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-nrg/CMakeLists.txt	Sat Nov 01 07:03:07 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-readcd/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-readcd/CMakeLists.txt	Sat Nov 01 07:03:00 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-toc/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-toc/CMakeLists.txt	Sat Nov 01 07:02:52 2014
+@@ -10,7 +10,7 @@
+         plugin.c
+         writer.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- images/image-xcdroast/CMakeLists.txt	Mon Sep 29 02:19:13 2014
++++ images/image-xcdroast/CMakeLists.txt	Sat Nov 01 07:02:42 2014
+@@ -9,7 +9,7 @@
+         parser.c
+         plugin.c
+     )
+-    target_link_libraries(${image_name} ${GLIB_LIBRARIES})
++    target_link_libraries(${image_name} "-L${PROJECT_BINARY_DIR}/../.. -lmirage" ${GLIB_LIBRARIES})
+ 
+     # Disable library prefix
+     set_target_properties(${image_name} PROPERTIES PREFIX "")
+--- mirage/mirage.c	Mon Sep 29 02:19:13 2014
++++ mirage/mirage.c	Tue Oct 28 21:44:29 2014
+@@ -42,6 +42,21 @@
+ 
+ #include "mirage.h"
+ 
++#ifdef G_OS_WIN32
++#include <windows.h>
++#undef MIRAGE_PLUGIN_DIR
++HMODULE mr_dll = NULL;
++BOOL WINAPI
++DllMain (HINSTANCE hinstDLL,
++	 DWORD     fdwReason,
++	 LPVOID    lpvReserved)
++{
++  if (fdwReason == DLL_PROCESS_ATTACH)
++      mr_dll = hinstDLL;
++
++  return TRUE;
++}
++#endif
+ 
+ static struct
+ {
+@@ -142,6 +157,12 @@
+ 
+     /* *** Load plugins *** */
+     /* Open plugins dir */
++    
++#ifdef G_OS_WIN32
++    gchar *MIRAGE_PLUGIN_DIR = NULL;
++    MIRAGE_PLUGIN_DIR = g_build_filename (g_win32_get_package_installation_directory_of_module (mr_dll), \
++    "lib","libmirage-3.0", NULL);
++#endif
+     plugins_dir = g_dir_open(MIRAGE_PLUGIN_DIR, 0, NULL);
+ 
+     if (!plugins_dir) {
+@@ -152,7 +173,11 @@
+ 
+     /* Check every file in the plugin dir */
+     while ((plugin_file = g_dir_read_name(plugins_dir))) {
++#ifdef G_OS_WIN32
++        if (g_str_has_suffix(plugin_file, ".dll")) {
++#else
+         if (g_str_has_suffix(plugin_file, ".so")) {
++#endif
+             MiragePlugin *plugin;
+             gchar *fullpath;
+ 
+@@ -174,7 +199,9 @@
+     }
+ 
+     g_dir_close(plugins_dir);
+-
++#ifdef G_OS_WIN32
++    g_free(MIRAGE_PLUGIN_DIR);
++#endif
+     /* *** Get parsers and filter streams *** */
+     initialize_parsers_list();
+     initialize_writers_list();
+--- libmirage.pc.in	Mon Sep 29 02:19:13 2014
++++ libmirage.pc.in	Tue Oct 28 21:36:28 2014
+@@ -1,8 +1,8 @@
+-prefix=@CMAKE_INSTALL_PREFIX@
++prefix=
+ exec_prefix=${prefix}
+-libdir=@CMAKE_INSTALL_FULL_LIBDIR@
+-includedir=@CMAKE_INSTALL_FULL_INCLUDEDIR@
+-plugindir=@MIRAGE_PLUGIN_DIR@
++libdir=${prefix}/lib
++includedir=${prefix}/include
++plugindir=${libdir}/libmirage-2.1
+ 
+ Name: @PROJECT_NAME@
+ Description: CD/DVD-ROM image access library
