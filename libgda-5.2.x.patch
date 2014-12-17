@@ -1,0 +1,280 @@
+configure: mess it up a bit because of static lib dependencies
+gdaui-init.c: make iso-codes recolatable
+libmain.c: win32 fix
+
+--- libgda-ui/gdaui-init.c	Sat Oct 19 19:35:28 2013
++++ libgda-ui/gdaui-init.c	Sat Dec 28 06:15:36 2013
+@@ -39,6 +39,23 @@
+ #include "data-entries/gdaui-data-cell-renderer-bin.h"
+ #include "gdaui-resources.h"
+ 
++#ifdef G_OS_WIN32
++#include <windows.h>
++HMODULE gdaui_dll = NULL;
++#ifdef DLL_EXPORT
++BOOL WINAPI
++DllMain (HINSTANCE hinstDLL,
++	 DWORD     fdwReason,
++	 LPVOID    lpvReserved)
++{
++  if (fdwReason == DLL_PROCESS_ATTACH)
++      gdaui_dll = hinstDLL;
++
++  return TRUE;
++}
++#endif
++#endif
++
+ /* plugins list */
+ 
+ typedef GSList           *(*GdauiPluginInit)     (GError **);
+@@ -690,11 +707,15 @@
+ 	 * Load iso codes
+ 	 */
+ #define ISO_CODES_LOCALESDIR ISO_CODES_PREFIX "/share/locale"
+-
++#ifdef _WIN32
++	bindtextdomain ("iso_4217", g_build_filename(g_win32_get_package_installation_directory_of_module(gdaui_dll),"share","locale",NULL));
++	isofile = g_build_filename (g_win32_get_package_installation_directory_of_module(gdaui_dll), "share", "xml", "iso-codes", "iso_4217.xml", NULL);
++#else
+ 	bindtextdomain ("iso_4217", ISO_CODES_LOCALESDIR);
++	isofile = g_build_filename (ISO_CODES_PREFIX, "share", "xml", "iso-codes", "iso_4217.xml", NULL);
++#endif
+ 	bind_textdomain_codeset ("iso_4217", "UTF-8");
+ 
+-	isofile = g_build_filename (ISO_CODES_PREFIX, "share", "xml", "iso-codes", "iso_4217.xml", NULL);
+ 	if (g_file_get_contents (isofile, &buf, NULL, &err)) {
+ 		isocodes = xmlParseDoc (BAD_CAST buf);
+ 		g_free (buf);
+--- providers/jdbc/libmain.c	Sat Oct 19 19:35:12 2013
++++ providers/jdbc/libmain.c	Sat Dec 28 06:00:32 2013
+@@ -30,13 +30,13 @@
+ #include "jni-wrapper.h"
+ #include "jni-globals.h"
+ #include <unistd.h>
+-#include <sys/wait.h>
+ 
+ #ifdef G_OS_WIN32
+ #include <windows.h>
+ #include <winreg.h>
+ #define EXPORT __declspec(dllexport)
+ #else
++#include <sys/wait.h>
+ #define EXPORT
+ #endif
+ 
+--- configure	Mon Dec 23 19:40:08 2013
++++ configure	Sat Oct 18 20:01:52 2014
+@@ -19030,6 +19030,7 @@
+     { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"
+ 	glib-2.0	>= 2.32.0
+ 	gobject-2.0	>= 2.32.0
++	gio-2.0	>= 2.32.0
+ 	gthread-2.0	>= 2.32.0
+ 	gmodule-no-export-2.0	>= 2.32.0
+ 	libxml-2.0
+@@ -19037,6 +19038,7 @@
+   ($PKG_CONFIG --exists --print-errors "
+ 	glib-2.0	>= 2.32.0
+ 	gobject-2.0	>= 2.32.0
++	gio-2.0	>= 2.32.0
+ 	gthread-2.0	>= 2.32.0
+ 	gmodule-no-export-2.0	>= 2.32.0
+ 	libxml-2.0
+@@ -19047,6 +19049,7 @@
+   pkg_cv_COREDEPS_CFLAGS=`$PKG_CONFIG --cflags "
+ 	glib-2.0	>= 2.32.0
+ 	gobject-2.0	>= 2.32.0
++	gio-2.0	>= 2.32.0
+ 	gthread-2.0	>= 2.32.0
+ 	gmodule-no-export-2.0	>= 2.32.0
+ 	libxml-2.0
+@@ -19065,6 +19068,7 @@
+     { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"
+ 	glib-2.0	>= 2.32.0
+ 	gobject-2.0	>= 2.32.0
++	gio-2.0	>= 2.32.0
+ 	gthread-2.0	>= 2.32.0
+ 	gmodule-no-export-2.0	>= 2.32.0
+ 	libxml-2.0
+@@ -19072,6 +19076,7 @@
+   ($PKG_CONFIG --exists --print-errors "
+ 	glib-2.0	>= 2.32.0
+ 	gobject-2.0	>= 2.32.0
++	gio-2.0	>= 2.32.0
+ 	gthread-2.0	>= 2.32.0
+ 	gmodule-no-export-2.0	>= 2.32.0
+ 	libxml-2.0
+@@ -19082,6 +19087,7 @@
+   pkg_cv_COREDEPS_LIBS=`$PKG_CONFIG --libs "
+ 	glib-2.0	>= 2.32.0
+ 	gobject-2.0	>= 2.32.0
++	gio-2.0	>= 2.32.0
+ 	gthread-2.0	>= 2.32.0
+ 	gmodule-no-export-2.0	>= 2.32.0
+ 	libxml-2.0
+@@ -19109,6 +19115,7 @@
+ 	        COREDEPS_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "
+ 	glib-2.0	>= 2.32.0
+ 	gobject-2.0	>= 2.32.0
++	gio-2.0	>= 2.32.0
+ 	gthread-2.0	>= 2.32.0
+ 	gmodule-no-export-2.0	>= 2.32.0
+ 	libxml-2.0
+@@ -19116,6 +19123,7 @@
+         else
+ 	        COREDEPS_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "
+ 	glib-2.0	>= 2.32.0
++	gio-2.0	>= 2.32.0
+ 	gobject-2.0	>= 2.32.0
+ 	gthread-2.0	>= 2.32.0
+ 	gmodule-no-export-2.0	>= 2.32.0
+@@ -19127,6 +19135,7 @@
+ 
+ 	as_fn_error $? "Package requirements (
+ 	glib-2.0	>= 2.32.0
++	gio-2.0	>= 2.32.0
+ 	gobject-2.0	>= 2.32.0
+ 	gthread-2.0	>= 2.32.0
+ 	gmodule-no-export-2.0	>= 2.32.0
+@@ -22020,7 +22029,7 @@
+ 	then
+ 	    bdb_libext=".so"
+ 	else
+-	    bdb_libext="$linklibext"
++	    bdb_libext=".dll.a"
+ 	fi
+ 	bdbdir=""
+ 	for d in $bdb_test_dir
+@@ -22032,7 +22041,8 @@
+ 	    do
+ 	        if test $platform_win32 = yes
+ 		then
+-		    sversion=`echo $version | sed -e 's,\.,,g'`
++		    #sversion=`echo $version | sed -e 's,\.,,g'`
++		    sversion="-$version"
+ 		else
+ 		    sversion=`echo $version | sed -e 's,\..*,,g'`
+ 		fi
+@@ -22045,7 +22055,7 @@
+     		else
+ 		    if test $platform_win32 = yes
+ 		    then
+-		        db_libfilename="libdb$sversion$bdb_libext"
++		        db_libfilename="libdb$sversion.dll"
+         	        db_lib="-ldb$sversion"
+ 		        db_libfile="$d/$bdb_loclibdir/libdb$sversion$bdb_libext"
+         	        try_headers="db.h db$version/db.h db$sversion/db.h"
+@@ -22353,7 +22363,7 @@
+ 	    then
+ 	        mysql_libext=".so"
+ 	    else
+-	        mysql_libext=".lib"
++	        mysql_libext=".a"
+ 	    fi
+ 	    if test $platform_win32 = yes
+ 	    then
+@@ -22361,12 +22371,12 @@
+ 	        do
+ 	            { $as_echo "$as_me:${as_lineno-$LINENO}: checking checking for mysql files in $d" >&5
+ $as_echo_n "checking checking for mysql files in $d... " >&6; }
+-		    if test -a $d/include/mysql.h -a -f $d/$mysql_loclibdir/libmysql$mysql_libext
++		    if test -a $d/include/mysql/mysql.h -a -f $d/$mysql_loclibdir/libmysql$mysql_libext
+ 		    then
+ 			save_CFLAGS="$CFLAGS"
+-	                CFLAGS="$CFLAGS -I$d/include"
++	                CFLAGS="$CFLAGS -I$d/include/mysql"
+   	                save_LIBS="$LIBS"
+-	                LIBS="$LIBS -L$d/$mysql_loclibdir -lmysql"
++	                LIBS="-L$d/$mysql_loclibdir -lmysql -lsecur32 -lws2_32 -lz $LIBS"
+    	                cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ 
+@@ -22389,8 +22399,8 @@
+ 			then
+ 		            { $as_echo "$as_me:${as_lineno-$LINENO}: result: found" >&5
+ $as_echo "found" >&6; }
+-			    MYSQL_CFLAGS=-I$d/include
+-			    MYSQL_LIBS="-L$d/$mysql_loclibdir -lmysql"
++			    MYSQL_CFLAGS=-I$d/include/mysql
++			    MYSQL_LIBS="-L$d/$mysql_loclibdir -lmysql -lsecur32 -lws2_32 -lz"
+ 			    break
+ 			fi
+ 			{ $as_echo "$as_me:${as_lineno-$LINENO}: result: files found but are not useable" >&5
+@@ -22610,7 +22620,7 @@
+ 	then
+ 	    pkgpostgres=yes
+ 	    POSTGRES_CFLAGS="-I`$PG_CONFIG --includedir`"
+-	    POSTGRES_LIBS="-L`$PG_CONFIG --libdir` -lpq"
++	    POSTGRES_LIBS="-L`$PG_CONFIG --libdir` -lpq -lgssapi -pthread -lssl -lcrypto -lws2_32 -lsecur32 -lwldap32"
+ 	else
+ 	    postgres_test_dir="/usr /usr/local /opt/gnome"
+ 	fi
+@@ -22639,7 +22649,7 @@
+ 			save_CFLAGS="$CFLAGS"
+ 	                CFLAGS="$CFLAGS -I$d/include"
+   	                save_LIBS="$LIBS"
+-	                LIBS="$LIBS -L$d/$pg_loclibdir -lpq"
++	                LIBS="$LIBS -L$d/$pg_loclibdir -lpq -lssl -lcrypto -lws2_32 -lsecur32"
+    	                cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ 
+@@ -22662,7 +22672,7 @@
+ 		            { $as_echo "$as_me:${as_lineno-$LINENO}: result: found" >&5
+ $as_echo "found" >&6; }
+ 			    POSTGRES_CFLAGS=-I$d/include
+-			    POSTGRES_LIBS="-L$d/$pg_loclibdir -lpq"
++			    POSTGRES_LIBS="-L$d/$pg_loclibdir -lpq -lssl -lcrypto -lws2_32 -lsecur32"
+ 			    break
+ 			fi
+ 			{ $as_echo "$as_me:${as_lineno-$LINENO}: result: files found but are not useable" >&5
+@@ -23142,7 +23152,7 @@
+         { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether Java interpreter works" >&5
+ $as_echo_n "checking whether Java interpreter works... " >&6; }
+ 	try_java=false
+-	acx_java_works=no
++	acx_java_works=yes
+ 	if test -n "${JAVA_PROG}"
+ 	then
+ 
+@@ -23270,10 +23280,10 @@
+   acx_java_result=
+   if test -z "${JAVA_PROG}"
+   then
+-      echo "$as_me:$LINENO: JAVA_PROG is not set, cannot run java -classpath ${srcdir} getsp -ldpath" >&5
++      echo "$as_me:$LINENO: JAVA_PROG is not set, cannot run java -classpath ${srcdir} getsp java.library.path" >&5
+   else
+-      echo "$as_me:$LINENO: running ${JAVA_PROG} -classpath ${srcdir} getsp -ldpath" >&5
+-      acx_java_result=`${JAVA_PROG} -classpath ${srcdir} getsp -ldpath 2>&5`
++      echo "$as_me:$LINENO: running ${JAVA_PROG} -classpath ${srcdir} getsp java.library.path" >&5
++      acx_java_result=`${JAVA_PROG} -classpath ${srcdir} getsp java.library.path 2>&5`
+       echo "$as_me:$LINENO: output: '$acx_java_result'" >&5
+   fi
+   JAVA_LD_PATH=$acx_java_result
+@@ -23601,7 +23611,7 @@
+   	        save_CFLAGS="$CFLAGS"
+ 	        CFLAGS="$CFLAGS -I$d/include"
+   	        save_LIBS="$LIBS"
+-	        LIBS="$LIBS -L$d/$ldap_loclibdir -lldap -llber"
++	        LIBS="$LIBS -L$d/$ldap_loclibdir -lldap -llber -lsasl2 -lssl -lcrypto -lws2_32"
+    	        cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ 
+@@ -23629,7 +23639,7 @@
+ 	        { $as_echo "$as_me:${as_lineno-$LINENO}: result: found" >&5
+ $as_echo "found" >&6; }
+ 	        LDAP_CFLAGS=-I${ldapdir}/include
+-	        LDAP_LIBS="-L${ldapdir}/$ldap_loclibdir -lldap -llber"
++	        LDAP_LIBS="-L${ldapdir}/$ldap_loclibdir -lldap -llber -lsasl2 -lssl -lcrypto -lws2_32"
+ 		break
+   	    else
+ 	        { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+@@ -25163,7 +25173,7 @@
+   	            save_CFLAGS="$CFLAGS"
+ 	            CFLAGS="$CFLAGS -I$d/include $mdb_glib_cflags"
+   	            save_LIBS="$LIBS"
+-	            LIBS="$LIBS -L$d/$mdb_loclibdir -lmdb $mdb_glib_libs"
++	            LIBS="$LIBS -L$d/$mdb_loclibdir -lmdb $mdb_glib_libs "
+    	            cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+ 
