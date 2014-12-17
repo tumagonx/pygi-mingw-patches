@@ -1,0 +1,58 @@
+--- libpeas/peas-dirs.c	Sat Aug 23 02:09:44 2014
++++ libpeas/peas-dirs.c	Tue Sep 30 21:17:42 2014
+@@ -114,6 +114,26 @@
+ 
+ #endif
+ 
++#ifdef _WIN32
++#undef DATADIR
++#include <windows.h>
++HMODULE peas_dll = NULL;
++BOOL WINAPI
++DllMain (HINSTANCE hinstDLL,
++	 DWORD     fdwReason,
++	 LPVOID    lpvReserved);
++BOOL WINAPI
++DllMain (HINSTANCE hinstDLL,
++	 DWORD     fdwReason,
++	 LPVOID    lpvReserved)
++{
++  if (fdwReason == DLL_PROCESS_ATTACH)
++      peas_dll = hinstDLL;
++
++  return TRUE;
++}
++#endif
++
+ gchar *
+ peas_dirs_get_data_dir (void)
+ {
+@@ -143,7 +163,7 @@
+ #ifdef G_OS_WIN32
+   gchar *win32_dir;
+ 
+-  win32_dir = g_win32_get_package_installation_directory_of_module (NULL);
++  win32_dir = g_win32_get_package_installation_directory_of_module (peas_dll);
+ 
+   lib_dir = g_build_filename (win32_dir, "lib", "libpeas-1.0", NULL);
+   g_free (win32_dir);
+--- tests/libpeas/plugins/Makefile.in	Mon Sep 22 21:37:44 2014
++++ tests/libpeas/plugins/Makefile.in	Tue Sep 30 21:08:03 2014
+@@ -149,7 +149,7 @@
+   done | $(am__uniquify_input)`
+ ETAGS = etags
+ CTAGS = ctags
+-DIST_SUBDIRS = extension-c extension-python extension-seed
++DIST_SUBDIRS = extension-python extension-seed
+ DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
+ am__relativize = \
+   dir0=`pwd`; \
+@@ -381,7 +381,7 @@
+ top_build_prefix = @top_build_prefix@
+ top_builddir = @top_builddir@
+ top_srcdir = @top_srcdir@
+-SUBDIRS = extension-c $(am__append_1) $(am__append_2) $(am__append_3)
++SUBDIRS = $(am__append_1) $(am__append_2) $(am__append_3)
+ noinst_PLUGIN = \
+ 	disabled-loader.plugin			\
+ 	extension-c-nonexistent.plugin		\
