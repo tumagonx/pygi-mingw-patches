@@ -1,0 +1,153 @@
+--- src/dh-assistant-view.c	Wed May 15 18:05:20 2013
++++ src/dh-assistant-view.c	Sun Nov 10 18:40:38 2013
+@@ -128,7 +128,7 @@
+                 priv->snippet_loaded = TRUE;
+                 return WEBKIT_NAVIGATION_RESPONSE_ACCEPT;
+         }
+-        else if (g_str_has_prefix (uri, "file://")) {
++        else if (g_str_has_prefix (uri, URI_PREFIX)) {
+                 g_signal_emit (web_view, signals[SIGNAL_OPEN_URI], 0, uri);
+         }
+ 
+@@ -266,7 +266,7 @@
+                 return FALSE;
+         }
+ 
+-        if (g_str_has_prefix (filename, "file://"))
++        if (g_str_has_prefix (filename, URI_PREFIX))
+             offset = 7;
+ 
+         file = g_mapped_file_new (filename + offset, FALSE, NULL);
+--- src/dh-book-manager.c	Wed Feb 06 01:18:57 2013
++++ src/dh-book-manager.c	Sun Nov 10 18:55:19 2013
+@@ -528,11 +528,16 @@
+ 
+                 /* Build the path of the directory where the final
+                  * devhelp book resides */
++#ifdef G_OS_WIN32
++                book_dir_path = g_build_filename (dir_path,
++                                                  name,
++                                                  NULL);
++#else
+                 book_dir_path = g_build_filename (G_DIR_SEPARATOR_S,
+                                                   dir_path,
+                                                   name,
+                                                   NULL);
+-
++#endif
+                 book_path = book_manager_get_book_path (book_dir_path, name);
+                 if (book_path) {
+                         /* Add book from filepath */
+--- src/dh-link.c	Sun Aug 21 17:00:05 2011
++++ src/dh-link.c	Sun Nov 10 18:36:49 2013
+@@ -234,7 +234,7 @@
+         else
+                 base = link->book->base;
+ 
+-	uri = g_strconcat ("file://", base, "/", link->filename, NULL, NULL);
++	uri = g_strconcat (URI_PREFIX, base, "/", link->filename, NULL, NULL);
+ 
+ 	return uri;
+ }
+--- src/dh-link.h	Sun Aug 21 17:00:05 2011
++++ src/dh-link.h	Sun Nov 10 18:58:49 2013
+@@ -23,7 +23,11 @@
+ #define __DH_LINK_H__
+ 
+ #include <glib-object.h>
+-
++#ifdef G_OS_WIN32
++#define URI_PREFIX "file:///"
++#else
++#define URI_PREFIX "file://"
++#endif
+ typedef enum {
+         DH_LINK_TYPE_BOOK,
+         DH_LINK_TYPE_PAGE,
+--- src/dh-main.c	Fri Feb 01 21:35:06 2013
++++ src/dh-main.c	Sun May 18 09:24:13 2014
+@@ -103,7 +103,14 @@
+         gint     status;
+ 
+         setlocale (LC_ALL, "");
++#ifdef G_OS_WIN32
++      gchar *_glib_get_locale_dir (void);
++      gchar *localedir = _glib_get_locale_dir ();
++      bindtextdomain (GETTEXT_PACKAGE, localedir);
++      g_free (localedir);
++#else
+         bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+         bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+         textdomain (GETTEXT_PACKAGE);
+ 
+--- src/dh-util.c	Wed May 15 18:05:20 2013
++++ src/dh-util.c	Sat Nov 23 15:48:13 2013
+@@ -117,6 +117,20 @@
+         va_end (args);
+ }
+ 
++#ifdef G_OS_WIN32
++
++static gchar *
++util_get_win32_datadir (void)
++{
++  static gchar *install_dir;
++  static gchar * win32_datadir;
++  install_dir = g_win32_get_package_installation_directory_of_module (NULL);
++  win32_datadir = g_build_filename(install_dir,"share",NULL);
++  g_free(install_dir);
++  return win32_datadir;
++}
++#endif
++
+ gchar *
+ dh_util_build_data_filename (const gchar *first_part,
+                              ...)
+@@ -130,10 +144,14 @@
+ 
+         va_start (args, first_part);
+ 
++#ifdef G_OS_WIN32
++        datadir = util_get_win32_datadir ();
++#else
++
+         if (datadir == NULL) {
+                 datadir = g_strdup (DATADIR);
+         }
+-
++#endif
+         /* 2 = 1 initial component + terminating NULL element. */
+         strv = g_malloc (sizeof (gchar *) * 2);
+         strv[0] = (gchar *) datadir;
+--- src/dh-window.c	Wed May 15 18:05:20 2013
++++ src/dh-window.c	Sun Nov 10 18:37:40 2013
+@@ -892,7 +892,7 @@
+                 }
+         }
+ 
+-        if (strncmp (uri, "file://", 7) != 0) {
++        if (strncmp (uri, URI_PREFIX, 7) != 0) {
+ #ifdef HAVE_WEBKIT2
+                 webkit_policy_decision_ignore (policy_decision);
+ #else
+--- src/Makefile.in	Wed May 15 18:07:36 2013
++++ src/Makefile.in	Fri Oct 17 21:26:13 2014
+@@ -134,7 +134,7 @@
+ devhelp_DEPENDENCIES = $(am__DEPENDENCIES_1) libdevhelp-3.la
+ devhelp_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+ 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(devhelp_CFLAGS) \
+-	$(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
++	$(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -mwindows -o $@
+ DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
+ depcomp = $(SHELL) $(top_srcdir)/build-aux/depcomp
+ am__depfiles_maybe = depfiles
+@@ -445,7 +445,7 @@
+ 	$(LIBM)
+ 
+ libdevhelp_3_la_LDFLAGS = \
+-	-no-undefined					\
++	-no-undefined	\
+ 	-version-info ${LIBDEVHELP_CURRENT}:${LIBDEVHELP_REVISION}:${LIBDEVHELP_AGE} \
+ 	-export-symbols-regex ^dh_ \
+ 	$(ZLIB_LDFLAGS)
