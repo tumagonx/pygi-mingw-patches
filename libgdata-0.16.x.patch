@@ -1,0 +1,59 @@
+--- gdata/tests/contacts.c	Sun Aug 31 16:30:48 2014
++++ gdata/tests/contacts.c	Fri Sep 19 15:54:48 2014
+@@ -19,6 +19,10 @@
+ 
+ #include <glib.h>
+ #include <unistd.h>
++#ifdef _WIN32
++#include <windows.h>
++#define sleep(a) Sleep((1000)*(a))
++#endif
+ #include <string.h>
+ 
+ #include "gdata.h"
+--- gdata/tests/picasaweb.c	Sun Aug 31 16:30:48 2014
++++ gdata/tests/picasaweb.c	Fri Sep 19 15:55:01 2014
+@@ -20,6 +20,10 @@
+ 
+ #include <glib.h>
+ #include <unistd.h>
++#ifdef _WIN32
++#include <windows.h>
++#define sleep(a) Sleep((1000)*(a))
++#endif
+ #include <string.h>
+ #include <config.h>
+ 
+--- gdata/tests/streams.c	Thu Sep 18 06:22:31 2014
++++ gdata/tests/streams.c	Fri Sep 19 15:56:37 2014
+@@ -16,7 +16,7 @@
+  * You should have received a copy of the GNU Lesser General Public
+  * License along with GData Client.  If not, see <http://www.gnu.org/licenses/>.
+  */
+-
++#ifndef _WIN32
+ #include "config.h"
+ 
+ #include <glib.h>
+@@ -1104,3 +1104,9 @@
+ 
+ 	return g_test_run ();
+ }
++#else
++int
++main (int argc, char *argv[])
++{
++}
++#endif
+\ No newline at end of file
+--- gdata/gdata.symbols	Thu Sep 18 06:22:31 2014
++++ gdata/gdata.symbols	Fri Sep 19 16:06:06 2014
+@@ -1089,8 +1089,6 @@
+ gdata_freebase_topic_result_get_type
+ gdata_freebase_topic_result_new
+ gdata_freebase_topic_result_dup_object
+-gdata_freebase_result_error_get_type
+-gdata_freebase_result_error_quark
+ gdata_freebase_result_get_type
+ gdata_freebase_result_new
+ gdata_freebase_result_dup_variant
