@@ -1,0 +1,682 @@
+--- lib/dat/dat.hpp	Sun Nov 23 11:42:19 2014
++++ lib/dat/dat.hpp	Sun Dec 14 23:20:42 2014
+@@ -31,7 +31,7 @@
+ #endif  // _DEBUG
+ 
+ #ifndef GRN_DAT_API
+-# ifdef WIN32
++# ifdef _WIN32
+ #  ifdef GRN_DAT_EXPORT
+ #   define GRN_DAT_API __declspec(dllexport)
+ #  else  // GRN_DAT_EXPORT
+--- lib/dat/file-impl.cpp	Sun Nov 23 11:42:19 2014
++++ lib/dat/file-impl.cpp	Sun Dec 14 23:17:17 2014
+@@ -20,7 +20,7 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ # ifdef min
+ #  undef min
+ # endif  // min
+@@ -39,7 +39,7 @@
+ namespace grn {
+ namespace dat {
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ 
+ FileImpl::FileImpl()
+     : ptr_(NULL),
+@@ -107,7 +107,7 @@
+   new_impl.swap(this);
+ }
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ 
+ void FileImpl::swap(FileImpl *rhs) {
+   std::swap(ptr_, rhs->ptr_);
+--- lib/dat/file-impl.hpp	Sun Nov 23 11:42:19 2014
++++ lib/dat/file-impl.hpp	Sun Dec 14 23:17:17 2014
+@@ -18,7 +18,7 @@
+ #ifndef GRN_DAT_FILE_IMPL_HPP_
+ #define GRN_DAT_FILE_IMPL_HPP_
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ # include <windows.h>
+ #endif  // WIN32
+ 
+@@ -49,7 +49,7 @@
+   void *ptr_;
+   UInt64 size_;
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+   HANDLE file_;
+   HANDLE map_;
+   LPVOID addr_;
+--- lib/com.c	Sun Nov 23 11:42:19 2014
++++ lib/com.c	Sun Dec 14 23:17:17 2014
+@@ -21,7 +21,7 @@
+ #include <string.h>
+ #include "grn_ctx_impl.h"
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ #  include <ws2tcpip.h>
+ #else
+ #  ifdef HAVE_SYS_SOCKET_H
+@@ -247,7 +247,7 @@
+ grn_rc
+ grn_com_init(void)
+ {
+-#ifdef WIN32
++#ifdef _WIN32
+   WSADATA wd;
+   if (WSAStartup(MAKEWORD(2, 0), &wd) != 0) {
+     grn_ctx *ctx = &grn_gctx;
+@@ -267,7 +267,7 @@
+ void
+ grn_com_fin(void)
+ {
+-#ifdef WIN32
++#ifdef _WIN32
+   WSACleanup();
+ #endif /* WIN32 */
+ }
+@@ -707,7 +707,7 @@
+   GRN_LOG(ctx, GRN_LOG_INFO, "send (%d,%x,%d,%02x,%02x,%04x)", size, header->flags, header->proto, header->qtype, header->level, header->status);
+ 
+   if (size) {
+-#ifdef WIN32
++#ifdef _WIN32
+     WSABUF wsabufs[2];
+     DWORD n_sent;
+     wsabufs[0].buf = (char *)header;
+--- lib/ctx.c	Sun Nov 23 11:42:19 2014
++++ lib/ctx.c	Sun Dec 14 23:17:17 2014
+@@ -63,7 +63,7 @@
+ void
+ grn_sleep(uint32_t seconds)
+ {
+-#ifdef WIN32
++#ifdef _WIN32
+   Sleep(seconds * 1000);
+ #else  // WIN32
+   sleep(seconds);
+@@ -73,7 +73,7 @@
+ void
+ grn_nanosleep(uint64_t nanoseconds)
+ {
+-#ifdef WIN32
++#ifdef _WIN32
+   Sleep((DWORD)(nanoseconds / 1000000));
+ #else  // WIN32
+   struct timespec interval;
+@@ -98,7 +98,7 @@
+   }
+   return ctx->rc;
+ #else /* HAVE_CLOCK_GETTIME */
+-#ifdef WIN32
++#ifdef _WIN32
+   time_t t;
+   struct _timeb tb;
+   time(&t);
+@@ -1230,7 +1230,7 @@
+   grn_ctx_init(ctx, 0);
+   ctx->encoding = grn_encoding_parse(GRN_DEFAULT_ENCODING);
+   grn_timeval_now(ctx, &grn_starttime);
+-#ifdef WIN32
++#ifdef _WIN32
+   {
+     SYSTEM_INFO si;
+     GetSystemInfo(&si);
+--- lib/db.c	Tue Nov 25 21:04:10 2014
++++ lib/db.c	Sun Dec 14 23:17:44 2014
+@@ -330,7 +330,7 @@
+   }
+ 
+ /* grn_tiny_array_fin should be refined.. */
+-#ifdef WIN32
++#ifdef _WIN32
+   {
+     grn_tiny_array *a = &s->values;
+     CRITICAL_SECTION_FIN(a->lock);
+--- lib/error.c	Sun Nov 23 11:42:19 2014
++++ lib/error.c	Sun Dec 14 23:17:44 2014
+@@ -23,7 +23,7 @@
+ 
+ #include <string.h>
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ const char *
+ grn_current_error_message(void)
+ {
+--- lib/grn.h	Fri Nov 28 10:10:30 2014
++++ lib/grn.h	Sun Dec 14 23:20:42 2014
+@@ -55,7 +55,7 @@
+ # include <sys/resource.h>
+ #endif /* HAVE_SYS_RESOURCE_H */
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ # define GRN_API __declspec(dllexport)
+ #ifdef GROONGA_MAIN
+ # define GRN_VAR __declspec(dllimport)
+@@ -91,7 +91,7 @@
+ # define GRN_WRITE(fd, buf, count) _write(fd, buf, count)
+ #endif /* HAVE_WRITE */
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ 
+ # if defined(__GNUC__) && !defined(WINVER)
+ #  include <w32api.h>
+@@ -230,7 +230,7 @@
+ #endif /* INT64_MIN */
+ 
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ # define grn_lseek(fd, offset, whence) _lseeki64(fd, offset, whence)
+ #else /* WIN32 */
+ # define grn_lseek(fd, offset, whence) lseek(fd, offset, whence)
+@@ -330,7 +330,7 @@
+ # define THREAD_SETSPECIFIC(key)
+ # define THREAD_GETSPECIFIC(key,value)
+ 
+-# ifdef WIN32
++# ifdef _WIN32
+ typedef uintptr_t grn_thread;
+ typedef unsigned int grn_thread_func_result;
+ #  define GRN_THREAD_FUNC_RETURN_VALUE 0
+@@ -444,7 +444,7 @@
+ # define GRN_FMT_INT64D PRId64
+ # define GRN_FMT_INT64U PRIu64
+ #else /* HAVE_INTTYPES_H */
+-# ifdef WIN32
++# ifdef _WIN32
+ #  define GRN_FMT_INT32D "I32d"
+ #  define GRN_FMT_INT32U "I32u"
+ #  define GRN_FMT_INT64D "I64d"
+@@ -462,7 +462,7 @@
+ # endif /* WIN32 */
+ #endif /* HAVE_INTTYPES_H */
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ # define GRN_FMT_LLD "I64d"
+ # define GRN_FMT_LLU "I64u"
+ # define GRN_FMT_SIZE  "Iu"
+--- lib/grn_ctx.h	Sun Nov 23 11:42:19 2014
++++ lib/grn_ctx.h	Sun Dec 14 23:20:42 2014
+@@ -149,7 +149,7 @@
+   GRN_OBJ_FIN(ctx, &inspected);\
+ } while (0)
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ #define SERR(str) do {\
+   grn_rc rc;\
+   const char *m;\
+--- lib/grn_io.h	Sun Nov 23 11:42:19 2014
++++ lib/grn_io.h	Sun Dec 14 23:22:53 2014
+@@ -24,7 +24,7 @@
+ extern "C" {
+ #endif
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ #ifdef WIN32_FMO_EACH
+ #define GRN_IO_FILE_SIZE  1073741824UL
+ #else /* FMO_EACH */
+--- lib/grn_plugin.h	Sun Nov 23 11:42:19 2014
++++ lib/grn_plugin.h	Sun Dec 14 23:20:42 2014
+@@ -25,7 +25,7 @@
+ extern "C" {
+ #endif
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ typedef HINSTANCE grn_dl;
+ typedef FARPROC grn_dl_symbol;
+ 
+--- lib/ii.c	Sun Nov 23 11:42:19 2014
++++ lib/ii.c	Sun Dec 14 23:20:42 2014
+@@ -7394,7 +7394,7 @@
+         ii_buffer->block_buf = GRN_MALLOCN(grn_id, II_BUFFER_BLOCK_SIZE);
+         if (ii_buffer->block_buf) {
+           int open_flags = O_WRONLY|O_CREAT;
+-#ifdef WIN32
++#ifdef _WIN32
+           open_flags |= O_BINARY;
+ #endif
+ #ifdef BSD
+@@ -7472,7 +7472,7 @@
+           ii_buffer->nblocks, ii_buffer->update_buffer_size);
+ 
+   datavec_init(ctx, ii_buffer->data_vectors, ii_buffer->ii->n_elements, 0, 0);
+-#ifdef WIN32
++#ifdef _WIN32
+   ii_buffer->tmpfd = GRN_OPEN(ii_buffer->tmpfpath, O_RDONLY|O_BINARY);
+ #else /* WIN32 */
+   ii_buffer->tmpfd = GRN_OPEN(ii_buffer->tmpfpath, O_RDONLY);
+--- lib/io.c	Sun Nov 23 11:42:19 2014
++++ lib/io.c	Sun Dec 14 23:22:53 2014
+@@ -43,7 +43,7 @@
+ #endif
+ 
+ typedef struct _grn_io_fileinfo {
+-#ifdef WIN32
++#ifdef _WIN32
+   HANDLE fh;
+   HANDLE fmo;
+   grn_critical_section cs;
+@@ -509,7 +509,7 @@
+     for (mi = io->maps, i = max_segment; i; mi++, i--) {
+       if (mi->map) {
+         /* if (atomic_read(mi->nref)) { return STILL_IN_USE ; } */
+-#ifdef WIN32
++#ifdef _WIN32
+         if ((io->flags & GRN_IO_TEMPORARY)) {
+           GRN_GFREE(mi->map);
+         } else
+@@ -519,7 +519,7 @@
+     }
+     GRN_GFREE(io->maps);
+   }
+-#ifdef WIN32
++#ifdef _WIN32
+   if ((io->flags & GRN_IO_TEMPORARY)) {
+     GRN_GFREE(io->header);
+   } else
+@@ -1272,7 +1272,7 @@
+ grn_io_anon_unmap(grn_ctx *ctx, grn_io_mapinfo *mi, size_t length)
+ {
+   /* support WIN32 */
+-#ifdef WIN32
++#ifdef _WIN32
+   return GRN_FREE(mi->map);
+ #endif
+   GRN_MUNMAP(ctx, &mi->fmo, mi->map, length);
+@@ -1343,7 +1343,7 @@
+ 
+ static size_t mmap_size = 0;
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ 
+ #ifdef WIN32_FMO_EACH
+ 
+--- lib/mrb.c	Sun Nov 23 11:42:19 2014
++++ lib/mrb.c	Sun Dec 14 23:20:42 2014
+@@ -29,7 +29,7 @@
+ #define BUFFER_SIZE 2048
+ 
+ #ifdef GRN_WITH_MRUBY
+-# ifdef WIN32
++# ifdef _WIN32
+ static char *win32_ruby_scripts_dir = NULL;
+ static char win32_ruby_scripts_dir_buffer[PATH_MAX];
+ static const char *
+--- lib/plugin.c	Sun Nov 23 11:42:19 2014
++++ lib/plugin.c	Sun Dec 14 23:18:30 2014
+@@ -370,7 +370,7 @@
+   GRN_API_RETURN(ctx->rc);
+ }
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ static char *win32_plugins_dir = NULL;
+ static char win32_plugins_dir_buffer[PATH_MAX];
+ const char *
+@@ -674,7 +674,7 @@
+ const char *
+ grn_plugin_win32_base_dir(void)
+ {
+-#ifdef WIN32
++#ifdef _WIN32
+   return grn_win32_base_dir();
+ #else /* WIN32 */
+   return NULL;
+--- lib/proc.c	Tue Nov 25 07:53:09 2014
++++ lib/proc.c	Sun Dec 14 23:18:39 2014
+@@ -73,7 +73,7 @@
+     case ENOENT :
+       ERR(GRN_NO_SUCH_FILE_OR_DIRECTORY, "no such file: <%s>", path);
+       break;
+-#ifndef WIN32
++#ifndef _WIN32
+     case ELOOP :
+       ERR(GRN_NO_SUCH_FILE_OR_DIRECTORY,
+           "symbolic link is not allowed: <%s>", path);
+--- lib/util.c	Sun Nov 23 11:42:19 2014
++++ lib/util.c	Sun Dec 14 23:18:39 2014
+@@ -1226,7 +1226,7 @@
+   grn_obj_unlink(ctx, &buffer);
+ }
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ static char *win32_base_dir = NULL;
+ const char *
+ grn_win32_base_dir(void)
+--- plugins/query_expanders/tsv.c	Tue Nov 25 07:53:09 2014
++++ plugins/query_expanders/tsv.c	Sun Dec 14 23:18:39 2014
+@@ -33,7 +33,7 @@
+ 
+ static grn_hash *synonyms = NULL;
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ static char *win32_synonyms_file = NULL;
+ const char *
+ get_system_synonyms_file(void)
+--- plugins/tokenizers/kytea.cpp	Sun Nov 23 11:42:19 2014
++++ plugins/tokenizers/kytea.cpp	Mon Dec 15 01:09:28 2014
+@@ -19,7 +19,7 @@
+ 
+ #include <kytea/kytea.h>
+ #include <kytea/string-util.h>
+-
++#include <grn_util.h>
+ #include <string.h>
+ 
+ #include <string>
+@@ -42,7 +42,14 @@
+                      "TokenKytea is already initialized");
+     return;
+   }
+-
++  const char *base_dir;
++  static char *kytea_model_env = NULL;
++  static char kytea_model_buffer[PATH_MAX] = "KYTEA_MODEL=";
++  base_dir = grn_win32_base_dir();
++  strcpy(kytea_model_buffer, base_dir);
++  strcat(kytea_model_buffer, "/share/kytea/model.bin");
++  kytea_model_env = kytea_model_buffer;
++  putenv(kytea_model_env);
+   kytea_mutex = grn_plugin_mutex_open(ctx);
+   if (!kytea_mutex) {
+     kytea_fin(ctx);
+--- src/httpd/nginx-module/ngx_http_groonga_module.c	Sun Nov 23 20:23:17 2014
++++ src/httpd/nginx-module/ngx_http_groonga_module.c	Sun Dec 14 23:20:42 2014
+@@ -16,7 +16,7 @@
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+ 
+-#ifndef WIN32
++#ifndef _WIN32
+ # define NGX_GRN_SUPPORT_STOP_BY_COMMAND
+ #endif
+ 
+--- src/groonga.c	Tue Nov 25 07:53:09 2014
++++ src/groonga.c	Sun Dec 14 23:18:39 2014
+@@ -16,7 +16,7 @@
+   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+ */
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ # define GROONGA_MAIN
+ #endif /* WIN32 */
+ #include <grn.h>
+@@ -458,7 +458,7 @@
+ daemonize(void)
+ {
+   int exit_code = EXIT_SUCCESS;
+-#ifndef WIN32
++#ifndef _WIN32
+   pid_t pid;
+ 
+   if (pipe(ready_notify_pipe) == -1) {
+@@ -524,7 +524,7 @@
+ static void
+ clean_pid_file(void)
+ {
+-#ifndef WIN32
++#ifndef _WIN32
+   if (pid_file_path) {
+     unlink(pid_file_path);
+   }
+@@ -686,7 +686,7 @@
+   GRN_TEXT_PUTS(ctx, &header, "\r\n\r\n");
+   {
+     ssize_t ret, len;
+-#ifdef WIN32
++#ifdef _WIN32
+     WSABUF wsabufs[4];
+     wsabufs[0].buf = GRN_TEXT_VALUE(&header);
+     wsabufs[0].len = GRN_TEXT_LEN(&header);
+@@ -1643,7 +1643,7 @@
+ static void
+ check_rlimit_nofile(grn_ctx *ctx)
+ {
+-#ifndef WIN32
++#ifndef _WIN32
+   struct rlimit limit;
+   limit.rlim_cur = 0;
+   limit.rlim_max = 0;
+@@ -1916,7 +1916,7 @@
+ static uint32_t
+ get_core_number(void)
+ {
+-#ifdef WIN32
++#ifdef _WIN32
+   SYSTEM_INFO sinfo;
+   GetSystemInfo(&sinfo);
+   return sinfo.dwNumberOfProcessors;
+@@ -2196,7 +2196,7 @@
+     }
+   }
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+   {
+     static char win32_default_document_root[PATH_MAX];
+     size_t document_root_length = strlen(grn_win32_base_dir()) + 1 +
+--- src/groonga_benchmark.c	Tue Nov 25 07:53:09 2014
++++ src/groonga_benchmark.c	Sun Dec 14 23:20:42 2014
+@@ -41,7 +41,7 @@
+ #include <grn_com.h>
+ #include <grn_db.h>
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ #include <windows.h>
+ #include <stddef.h>
+ #else
+@@ -87,7 +87,7 @@
+ #define OS_WINDOWS64 "WINDOWS64"
+ #define OS_WINDOWS32 "WINDOWS32"
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ typedef SOCKET socket_t;
+ #define SOCKETERROR INVALID_SOCKET
+ #define socketclose closesocket
+@@ -271,7 +271,7 @@
+   CRITICAL_SECTION_ENTER(grntest_cs);
+   grntest_stop_flag = 1;
+   CRITICAL_SECTION_LEAVE(grntest_cs);
+-#ifdef WIN32
++#ifdef _WIN32
+   _endthreadex(code);
+ #else
+   pthread_exit((void *)code);
+@@ -597,7 +597,7 @@
+   if (http_socket == SOCKETERROR) {
+     fprintf(stderr, "failed to connect to groonga at %s:%d via HTTP: ",
+             grntest_serverhost, grntest_serverport);
+-#ifdef WIN32
++#ifdef _WIN32
+     fprintf(stderr, "%lu\n", GetLastError());
+ #else
+     fprintf(stderr, "%s\n", strerror(errno));
+@@ -1148,7 +1148,7 @@
+   int task_id;
+ } grntest_worker;
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ static unsigned int
+ __stdcall
+ worker(void *val)
+@@ -1167,7 +1167,7 @@
+ }
+ #endif /* WIN32 */
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ static int
+ thread_main(grn_ctx *ctx, int num)
+ {
+@@ -1251,7 +1251,7 @@
+ {
+   char tmpbuf[256];
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+   ULARGE_INTEGER dinfo;
+   char cpustring[64];
+   SYSTEM_INFO sinfo;
+@@ -1541,7 +1541,7 @@
+ {
+   int ret;
+   char optbuf[BUF_LEN];
+-#ifdef WIN32
++#ifdef _WIN32
+   char tmpbuf[BUF_LEN];
+ 
+   STARTUPINFO si;
+@@ -2339,7 +2339,7 @@
+   char data_host[BUF_LEN];
+   char send_mesg[BUF_LEN];
+   char buf[BUF_LEN];
+-#ifdef WIN32
++#ifdef _WIN32
+   char base[BUF_LEN];
+   char fname[BUF_LEN];
+   char ext[BUF_LEN];
+@@ -2347,7 +2347,7 @@
+   char *base;
+ #endif /* WIN32 */
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+   WSADATA ws;
+ 
+   WSAStartup(MAKEWORD(2,0), &ws);
+@@ -2425,7 +2425,7 @@
+     goto exit;
+   }
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+   _splitpath(filename, NULL, NULL, fname, ext);
+   strcpy(base, fname);
+   strcat(base, ext);
+@@ -2509,7 +2509,7 @@
+ exit:
+   socketclose(command_socket);
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+   WSACleanup();
+ #endif
+   return status;
+@@ -2535,7 +2535,7 @@
+ {
+   char *env=NULL;
+   strcpy(name, "nobody");
+-#ifdef WIN32
++#ifdef _WIN32
+   env = getenv("USERNAME");
+ #else
+   env = getenv("USER");
+@@ -2567,7 +2567,7 @@
+ #  endif /* HAVE_LOCALTIME_R */
+ #endif /* defined(WIN32) && !defined(__GNUC__) */
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+   strftime(date, 128, "%Y-%m-%d %H:%M:%S", tm);
+ #else
+   strftime(date, 128, "%F %T", tm);
+@@ -2600,7 +2600,7 @@
+   return 1;
+ }
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+ static int
+ get_tm_from_serverdate(char *serverdate, struct tm *tm)
+ {
+@@ -2633,7 +2633,7 @@
+ {
+   int ret;
+   char serverdate[BUF_LEN];
+-#ifdef WIN32
++#ifdef _WIN32
+   struct _stat statbuf;
+ #else
+   struct stat statbuf;
+@@ -2647,7 +2647,7 @@
+     fprintf(stderr, "[%s] does not exist in server\n", filename);
+     return 0;
+   }
+-#ifdef WIN32
++#ifdef _WIN32
+   get_tm_from_serverdate(serverdate, &stm);
+ #else
+   strptime(serverdate, "%Y%m%d %H%M%S", &stm);
+@@ -2657,7 +2657,7 @@
+   st = mktime(&stm) + 3600 * 9;
+   lt = st;
+ 
+-#ifdef WIN32
++#ifdef _WIN32
+   ret = _stat(filename, &statbuf);
+ #else
+   ret = stat(filename, &statbuf);
+@@ -2894,7 +2894,7 @@
+   return GRN_TRUE;
+ }
+ 
+-#ifndef WIN32
++#ifndef _WIN32
+ static void
+ timeout(int sig)
+ {
+@@ -3118,7 +3118,7 @@
+   get_sysinfo(dbname, sysinfo, BUF_LEN);
+   output_sysinfo(sysinfo);
+ 
+-#ifndef WIN32
++#ifndef _WIN32
+   setsigint();
+ #endif /* WIN32 */
+   qnum = do_script(&context, scrname);
+@@ -3137,7 +3137,7 @@
+   }
+ 
+   shutdown_server();
+-#ifdef WIN32
++#ifdef _WIN32
+   if (!grntest_remote_mode) {
+     int ret;
+     ret = WaitForSingleObject(grntest_pi.hProcess, 20000);
+--- Makefile.in	Sat Nov 29 04:04:41 2014
++++ Makefile.in	Mon Dec 15 00:03:54 2014
+@@ -456,7 +456,6 @@
+ 	lib					\
+ 	plugins					\
+ 	src					\
+-	examples				\
+ 	test					\
+ 	benchmark				\
+ 	packages				\
