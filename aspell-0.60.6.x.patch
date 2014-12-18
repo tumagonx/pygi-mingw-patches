@@ -1,0 +1,113 @@
+--- common/config.cpp	Sun Jul 03 04:30:12 2011
++++ common/config.cpp	Thu Nov 07 20:23:44 2013
+@@ -22,6 +22,20 @@
+ # include <langinfo.h>
+ #endif
+ 
++#ifdef _WIN32
++#define WIN32_LEAN_AND_MEAN
++#  include <mbstring.h>
++#  include <shlobj.h>
++
++static HMODULE hmodule;
++
++BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved)
++{
++    if (fdwReason == DLL_PROCESS_ATTACH)
++        hmodule = hinstDLL;
++    return TRUE;
++}
++#endif
+ #include "cache.hpp"
+ #include "asc_ctype.hpp"
+ #include "config.hpp"
+@@ -41,6 +55,7 @@
+ 
+ #include "gettext.h"
+ 
++#undef printf
+ #include "iostream.hpp"
+ 
+ #define DEFAULT_LANG "en_US"
+@@ -1348,7 +1363,32 @@
+ #  define PERSONAL ".aspell.<lang>.pws"
+ #  define REPL     ".aspell.<lang>.prepl"
+ #endif
++#ifdef _WIN32
++
++static char* getwin32dictdir(void)
++{
++    static char dictdir [MAX_PATH];
++   
++    if (!GetModuleFileName(hmodule, (CHAR *) dictdir, MAX_PATH))
++        return DICT_DIR;
++
++    unsigned char *p;
++    p = _mbsrchr((const unsigned char *) dictdir, '\\');
++    *p = '\0';
++    p = _mbsrchr((const unsigned char *) dictdir, '\\');
++    if (p) {
++        if (!stricmp((const char *) (p+1), "bin"))
++            *p = '\0';
++    }
++    strcat(dictdir, "\\lib\\aspell-0.60");
++    return dictdir;
++}
++#undef DICT_DIR
++#undef DATA_DIR
++#define DICT_DIR getwin32dictdir()
++#define DATA_DIR getwin32dictdir()
+ 
++#endif
+   static const KeyInfo config_keys[] = {
+     // the description should be under 50 chars
+     {"actual-dict-dir", KeyInfoString, "<dict-dir^master>", 0}
+--- common/file_util.cpp	Sun Jul 03 04:09:08 2011
++++ common/file_util.cpp	Thu Dec 22 12:06:07 2011
+@@ -13,6 +13,7 @@
+ #include "fstream.hpp"
+ #include "errors.hpp"
+ #include "string_list.hpp"
++#include "asc_ctype.hpp"
+ 
+ #ifdef USE_FILE_LOCKS
+ #  include <fcntl.h>
+--- common/lock.hpp	Mon Jul 04 16:23:57 2011
++++ common/lock.hpp	Sun Mar 09 20:00:12 2014
+@@ -21,6 +21,10 @@
+ 
+ #ifdef USE_POSIX_MUTEX
+ #  include <pthread.h>
++#else
++#ifdef _WIN32
++#include <stdlib.h>
++#endif
+ #endif
+ 
+ namespace acommon {
+--- common/string_list.cpp	Sun Jul 03 04:09:08 2011
++++ common/string_list.cpp	Thu Dec 22 12:05:05 2011
+@@ -5,6 +5,7 @@
+ // it at http://www.gnu.org/.
+ 
+ #include "string_list.hpp"
++#include "asc_ctype.hpp"
+ //#include "iostream.hpp"
+ 
+ namespace acommon {
+--- prog/check_funs.cpp	Mon Jul 04 16:17:27 2011
++++ prog/check_funs.cpp	Tue Dec 25 16:01:50 2012
+@@ -62,11 +62,11 @@
+ 
+ #if HAVE_LIBCURSES
+ 
+-#include CURSES_HEADER
++#include <curses.h>
+ 
+ #if CURSES_INCLUDE_STANDARD
+ 
+-#include TERM_HEADER
++#include <term.h>
+ 
+ #elif CURSES_INCLUDE_WORKAROUND_1
+ 
