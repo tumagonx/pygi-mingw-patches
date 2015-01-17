@@ -143,7 +143,7 @@ makefile fixes
 +    if (!g_file_test (css_file, G_FILE_TEST_IS_REGULAR))
 +      g_free (css_file);
 +    else
-+      g_object_set (settings, "user-stylesheet-uri", g_filename_to_uri (css_file), NULL);
++      g_object_set (settings, "user-stylesheet-uri", g_filename_to_uri (css_file, NULL, NULL), NULL);
 +  }
 +#else
    g_object_set (settings, "user-stylesheet-uri", "file://" PACKAGE_DATA_DIR "/goawebview.css", NULL);
