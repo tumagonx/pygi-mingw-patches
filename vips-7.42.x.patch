@@ -1,0 +1,29 @@
+--- libvips/include/vips/vips.h	Wed Oct 08 18:12:34 2014
++++ libvips/include/vips/vips.h	Sun Oct 12 13:09:21 2014
+@@ -103,6 +103,7 @@
+ #  endif
+ #endif /*__GNUC__*/
+ 
++#ifndef VIPS_INTROSPECT
+ #include <vips/basic.h>
+ 
+ #include <vips/buf.h>
+@@ -146,6 +147,7 @@
+ #include <vips/create.h>
+ #include <vips/video.h>
+ #include <vips/cimg_funcs.h>
++#endif
+ 
+ #ifndef VIPS_DISABLE_VIPS7COMPAT
+ #include <vips/vips7compat.h>
+--- libvips/Makefile.am	Wed Oct 08 18:12:34 2014
++++ libvips/Makefile.am	Sun Oct 12 13:09:21 2014
+@@ -88,7 +88,7 @@
+ # we make the vips8 API
+ Vips-8.0.gir: libvips.la
+ Vips_8_0_gir_INCLUDES = GObject-2.0
+-Vips_8_0_gir_CFLAGS = $(INCLUDES) -I${top_srcdir}/libvips/include
++Vips_8_0_gir_CFLAGS = $(INCLUDES) -DVIPS_INTROSPECT -I${top_srcdir}/libvips/include
+ Vips_8_0_gir_LIBS = libvips.la
+ Vips_8_0_gir_FILES = $(introspection_sources)
+ INTROSPECTION_GIRS += Vips-8.0.gir
