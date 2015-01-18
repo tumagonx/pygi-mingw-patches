@@ -1,4 +1,4 @@
-localization patch
+localization patch and gst-riff gir workaround
 
 --- ext/ogg/gstoggdemux.c	Mon Jul 21 15:22:55 2014
 +++ ext/ogg/gstoggdemux.c	Thu Oct 02 07:54:54 2014
@@ -153,3 +153,13 @@ localization patch
    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
    textdomain (GETTEXT_PACKAGE);
  #endif
+--- gst-libs/gst/riff/Makefile.in	Mon Jan 19 04:04:09 2015
++++ gst-libs/gst/riff/Makefile.in	Sun Jan 18 23:18:09 2015
+@@ -916,6 +916,7 @@
+ @HAVE_INTROSPECTION_TRUE@		--strip-prefix=Gst \
+ @HAVE_INTROSPECTION_TRUE@		--warn-all \
+ @HAVE_INTROSPECTION_TRUE@		--c-include "gst/riff/riff.h" \
++@HAVE_INTROSPECTION_TRUE@		-I$(top_srcdir)/gst-libs \
+ @HAVE_INTROSPECTION_TRUE@		--add-include-path=$(builddir)/../tag \
+ @HAVE_INTROSPECTION_TRUE@		--add-include-path=$(builddir)/../audio \
+ @HAVE_INTROSPECTION_TRUE@		--add-include-path=`PKG_CONFIG_PATH="$(GST_PKG_CONFIG_PATH)" $(PKG_CONFIG) --variable=girdir gstreamer-@GST_API_VERSION@` \
