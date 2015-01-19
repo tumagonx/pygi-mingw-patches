@@ -1,0 +1,18 @@
+use gmtime_s mapped to gmtime_r
+
+--- gsf/gsf-timestamp.c	Sun Jun 23 23:37:16 2013
++++ gsf/gsf-timestamp.c	Mon Jan 06 15:18:37 2014
+@@ -26,6 +26,13 @@
+ #include <string.h>
+ #include <time.h>
+ #ifdef G_OS_WIN32
++#if defined(__MSVCRT_VERSION__) && __MSVCRT_VERSION__ >= 0x0800
++#define HAVE_GMTIME_R
++typedef int errno_t;
++/* by default 64bit variant used */
++_CRTIMP errno_t __cdecl _gmtime64_s(struct tm *_Tm,const __time64_t *_Time);
++#define gmtime_r(a,b) _gmtime64_s(b,a)
++#endif
+ #include <windows.h>
+ #endif
+ 
