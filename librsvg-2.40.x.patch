@@ -1,126 +1,38 @@
-configure: disable gio-unix
-rsvg-size-callback.c : resizing patch
-rsvg-base.c : missing realpath
-rsvg-convert : use win32 stream and skip mime check
---- configure	Wed Sep 17 15:29:02 2014
-+++ configure	Tue Oct 14 04:14:44 2014
-@@ -13662,12 +13662,12 @@
-     pkg_cv_RSVG_CONVERT_CFLAGS="$RSVG_CONVERT_CFLAGS"
-  elif test -n "$PKG_CONFIG"; then
-     if test -n "$PKG_CONFIG" && \
--    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo\""; } >&5
--  ($PKG_CONFIG --exists --print-errors "gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo") 2>&5
-+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"gio-2.0 gdk-pixbuf-2.0 cairo pangocairo\""; } >&5
-+  ($PKG_CONFIG --exists --print-errors "gio-2.0 gdk-pixbuf-2.0 cairo pangocairo") 2>&5
-   ac_status=$?
-   $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-   test $ac_status = 0; }; then
--  pkg_cv_RSVG_CONVERT_CFLAGS=`$PKG_CONFIG --cflags "gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo" 2>/dev/null`
-+  pkg_cv_RSVG_CONVERT_CFLAGS=`$PKG_CONFIG --cflags "gio-2.0 gdk-pixbuf-2.0 cairo pangocairo" 2>/dev/null`
- 		      test "x$?" != "x0" && pkg_failed=yes
- else
-   pkg_failed=yes
-@@ -13679,12 +13679,12 @@
-     pkg_cv_RSVG_CONVERT_LIBS="$RSVG_CONVERT_LIBS"
-  elif test -n "$PKG_CONFIG"; then
-     if test -n "$PKG_CONFIG" && \
--    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo\""; } >&5
--  ($PKG_CONFIG --exists --print-errors "gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo") 2>&5
-+    { { $as_echo "$as_me:${as_lineno-$LINENO}: \$PKG_CONFIG --exists --print-errors \"gio-2.0 gdk-pixbuf-2.0 cairo pangocairo\""; } >&5
-+  ($PKG_CONFIG --exists --print-errors "gio-2.0 gdk-pixbuf-2.0 cairo pangocairo") 2>&5
-   ac_status=$?
-   $as_echo "$as_me:${as_lineno-$LINENO}: \$? = $ac_status" >&5
-   test $ac_status = 0; }; then
--  pkg_cv_RSVG_CONVERT_LIBS=`$PKG_CONFIG --libs "gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo" 2>/dev/null`
-+  pkg_cv_RSVG_CONVERT_LIBS=`$PKG_CONFIG --libs "gio-2.0 gdk-pixbuf-2.0 cairo pangocairo" 2>/dev/null`
- 		      test "x$?" != "x0" && pkg_failed=yes
- else
-   pkg_failed=yes
-@@ -13705,14 +13705,14 @@
-         _pkg_short_errors_supported=no
- fi
-         if test $_pkg_short_errors_supported = yes; then
--	        RSVG_CONVERT_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo" 2>&1`
-+	        RSVG_CONVERT_PKG_ERRORS=`$PKG_CONFIG --short-errors --print-errors --cflags --libs "gio-2.0 gdk-pixbuf-2.0 cairo pangocairo" 2>&1`
-         else
--	        RSVG_CONVERT_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo" 2>&1`
-+	        RSVG_CONVERT_PKG_ERRORS=`$PKG_CONFIG --print-errors --cflags --libs "gio-2.0 gdk-pixbuf-2.0 cairo pangocairo" 2>&1`
-         fi
- 	# Put the nasty error message in config.log where it belongs
- 	echo "$RSVG_CONVERT_PKG_ERRORS" >&5
+--- librsvg.pc.in	Wed Dec 04 03:19:50 2013
++++ librsvg.pc.in	Wed Apr 01 14:18:41 2015
+@@ -9,7 +9,7 @@
+ Name: librsvg
+ Description: library that renders svg files
+ Version: @VERSION@
+-Requires: glib-2.0 gio-2.0 gdk-pixbuf-2.0 cairo
++Requires: pangocairo libcroco-0.6 glib-2.0 gio-2.0 gdk-pixbuf-2.0
+ Requires.private:
+ Libs: -L${libdir} -lrsvg-@RSVG_API_MAJOR_VERSION@ -lm
+ Cflags: -I${includedir}/librsvg-@RSVG_API_VERSION@
+--- rsvg-convert.c	Thu Feb 12 23:31:51 2015
++++ rsvg-convert.c	Sat Aug 15 07:10:26 2015
+@@ -43,6 +43,7 @@
  
--	as_fn_error $? "Package requirements (gio-2.0 gio-unix-2.0 gdk-pixbuf-2.0 cairo pangocairo) were not met:
-+	as_fn_error $? "Package requirements (gio-2.0 gdk-pixbuf-2.0 cairo pangocairo) were not met:
+ #ifdef G_OS_WIN32
+ #define WIN32_LEAN_AND_MEAN
++#include <fcntl.h>
+ #include <windows.h>
  
- $RSVG_CONVERT_PKG_ERRORS
+ #include <gio/gwin32inputstream.h>
+@@ -128,6 +130,7 @@
  
---- rsvg-base.c	Thu Jun 19 01:05:08 2014
-+++ rsvg-base.c	Tue Oct 14 04:13:20 2014
-@@ -57,6 +57,19 @@
- #include "rsvg-paint-server.h"
- #include "rsvg-xml.h"
+ #ifdef G_OS_WIN32
+     HANDLE handle;
++    setmode (fileno (stdout), O_BINARY);
+ #endif
  
-+#ifdef G_OS_WIN32
-+#include <windows.h>
-+static char *realpath(const char *path, char *resolved_path)
-+{
-+    DWORD res = GetFullPathName(path, MAX_PATH, resolved_path, NULL);
-+    if (res == 0 || res > MAX_PATH - 1)
-+        return strdup(path);
-+    else
-+        return resolved_path;
-+}
-+
-+#endif
-+
- /*
-  * This is configurable at runtime
-  */
---- rsvg-convert.c	Wed Sep 17 15:28:09 2014
-+++ rsvg-convert.c	Wed Nov 19 12:50:59 2014
-@@ -36,8 +36,14 @@
- #include <locale.h>
- #include <glib/gi18n.h>
- #include <gio/gio.h>
-+#ifdef G_OS_WIN32
-+#include <gio/gwin32inputstream.h>
-+#include <io.h>
-+#include <windows.h>
-+int reader_pipe[2];
-+#else
- #include <gio/gunixinputstream.h>
--
-+#endif
- #include "rsvg-css.h"
- #include "rsvg.h"
- #include "rsvg-size-callback.h"
-@@ -213,7 +219,20 @@
- 
-         if (using_stdin) {
-             file = NULL;
-+#ifdef G_OS_WIN32
-+            //rsvg = rsvg_handle_new_from_stdio_file (stdin, &error);
-+            HANDLE in_handle;
-+            g_assert (DuplicateHandle (GetCurrentProcess (),
-+                         (HANDLE) (gintptr) _get_osfhandle (reader_pipe[0]),
-+                         GetCurrentProcess (),
-+                         &in_handle,
-+                         0, FALSE,
-+                         DUPLICATE_SAME_ACCESS));
-+            close (reader_pipe[0]);
-+            stream = g_win32_input_stream_new (in_handle, FALSE);
-+#else
-             stream = g_unix_input_stream_new (STDIN_FILENO, FALSE);
-+#endif
-         } else {
-             GFileInfo *file_info;
-             gboolean compressed = FALSE;
-@@ -227,12 +246,17 @@
+     GOptionEntry options_table[] = {
+@@ -253,12 +256,18 @@
                                                  NULL,
                                                  NULL))) {
                  const char *content_type;
 -                char *gz_content_type;
--
+ 
                  content_type = g_file_info_get_content_type (file_info);
 +#ifdef G_OS_WIN32
 +/* Seems win32 don't have svgz mime registry, just verify the extension */
@@ -135,20 +47,12 @@ rsvg-convert : use win32 stream and skip mime check
                  g_object_unref (file_info);
              }
  
---- rsvg-size-callback.c	Tue Feb 07 02:44:12 2012
-+++ rsvg-size-callback.c	Tue Nov 18 16:20:20 2014
-@@ -93,11 +93,19 @@
- 
+--- rsvg-size-callback.c	Wed Dec 04 03:19:50 2013
++++ rsvg-size-callback.c	Tue Mar 31 21:37:49 2015
+@@ -94,10 +94,18 @@
      if (real_data->keep_aspect_ratio) {
          int out_min = MIN (*width, *height);
--
--        if (out_min == *width) {
--            *height = in_height * ((double) *width / (double) in_width);
--        } else {
--            *width = in_width * ((double) *height / (double) in_height);
--        }
--    }
-+         
+ 
 +       if (*width == *height) {
 +         if (in_height < in_width) {
 +             *height = in_height * ((double) *width / (double) in_width);
@@ -156,11 +60,11 @@ rsvg-convert : use win32 stream and skip mime check
 +             *width = in_width * ((double) *height / (double) in_height);
 +         }
 +       } else {
-+       if (out_min == *width) {
-+             *height = in_height * ((double) *width / (double) in_width);
-+         } else {
-+             *width = in_width * ((double) *height / (double) in_height);
-+         }
-+      }
+         if (out_min == *width) {
+             *height = in_height * ((double) *width / (double) in_width);
+         } else {
+             *width = in_width * ((double) *height / (double) in_height);
+         }
+     }
 +   }
  }

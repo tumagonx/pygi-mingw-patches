@@ -1,5 +1,5 @@
---- gtk/gtkiconcache.c	Fri Aug 15 21:38:05 2014
-+++ gtk/gtkiconcache.c	Sun Oct 05 07:54:42 2014
+--- gtk/gtkiconcache.c	Thu Apr 09 17:44:23 2015
++++ gtk/gtkiconcache.c	Sun Apr 12 15:37:18 2015
 @@ -106,13 +106,14 @@
      goto done;
  
@@ -16,35 +16,40 @@
  #endif
  #endif
  
---- gtk/gtksettings.c	Fri Sep 26 01:54:02 2014
-+++ gtk/gtksettings.c	Tue Sep 30 18:23:59 2014
-@@ -563,7 +563,11 @@
-                                              g_param_spec_string ("gtk-xft-hintstyle",
-                                                                   P_("Xft Hint Style"),
-                                                                   P_("What degree of hinting to use; hintnone, hintslight, hintmedium, or hintfull"),
-+#ifdef G_OS_WIN32
-+                                                                  "hintfull",
-+#else
-                                                                   NULL,
-+#endif
-                                                                   GTK_PARAM_READWRITE),
-                                               NULL);
+--- gtk/org.gtk.Settings.FileChooser.gschema.xml	Tue Mar 03 02:34:03 2015
++++ gtk/org.gtk.Settings.FileChooser.gschema.xml	Sun Apr 12 15:39:07 2015
+@@ -64,7 +64,7 @@
+       </description>
+     </key>
+     <key type="b" name="sort-directories-first">
+-      <default>false</default>
++      <default>true</default>
+       <summary>Show folders first</summary>
+       <description>
+         If set to true, then folders are shown before files in the list.
+--- gtk/updateiconcache.c	Thu Apr 09 17:44:23 2015
++++ gtk/updateiconcache.c	Sun Apr 26 23:22:41 2015
+@@ -605,7 +605,7 @@
+   gboolean dir_added = FALSE;
+   guint dir_index = 0xffff;
+   
+-  dir_path = g_build_path ("/", base_path, subdir, NULL);
++  dir_path = g_build_path (G_DIR_SEPARATOR_S, base_path, subdir, NULL);
  
-@@ -573,7 +577,11 @@
-                                              g_param_spec_string ("gtk-xft-rgba",
-                                                                   P_("Xft RGBA"),
-                                                                   P_("Type of subpixel antialiasing; none, rgb, bgr, vrgb, vbgr"),
-+#ifdef G_OS_WIN32
-+                                                                  "rgb",
-+#else
-                                                                   NULL,
-+#endif
-                                                                   GTK_PARAM_READWRITE),
-                                              NULL);
+   /* FIXME: Use the gerror */
+   dir = g_dir_open (dir_path, 0, NULL);
+@@ -631,7 +631,7 @@
+ 	  gchar *subsubdir;
  
---- Makefile.in	Tue Sep 30 08:38:27 2014
-+++ Makefile.in	Tue Sep 30 19:09:46 2014
-@@ -540,7 +540,7 @@
+ 	  if (subdir)
+-	    subsubdir = g_build_path ("/", subdir, name, NULL);
++	    subsubdir = g_build_path (G_DIR_SEPARATOR_S, subdir, name, NULL);
+ 	  else
+ 	    subsubdir = g_strdup (name);
+ 	  directories = scan_directory (base_path, subsubdir, files, 
+--- Makefile.in	Thu Apr 09 17:49:53 2015
++++ Makefile.in	Sun Apr 12 15:37:18 2015
+@@ -550,7 +550,7 @@
  	|| { echo "Gtk+Tests:ERROR: Failed to start Xvfb environment for X11 target tests."; exit 1; } \
  	&& DISPLAY=:$$XID && export DISPLAY
  

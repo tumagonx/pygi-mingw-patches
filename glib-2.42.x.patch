@@ -1,11 +1,5 @@
-Patches for glib 2.42
-gapplication.c : gnome bugzilla #734095
-gdbusaddress.c : send the correct path to rundll32
-gspawn-win32-helper.c : specific patch for gspawner when compiled with mingw but linked to newer msvcrt
-gwin32.c : revert to glib <= 2.40 where root path might not have 'bin' folder.
-the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it could be just aliased at pygobject)
---- gio/gapplication.c	Mon Sep 22 20:42:12 2014
-+++ gio/gapplication.c	Thu Oct 23 13:27:33 2014
+--- gio/gapplication.c	Thu Feb 26 09:54:06 2015
++++ gio/gapplication.c	Fri Feb 27 02:34:27 2015
 @@ -2132,7 +2132,8 @@
   * is intended to be returned by main(). Although you are expected to pass
   * the @argc, @argv parameters from main() to this function, it is possible
@@ -31,13 +25,13 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  #ifdef G_OS_WIN32
 -  arguments = g_win32_get_command_line ();
 -#else
--  {
--    gint i;
 +  if (argc > 0)
-+    {
+   {
+-    gint i;
 +      gchar **win32_arguments = g_win32_get_command_line ();
 +      gint j;
-+
+ 
+-    arguments = g_new (gchar *, argc + 1);
 +      /* We could be calling this via a script that uses GNOME
 +         bindings, so the arguments returned from g_win32_get_command_line()
 +         may include the invocation command of the script interpreter,
@@ -50,12 +44,7 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
 +           system codepage, though quite unlikely? */
 +        if (g_strcmp0 (win32_arguments[i], argv[0]) == 0)
 +          break;
- 
--    arguments = g_new (gchar *, argc + 1);
--    for (i = 0; i < argc; i++)
--      arguments[i] = g_strdup (argv[i]);
--    arguments[i] = NULL;
--  }
++
 +	  g_return_val_if_fail(win32_arguments[i] != NULL, 1);
 +
 +      for (j = 0; j < argc; j++)
@@ -68,14 +57,15 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
 +    /* if argc is 0, don't bother, as done on other platforms */
 +    arguments[0] = NULL;
 +#else
-+  for (i = 0; i < argc; i++)
-+    arguments[i] = g_strdup (argv[i]);
-+  arguments[i] = NULL;
+     for (i = 0; i < argc; i++)
+       arguments[i] = g_strdup (argv[i]);
+     arguments[i] = NULL;
+-  }
  #endif
  
    if (g_get_prgname () == NULL)
---- gio/gdbusaddress.c	Sat Jul 05 06:59:10 2014
-+++ gio/gdbusaddress.c	Tue Oct 07 14:01:56 2014
+--- gio/gdbusaddress.c	Sat Dec 20 04:49:48 2014
++++ gio/gdbusaddress.c	Fri Feb 27 02:34:27 2015
 @@ -1383,7 +1383,13 @@
  	  wchar_t gio_path_short[MAX_PATH];
  	  wchar_t rundll_path[MAX_PATH*2];
@@ -100,8 +90,22 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  				&si, &pi);
  	  if (res)
  	    address = read_shm (DBUS_DAEMON_ADDRESS_INFO);
---- glib/gconvert.c	Mon Sep 22 20:42:12 2014
-+++ glib/gconvert.c	Wed Oct 15 21:09:12 2014
+--- gio/glocalfileinfo.c	Thu Feb 26 09:57:52 2015
++++ gio/glocalfileinfo.c	Fri Feb 27 19:47:56 2015
+@@ -1218,9 +1218,9 @@
+ {
+   if (is_symlink &&
+       (symlink_broken || (flags & G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS)))
+-    return g_content_type_from_mime_type ("inode/symlink");
++    return g_strdup ("inode/symlink");
+   else if (statbuf != NULL && S_ISDIR(statbuf->st_mode))
+-    return g_content_type_from_mime_type ("inode/directory");
++    return g_strdup ("inode/directory");
+ #ifndef G_OS_WIN32
+   else if (statbuf != NULL && S_ISCHR(statbuf->st_mode))
+     return g_content_type_from_mime_type ("inode/chardevice");
+--- glib/gconvert.c	Sat Dec 20 04:49:48 2014
++++ glib/gconvert.c	Fri Feb 27 02:34:27 2015
 @@ -1157,7 +1157,7 @@
  		      "UTF-8", charset, bytes_read, bytes_written, error);
  }
@@ -138,8 +142,8 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  
  #undef g_filename_to_uri
  
---- glib/gdir.c	Sat Jul 05 06:59:10 2014
-+++ glib/gdir.c	Wed Oct 15 21:09:22 2014
+--- glib/gdir.c	Sat Dec 20 04:49:48 2014
++++ glib/gdir.c	Fri Feb 27 02:34:27 2015
 @@ -159,7 +159,7 @@
    return dir;
  }
@@ -158,8 +162,8 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  
  /* Ditto for g_dir_read_name */
  
---- glib/genviron.c	Mon Sep 22 20:42:12 2014
-+++ glib/genviron.c	Wed Oct 15 21:09:31 2014
+--- glib/genviron.c	Sat Dec 20 04:49:48 2014
++++ glib/genviron.c	Fri Feb 27 02:34:27 2015
 @@ -635,7 +635,6 @@
  }
  
@@ -177,8 +181,8 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  
  #endif  /* G_OS_WIN32 */
  
---- glib/gfileutils.c	Mon Sep 22 20:42:12 2014
-+++ glib/gfileutils.c	Wed Oct 15 21:08:52 2014
+--- glib/gfileutils.c	Sat Dec 20 04:49:48 2014
++++ glib/gfileutils.c	Fri Feb 27 02:34:27 2015
 @@ -2504,7 +2504,7 @@
  /* NOTE : Keep this part last to ensure nothing in this file uses thn
   * below binary compatibility versions.
@@ -188,8 +192,8 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  
  /* Binary compatibility versions. Will be called by code compiled
   * against quite old (pre-2.8, I think) headers only, not from more
---- glib/giowin32.c	Sat Jul 05 06:59:10 2014
-+++ glib/giowin32.c	Wed Oct 15 21:09:36 2014
+--- glib/giowin32.c	Sat Dec 20 04:49:48 2014
++++ glib/giowin32.c	Fri Feb 27 02:34:27 2015
 @@ -1742,7 +1742,6 @@
    return channel;
  }
@@ -206,8 +210,19 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  
  static GIOStatus
  g_io_win32_unimpl_set_flags (GIOChannel *channel,
---- glib/gspawn-win32-helper.c	Wed Aug 20 05:11:06 2014
-+++ glib/gspawn-win32-helper.c	Tue Sep 23 16:49:45 2014
+--- glib/grand.c	Sat Dec 20 04:49:48 2014
++++ glib/grand.c	Fri Feb 27 20:31:57 2015
+@@ -263,7 +263,7 @@
+     }
+ #else /* G_OS_WIN32 */
+   /* rand_s() is only available since Visual Studio 2005 */
+-#if defined(_MSC_VER) && _MSC_VER >= 1400
++#if (defined(_MSC_VER) && _MSC_VER >= 1400) || (defined (__MINGW64_VERSION_MAJOR) && __MSVCRT_VERSION__>= 0x0800)
+   gint i;
+ 
+   for (i = 0; i < G_N_ELEMENTS (seed); i++)
+--- glib/gspawn-win32-helper.c	Sat Dec 20 04:49:48 2014
++++ glib/gspawn-win32-helper.c	Tue May 19 19:29:31 2015
 @@ -33,7 +33,7 @@
   * Please see http://msdn.microsoft.com/zh-tw/library/ks2530z6%28v=vs.80%29.aspx
   * for an explanation on this.
@@ -226,15 +241,6 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  /*
   * This is the (empty) invalid parameter handler
   * that is used for Visual C++ 2005 (and later) builds
-@@ -175,7 +175,7 @@
-  * Please see http://msdn.microsoft.com/zh-tw/library/ks2530z6%28v=vs.80%29.aspx
-  * for an explanation on this.
-  */
--void myInvalidParameterHandler(
-+static void myInvalidParameterHandler(
-    const wchar_t * expression,
-    const wchar_t * function,
-    const wchar_t * file,
 @@ -215,7 +215,7 @@
    _startupinfo si = { 0 };
    char c;
@@ -244,8 +250,8 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
    /* set up our empty invalid parameter handler */
    _invalid_parameter_handler oldHandler, newHandler;
    newHandler = myInvalidParameterHandler;
---- glib/gspawn-win32.c	Mon Sep 22 20:42:12 2014
-+++ glib/gspawn-win32.c	Wed Oct 15 21:09:56 2014
+--- glib/gspawn-win32.c	Sat Dec 20 04:49:48 2014
++++ glib/gspawn-win32.c	Fri Feb 27 02:34:27 2015
 @@ -1240,8 +1240,6 @@
    return ret;
  }
@@ -262,8 +268,8 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
 -#endif	/* !_WIN64 */
  
  #endif /* !GSPAWN_HELPER */
---- glib/gutils.c	Mon Sep 22 20:42:12 2014
-+++ glib/gutils.c	Tue Oct 07 13:55:19 2014
+--- glib/gutils.c	Sat Dec 20 04:49:48 2014
++++ glib/gutils.c	Fri Feb 27 02:34:27 2015
 @@ -2289,7 +2289,7 @@
      }
  }
@@ -273,9 +279,9 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  
  /* Binary compatibility versions. Not for newly compiled code. */
  
---- glib/gwin32.c	Mon Sep 22 20:42:12 2014
-+++ glib/gwin32.c	Wed Oct 15 21:09:46 2014
-@@ -238,43 +238,22 @@
+--- glib/gwin32.c	Thu Feb 26 09:54:06 2015
++++ glib/gwin32.c	Fri Feb 27 02:34:27 2015
+@@ -238,44 +238,23 @@
  gchar *
  g_win32_get_package_installation_directory_of_module (gpointer hmodule)
  {
@@ -299,12 +305,14 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
 -
 -  do
 -    {
--      p = strrchr (retval, G_DIR_SEPARATOR);
+       p = strrchr (retval, G_DIR_SEPARATOR);
 -      if (p == NULL)
 -        break;
 -
--      *p = '\0';
--
++  if (p && (g_ascii_strcasecmp (p + 1, "bin") == 0 ||
++	    g_ascii_strcasecmp (p + 1, "lib") == 0))
+       *p = '\0';
+ 
 -      if (g_ascii_strcasecmp (p + 1, "bin") == 0 ||
 -          g_ascii_strcasecmp (p + 1, "lib") == 0)
 -        break;
@@ -318,13 +326,10 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
 -    }
 -  else
 -    g_free (filename);
-+  p = strrchr (retval, G_DIR_SEPARATOR);
-+  if (p && (g_ascii_strcasecmp (p + 1, "bin") == 0 ||
-+	    g_ascii_strcasecmp (p + 1, "lib") == 0))
-+    *p = '\0';
- 
+-
  #ifdef G_WITH_CYGWIN
    /* In Cygwin we need to have POSIX paths */
+   {
 @@ -413,8 +392,9 @@
    return result;
  }
@@ -347,8 +352,31 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  
  /* DLL ABI binary compatibility version that uses system codepage file names */
  
---- gmodule/gmodule.c	Sat Jul 05 06:59:10 2014
-+++ gmodule/gmodule.c	Wed Oct 15 21:09:07 2014
+--- glib/gwin32.h	Thu Feb 26 09:54:06 2015
++++ glib/gwin32.h	Fri Feb 27 02:34:27 2015
+@@ -116,10 +116,18 @@
+ #endif	 /* G_PLATFORM_WIN32 */
+ 
+ #ifdef G_OS_WIN32
+-#ifdef _WIN64
++
++
++GLIB_AVAILABLE_IN_ALL
++gchar *g_win32_get_package_installation_directory    (const gchar *package,
++                                                           const gchar *dll_name);
++GLIB_AVAILABLE_IN_ALL
++gchar *g_win32_get_package_installation_subdirectory (const gchar *package,
++                                                           const gchar *dll_name,
++                                                           const gchar *subdir);
++
+ #define g_win32_get_package_installation_directory g_win32_get_package_installation_directory_utf8
+ #define g_win32_get_package_installation_subdirectory g_win32_get_package_installation_subdirectory_utf8
+-#endif
+ 
+ GLIB_AVAILABLE_IN_ALL
+ gchar *g_win32_get_package_installation_directory_utf8    (const gchar *package,
+--- gmodule/gmodule.c	Sat Dec 20 04:49:48 2014
++++ gmodule/gmodule.c	Fri Feb 27 02:34:27 2015
 @@ -649,7 +649,7 @@
    return module;
  }
@@ -380,26 +408,3 @@ the rest is about the missing non utf8 suffixed functions in win64 (unsure.. it 
  }
  
  #endif
---- glib/gwin32.h	Sat Jul 05 06:59:10 2014
-+++ glib/gwin32.h	Wed Oct 15 21:09:51 2014
-@@ -116,10 +116,18 @@
- #endif	 /* G_PLATFORM_WIN32 */
- 
- #ifdef G_OS_WIN32
--#ifdef _WIN64
-+
-+
-+GLIB_AVAILABLE_IN_ALL
-+gchar *g_win32_get_package_installation_directory    (const gchar *package,
-+                                                           const gchar *dll_name);
-+GLIB_AVAILABLE_IN_ALL
-+gchar *g_win32_get_package_installation_subdirectory (const gchar *package,
-+                                                           const gchar *dll_name,
-+                                                           const gchar *subdir);
-+
- #define g_win32_get_package_installation_directory g_win32_get_package_installation_directory_utf8
- #define g_win32_get_package_installation_subdirectory g_win32_get_package_installation_subdirectory_utf8
--#endif
- 
- GLIB_AVAILABLE_IN_ALL
- gchar *g_win32_get_package_installation_directory_utf8    (const gchar *package,
