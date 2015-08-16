@@ -1,138 +1,322 @@
-localization patch
+directsoundsink: allow specifying audio playback device
+generic localization patches
 
---- ext/flac/gstflac.c	Mon Jul 21 15:24:26 2014
-+++ ext/flac/gstflac.c	Thu Oct 02 07:51:33 2014
+--- ext/flac/gstflac.c	Sun Oct 19 18:41:09 2014
++++ ext/flac/gstflac.c	Thu Mar 05 18:49:15 2015
 @@ -34,7 +34,14 @@
  #ifdef ENABLE_NLS
    GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
        LOCALEDIR);
 +#ifdef G_OS_WIN32
-+    gchar *_glib_get_locale_dir (void);
-+    gchar *localedir = _glib_get_locale_dir ();
-+    bindtextdomain (GETTEXT_PACKAGE, localedir);
-+    g_free (localedir);
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
 +#else
    bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 +#endif
    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
  #endif
  
---- ext/pulse/plugin.c	Mon Jul 21 15:24:26 2014
-+++ ext/pulse/plugin.c	Thu Oct 02 07:51:46 2014
+--- ext/pulse/plugin.c	Sun Oct 19 18:41:09 2014
++++ ext/pulse/plugin.c	Thu Mar 05 18:49:30 2015
 @@ -37,7 +37,14 @@
  #ifdef ENABLE_NLS
    GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
        LOCALEDIR);
 +#ifdef G_OS_WIN32
-+    gchar *_glib_get_locale_dir (void);
-+    gchar *localedir = _glib_get_locale_dir ();
-+    bindtextdomain (GETTEXT_PACKAGE, localedir);
-+    g_free (localedir);
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
 +#else
    bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 +#endif
    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
  #endif
  
---- ext/shout2/gstshout2.c	Mon Jul 21 15:24:27 2014
-+++ ext/shout2/gstshout2.c	Thu Oct 02 07:52:00 2014
+--- ext/shout2/gstshout2.c	Sun Oct 19 18:41:09 2014
++++ ext/shout2/gstshout2.c	Thu Mar 05 16:51:11 2015
 @@ -822,7 +822,14 @@
  plugin_init (GstPlugin * plugin)
  {
  #ifdef ENABLE_NLS
 +#ifdef G_OS_WIN32
-+    gchar *_glib_get_locale_dir (void);
-+    gchar *localedir = _glib_get_locale_dir ();
-+    bindtextdomain (GETTEXT_PACKAGE, localedir);
-+    g_free (localedir);
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
 +#else
    bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 +#endif
    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
  #endif /* ENABLE_NLS */
  
---- ext/soup/gstsoup.c	Mon Jul 21 15:24:27 2014
-+++ ext/soup/gstsoup.c	Thu Oct 02 07:53:34 2014
+--- ext/soup/gstsoup.c	Sun Oct 19 18:41:09 2014
++++ ext/soup/gstsoup.c	Thu Mar 05 18:49:56 2015
 @@ -30,7 +30,14 @@
  #ifdef ENABLE_NLS
    GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
        LOCALEDIR);
 +#ifdef G_OS_WIN32
-+    gchar *_glib_get_locale_dir (void);
-+    gchar *localedir = _glib_get_locale_dir ();
-+    bindtextdomain (GETTEXT_PACKAGE, localedir);
-+    g_free (localedir);
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
 +#else
    bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 +#endif
    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
  #endif
  
---- ext/wavpack/gstwavpack.c	Mon Jul 21 15:24:27 2014
-+++ ext/wavpack/gstwavpack.c	Thu Oct 02 07:53:41 2014
+--- ext/wavpack/gstwavpack.c	Sun Oct 19 18:41:09 2014
++++ ext/wavpack/gstwavpack.c	Thu Mar 05 18:50:12 2015
 @@ -39,7 +39,14 @@
  #ifdef ENABLE_NLS
    GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
        LOCALEDIR);
 +#ifdef G_OS_WIN32
-+    gchar *_glib_get_locale_dir (void);
-+    gchar *localedir = _glib_get_locale_dir ();
-+    bindtextdomain (GETTEXT_PACKAGE, localedir);
-+    g_free (localedir);
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
 +#else
    bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 +#endif
    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
  #endif
  
---- gst/avi/gstavi.c	Mon Jul 21 15:24:27 2014
-+++ gst/avi/gstavi.c	Thu Oct 02 07:53:49 2014
+--- gst/avi/gstavi.c	Sun Oct 19 18:41:09 2014
++++ gst/avi/gstavi.c	Thu Mar 05 16:52:27 2015
 @@ -35,7 +35,14 @@
    gst_riff_init ();
  
  #ifdef ENABLE_NLS
 +#ifdef G_OS_WIN32
-+    gchar *_glib_get_locale_dir (void);
-+    gchar *localedir = _glib_get_locale_dir ();
-+    bindtextdomain (GETTEXT_PACKAGE, localedir);
-+    g_free (localedir);
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
 +#else
    bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 +#endif
    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
  #endif /* ENABLE_NLS */
  
---- gst/isomp4/isomp4-plugin.c	Mon Jul 21 15:24:27 2014
-+++ gst/isomp4/isomp4-plugin.c	Thu Oct 02 07:54:00 2014
+--- gst/isomp4/isomp4-plugin.c	Sun Oct 19 18:41:09 2014
++++ gst/isomp4/isomp4-plugin.c	Thu Mar 05 16:52:43 2015
 @@ -35,7 +35,14 @@
  plugin_init (GstPlugin * plugin)
  {
  #ifdef ENABLE_NLS
 +#ifdef G_OS_WIN32
-+    gchar *_glib_get_locale_dir (void);
-+    gchar *localedir = _glib_get_locale_dir ();
-+    bindtextdomain (GETTEXT_PACKAGE, localedir);
-+    g_free (localedir);
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
 +#else
    bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 +#endif
    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
  #endif /* ENABLE_NLS */
  
---- gst/rtsp/gstrtsp.c	Mon Jul 21 15:24:27 2014
-+++ gst/rtsp/gstrtsp.c	Thu Oct 02 07:54:12 2014
+--- gst/rtsp/gstrtsp.c	Sun Oct 19 18:41:09 2014
++++ gst/rtsp/gstrtsp.c	Thu Mar 05 16:52:57 2015
 @@ -54,7 +54,14 @@
  plugin_init (GstPlugin * plugin)
  {
  #ifdef ENABLE_NLS
 +#ifdef G_OS_WIN32
-+    gchar *_glib_get_locale_dir (void);
-+    gchar *localedir = _glib_get_locale_dir ();
-+    bindtextdomain (GETTEXT_PACKAGE, localedir);
-+    g_free (localedir);
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
 +#else
    bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
 +#endif
    bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
  #endif /* ENABLE_NLS */
  
+--- sys/directsound/gstdirectsoundsink.c	Sun Oct 19 18:41:09 2014
++++ sys/directsound/gstdirectsoundsink.c	Mon Aug 17 00:23:39 2015
+@@ -101,6 +101,10 @@
+ static void gst_directsound_sink_set_mute (GstDirectSoundSink * sink,
+     gboolean mute);
+ static gboolean gst_directsound_sink_get_mute (GstDirectSoundSink * sink);
++static const gchar *gst_directsound_sink_get_device (GstDirectSoundSink *
++    dsoundsink);
++static void gst_directsound_sink_set_device (GstDirectSoundSink * dsoundsink,
++    const gchar * device_id);
+ 
+ static gboolean gst_directsound_sink_is_spdif_format (GstAudioRingBufferSpec *
+     spec);
+@@ -124,7 +128,8 @@
+ {
+   PROP_0,
+   PROP_VOLUME,
+-  PROP_MUTE
++  PROP_MUTE,
++  PROP_DEVICE
+ };
+ 
+ #define gst_directsound_sink_parent_class parent_class
+@@ -137,6 +142,11 @@
+ {
+   GstDirectSoundSink *dsoundsink = GST_DIRECTSOUND_SINK (object);
+ 
++  if (dsoundsink->device_id) {
++    g_free (dsoundsink->device_id);
++    dsoundsink->device_id = NULL;
++  }
++
+   g_mutex_clear (&dsoundsink->dsound_lock);
+ 
+   G_OBJECT_CLASS (parent_class)->finalize (object);
+@@ -189,6 +199,12 @@
+           "Mute state of this stream", DEFAULT_MUTE,
+           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+ 
++  g_object_class_install_property (gobject_class,
++      PROP_DEVICE,
++      g_param_spec_string ("device", "Device",
++          "DirectSound playback device as a GUID string",
++          NULL, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
++
+   gst_element_class_set_static_metadata (element_class,
+       "Direct Sound Audio Sink", "Sink/Audio",
+       "Output to a sound card via Direct Sound",
+@@ -203,6 +219,7 @@
+ {
+   dsoundsink->volume = 100;
+   dsoundsink->mute = FALSE;
++  dsoundsink->device_id = NULL;
+   dsoundsink->pDS = NULL;
+   dsoundsink->cached_caps = NULL;
+   dsoundsink->pDSBSecondary = NULL;
+@@ -226,6 +243,9 @@
+     case PROP_MUTE:
+       gst_directsound_sink_set_mute (sink, g_value_get_boolean (value));
+       break;
++    case PROP_DEVICE:
++      gst_directsound_sink_set_device (sink, g_value_get_string (value));
++      break;
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+       break;
+@@ -245,6 +265,9 @@
+     case PROP_MUTE:
+       g_value_set_boolean (value, gst_directsound_sink_get_mute (sink));
+       break;
++    case PROP_DEVICE:
++      g_value_set_string (value, gst_directsound_sink_get_device (sink));
++      break;
+     default:
+       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
+       break;
+@@ -378,22 +401,53 @@
+   return res;
+ }
+ 
++static LPGUID
++string_to_guid (const gchar * str)
++{
++  HRESULT ret;
++  gunichar2 *wstr;
++  LPGUID out;
++
++  wstr = g_utf8_to_utf16 (str, -1, NULL, NULL, NULL);
++  if (!wstr)
++    return NULL;
++
++  out = g_malloc (sizeof (GUID));
++  ret = CLSIDFromString ((LPOLESTR) wstr, out);
++  g_free (wstr);
++  if (ret != NOERROR) {
++    g_free (out);
++    return NULL;
++  }
++
++  return out;
++}
++
+ static gboolean
+ gst_directsound_sink_open (GstAudioSink * asink)
+ {
+   GstDirectSoundSink *dsoundsink;
+   HRESULT hRes;
++  LPGUID lpGuid = NULL;
+ 
+   dsoundsink = GST_DIRECTSOUND_SINK (asink);
+ 
++  if (dsoundsink->device_id)
++    lpGuid = string_to_guid (dsoundsink->device_id);
++
+   /* create and initialize a DirecSound object */
+-  if (FAILED (hRes = DirectSoundCreate (NULL, &dsoundsink->pDS, NULL))) {
++  if (FAILED (hRes = DirectSoundCreate (lpGuid, &dsoundsink->pDS, NULL))) {
+     GST_ELEMENT_ERROR (dsoundsink, RESOURCE, OPEN_READ,
+         ("gst_directsound_sink_open: DirectSoundCreate: %s",
+             DXGetErrorString9 (hRes)), (NULL));
++    if (lpGuid)
++      g_free (lpGuid);
+     return FALSE;
+   }
+ 
++  if (lpGuid)
++    g_free (lpGuid);
++
+   if (FAILED (hRes = IDirectSound_SetCooperativeLevel (dsoundsink->pDS,
+               GetDesktopWindow (), DSSCL_PRIORITY))) {
+     GST_ELEMENT_ERROR (dsoundsink, RESOURCE, OPEN_READ,
+@@ -873,4 +927,20 @@
+ gst_directsound_sink_get_mute (GstDirectSoundSink * dsoundsink)
+ {
+   return FALSE;
++}
++
++static const gchar *
++gst_directsound_sink_get_device (GstDirectSoundSink * dsoundsink)
++{
++  return dsoundsink->device_id;
++}
++
++static void
++gst_directsound_sink_set_device (GstDirectSoundSink * dsoundsink,
++    const gchar * device_id)
++{
++  if (dsoundsink->device_id) {
++    g_free (dsoundsink->device_id);
++  }
++  dsoundsink->device_id = g_strdup (device_id);
+ }
+--- sys/directsound/gstdirectsoundsink.h	Sun Oct 19 18:41:09 2014
++++ sys/directsound/gstdirectsoundsink.h	Mon Aug 17 00:23:39 2015
+@@ -74,6 +74,9 @@
+   /* current volume setup by mixer interface */
+   glong volume;
+   gboolean mute;
++  
++  /* current directsound device ID */
++  gchar * device_id;
+ 
+   GstCaps *cached_caps;
+   /* lock used to protect writes and resets */
+--- configure	Thu Dec 18 17:38:42 2014
++++ configure	Mon Aug 17 00:21:57 2015
+@@ -29001,7 +29001,7 @@
+   save_LIBS="$LIBS"
+   CFLAGS="$CFLAGS $DIRECTSOUND_CFLAGS"
+   LDFLAGS="$LDFLAGS $DIRECTSOUND_LDFLAGS"
+-  LIBS="$LIBS -ldsound -ldxerr9 -luser32"
++  LIBS="$LIBS -ldsound -ldxerr9 -luser32 -lole32"
+   { $as_echo "$as_me:${as_lineno-$LINENO}: checking for DirectSound LDFLAGS" >&5
+ $as_echo_n "checking for DirectSound LDFLAGS... " >&6; }
+   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+@@ -29017,6 +29017,7 @@
+ 
+   DXGetErrorString9 (0);
+   DirectSoundCreate(NULL, NULL, NULL);
++  CLSIDFromString(NULL, NULL);
+ 
+   ;
+   return 0;
