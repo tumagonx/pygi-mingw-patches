@@ -302,7 +302,7 @@ generic localization patches
    GstCaps *cached_caps;
    /* lock used to protect writes and resets */
 --- configure	Thu Dec 18 17:38:42 2014
-+++ configure	Mon Aug 17 00:21:57 2015
++++ configure	Mon Aug 17 19:11:56 2015
 @@ -29001,7 +29001,7 @@
    save_LIBS="$LIBS"
    CFLAGS="$CFLAGS $DIRECTSOUND_CFLAGS"
@@ -320,3 +320,12 @@ generic localization patches
  
    ;
    return 0;
+@@ -29037,7 +29038,7 @@
+   LIBS=$save_LIBS
+ 
+   if test "x$HAVE_DIRECTSOUND" = "xyes";  then
+-        DIRECTSOUND_LIBS="-ldsound -ldxerr9 -luser32"
++        DIRECTSOUND_LIBS="-ldsound -ldxerr9 -luser32 -lole32"
+ 
+ 
+ 

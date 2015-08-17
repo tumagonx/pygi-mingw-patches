@@ -1,0 +1,13 @@
+Force pthread mutexes model
+
+--- src/cairo-mutex-impl-private.h	Wed Mar 11 05:21:07 2015
++++ src/cairo-mutex-impl-private.h	Sun Apr 12 13:15:17 2015
+@@ -175,7 +175,7 @@
+ # define CAIRO_RECURSIVE_MUTEX_IMPL_INIT(mutex)
+ # define CAIRO_RECURSIVE_MUTEX_IMPL_NIL_INITIALIZER 0
+ 
+-#elif defined(_WIN32) /******************************************************/
++#elif defined(_WIN32) && !defined (CAIRO_HAS_PTHREAD)  /******************************************************/
+ 
+ #define WIN32_LEAN_AND_MEAN
+ /* We require Windows 2000 features such as ETO_PDY */

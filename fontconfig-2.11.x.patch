@@ -1,0 +1,105 @@
+change char -> const char as in win-iconv
+XP compatible dont use mktemp_s even if exist in libmsvcrt.a
+support isolated RELATIVE_CACHE for portable apps
+
+--- src/fccompat.c	Fri Feb 07 14:30:47 2014
++++ src/fccompat.c	Mon May 11 17:32:08 2015
+@@ -129,6 +129,12 @@
+     return fd;
+ }
+ 
++#if defined (__MSVCRT_VERSION__) && __MSVCRT_VERSION__ < 0x0800
++#ifdef HAVE__MKTEMP_S
++#undef HAVE__MKTEMP_S
++#endif
++#endif
++
+ int
+ FcMakeTempfile (char *template)
+ {
+--- src/fcfreetype.c	Fri Jan 31 09:05:49 2014
++++ src/fcfreetype.c	Mon Apr 13 18:40:01 2015
+@@ -702,7 +702,8 @@
+     {
+ 	size_t	    in_bytes_left = sname->string_len;
+ 	size_t	    out_bytes_left = sname->string_len * FC_UTF8_MAX_LEN;
+-	char	    *inbuf, *outbuf;
++	const char	    *inbuf;
++	char	    *outbuf;
+ 	
+ 	utf8 = malloc (out_bytes_left + 1);
+ 	if (!utf8)
+--- src/fcxml.c	Thu Mar 13 14:00:47 2014
++++ src/fcxml.c	Wed Apr 15 07:29:07 2015
+@@ -1985,6 +1985,13 @@
+ 	FcVStackPushExpr (parse, FcVStackExpr, expr);
+ }
+ 
++static HMODULE GetThisExecHandle()
++{
++  MEMORY_BASIC_INFORMATION info;
++  size_t len = VirtualQueryEx(GetCurrentProcess(), (void*)GetThisExecHandle, &info, sizeof(info));
++  return len ? (HMODULE)info.AllocationBase : NULL;
++}
++
+ static void
+ FcParseDir (FcConfigParse *parse)
+ {
+@@ -2026,7 +2033,7 @@
+     {
+ 	FcChar8 *p;
+ 	data = buffer;
+-	if (!GetModuleFileName (NULL, (LPCH) buffer, sizeof (buffer) - 20))
++	if (!GetModuleFileName (GetThisExecHandle(), (LPCH) buffer, sizeof (buffer) - 20))
+ 	{
+ 	    FcConfigMessage (parse, FcSevereError, "GetModuleFileName failed");
+ 	    goto bail;
+@@ -2045,14 +2052,19 @@
+     {
+ 	FcChar8 *p;
+ 	data = buffer;
+-	if (!GetModuleFileName (NULL, (LPCH) buffer, sizeof (buffer) - 20))
++	if (!GetModuleFileName (GetThisExecHandle(), (LPCH) buffer, sizeof (buffer) - 20))
+ 	{
+ 	    FcConfigMessage (parse, FcSevereError, "GetModuleFileName failed");
+ 	    goto bail;
+ 	}
+ 	p = _mbsrchr (data, '\\');
+-	if (p) *p = '\0';
+-	strcat ((char *) data, "\\..\\share\\fonts");
++	*p = '\0';
++	p = _mbsrchr (data, '\\');
++	if (p) {
++        if (FcStrCmpIgnoreCase(p+1, "bin")==0 || FcStrCmpIgnoreCase(p+1, "lib")==0)
++            *p = '\0';
++    }
++	strcat ((char *) data, "\\share\\fonts");
+     }
+     else if (strcmp ((const char *) data, "WINDOWSFONTDIR") == 0)
+     {
+@@ -2158,6 +2170,25 @@
+ 	    goto bail;
+ 	}
+ 	strncpy((char *) data, szFPath, len);
++    }
++    else if (strcmp ((const char *) data, "RELATIVE_CACHE") == 0)
++    {
++    FcChar8 buffer[1000];
++	FcChar8 *p;
++	data = buffer;
++	if (!GetModuleFileName (GetThisExecHandle(), (LPCH) buffer, sizeof (buffer) - 20))
++	{
++	    FcConfigMessage (parse, FcSevereError, "GetModuleFileName failed");
++	    goto bail;
++	}
++	p = _mbsrchr (data, '\\');
++	*p = '\0';
++	p = _mbsrchr (data, '\\');
++	if (p) {
++        if (FcStrCmpIgnoreCase(p+1, "bin")==0 || FcStrCmpIgnoreCase(p+1, "lib")==0)
++            *p = '\0';
++    }
++	strcat ((char *) data, "\\etc\\fonts\\cache");
+     }
+ #endif
+     if (strlen ((char *) data) == 0)

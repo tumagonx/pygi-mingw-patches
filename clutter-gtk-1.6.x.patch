@@ -32,3 +32,15 @@
  
  cluttergtkheadersdir = $(includedir)/clutter-gtk-@CLUTTER_GTK_API_VERSION@/clutter-gtk
  
+--- clutter-gtk/gtk-clutter-util.c	Thu Aug 28 21:44:44 2014
++++ clutter-gtk/gtk-clutter-util.c	Mon Aug 17 21:21:00 2015
+@@ -95,7 +95,9 @@
+       GDK_IS_WIN32_DISPLAY (display))
+     {
+       /* let GTK+ be in charge of the event handling */
++      /* PATCH: gtk event handling broken at the moment
+       clutter_win32_disable_event_retrieval ();
++      */
+     }
+   else
+ #endif

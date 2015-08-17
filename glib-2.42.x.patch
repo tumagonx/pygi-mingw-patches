@@ -352,29 +352,6 @@
  
  /* DLL ABI binary compatibility version that uses system codepage file names */
  
---- glib/gwin32.h	Thu Feb 26 09:54:06 2015
-+++ glib/gwin32.h	Fri Feb 27 02:34:27 2015
-@@ -116,10 +116,18 @@
- #endif	 /* G_PLATFORM_WIN32 */
- 
- #ifdef G_OS_WIN32
--#ifdef _WIN64
-+
-+
-+GLIB_AVAILABLE_IN_ALL
-+gchar *g_win32_get_package_installation_directory    (const gchar *package,
-+                                                           const gchar *dll_name);
-+GLIB_AVAILABLE_IN_ALL
-+gchar *g_win32_get_package_installation_subdirectory (const gchar *package,
-+                                                           const gchar *dll_name,
-+                                                           const gchar *subdir);
-+
- #define g_win32_get_package_installation_directory g_win32_get_package_installation_directory_utf8
- #define g_win32_get_package_installation_subdirectory g_win32_get_package_installation_subdirectory_utf8
--#endif
- 
- GLIB_AVAILABLE_IN_ALL
- gchar *g_win32_get_package_installation_directory_utf8    (const gchar *package,
 --- gmodule/gmodule.c	Sat Dec 20 04:49:48 2014
 +++ gmodule/gmodule.c	Fri Feb 27 02:34:27 2015
 @@ -649,7 +649,7 @@
@@ -408,3 +385,33 @@
  }
  
  #endif
+--- glib/gwin32.h	Thu Feb 26 09:54:06 2015
++++ glib/gwin32.h	Mon Aug 17 21:03:54 2015
+@@ -84,7 +84,6 @@
+ GLIB_AVAILABLE_IN_ALL
+ gchar*          g_win32_error_message (gint error);
+ 
+-#ifndef _WIN64
+ GLIB_DEPRECATED
+ gchar*          g_win32_get_package_installation_directory (const gchar *package,
+ 							    const gchar *dll_name);
+@@ -93,7 +92,6 @@
+ gchar*          g_win32_get_package_installation_subdirectory (const gchar *package,
+ 							       const gchar *dll_name,
+ 							       const gchar *subdir);
+-#endif
+ 
+ GLIB_AVAILABLE_IN_ALL
+ gchar*          g_win32_get_package_installation_directory_of_module (gpointer hmodule);
+@@ -116,10 +114,9 @@
+ #endif	 /* G_PLATFORM_WIN32 */
+ 
+ #ifdef G_OS_WIN32
+-#ifdef _WIN64
++
+ #define g_win32_get_package_installation_directory g_win32_get_package_installation_directory_utf8
+ #define g_win32_get_package_installation_subdirectory g_win32_get_package_installation_subdirectory_utf8
+-#endif
+ 
+ GLIB_AVAILABLE_IN_ALL
+ gchar *g_win32_get_package_installation_directory_utf8    (const gchar *package,
