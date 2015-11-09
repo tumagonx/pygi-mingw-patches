@@ -1,0 +1,40 @@
+--- giscanner/ccompiler.py	Wed Sep 09 17:20:37 2015
++++ giscanner/ccompiler.py	Wed Oct 14 04:36:32 2015
+@@ -334,10 +334,10 @@
+                                 break
+             if not found:
+                 not_resolved.append(lib)
+-        if len(not_resolved) > 0:
+-            raise SystemExit(
+-                "ERROR: can't resolve libraries to shared libraries: " +
+-                ", ".join(not_resolved))
++        #if len(not_resolved) > 0:
++        #    raise SystemExit(
++        #        "ERROR: can't resolve libraries to shared libraries: " +
++        #        ", ".join(not_resolved))
+         return shlibs
+ 
+     def check_is_msvc(self):
+--- giscanner/dumper.py	Wed Sep 09 17:20:37 2015
++++ giscanner/dumper.py	Fri Oct 23 14:12:09 2015
+@@ -195,6 +195,9 @@
+ 
+     def _compile(self, *sources):
+         pkgconfig_flags = self._run_pkgconfig('--cflags')
++        # Under Multilib compiler -m32/-m64 isn't handled
++        # use workaround from enviroment
++        pkgconfig_flags.append('-m'+os.environ.get('CPUARCH', '32'))
+         return self._compiler.compile(pkgconfig_flags,
+                                       self._options.cpp_includes,
+                                       sources,
+--- Makefile.introspection	Thu Apr 23 01:47:40 2015
++++ Makefile.introspection	Wed Oct 14 10:05:13 2015
+@@ -145,7 +145,7 @@
+ 	  $(_gir_libraries) \
+ 	  $($(_gir_name)_SCANNERFLAGS) \
+ 	  --cflags-begin \
+-	  $($(_gir_name)_CFLAGS) \
++	  $($(_gir_name)_CFLAGS) $(CPPFLAGS) \
+ 	  --cflags-end \
+ 	  $($(_gir_name)_LDFLAGS) \
+ 	  $$^ \
