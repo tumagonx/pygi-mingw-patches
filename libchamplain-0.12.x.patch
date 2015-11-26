@@ -1,0 +1,24 @@
+--- demos/local-rendering.c	Wed Oct 08 01:19:33 2014
++++ demos/local-rendering.c	Tue Mar 24 16:45:06 2015
+@@ -26,7 +26,11 @@
+ #include <string.h>
+ #include <stdio.h>
+ #include <unistd.h>
++#ifndef _WIN32
+ #include <sys/socket.h>
++#else
++#include <winsock2.h>
++#endif
+ 
+ #define N_COLS 2
+ #define COL_ID 0
+--- champlain/Makefile.in	Fri Sep 18 22:35:45 2015
++++ champlain/Makefile.in	Tue Mar 24 16:44:10 2015
+@@ -638,7 +638,6 @@
+ AM_CPPFLAGS = \
+ 	$(DEPS_CFLAGS)			\
+ 	$(MEMPHIS_CFLAGS)		\
+-	-DDATADIR=\""$(datadir)"\"	\
+ 	-I$(top_srcdir)			\
+ 	-DCHAMPLAIN_COMPILATION 	\
+ 	$(WARN_CFLAGS)
