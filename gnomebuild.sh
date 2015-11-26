@@ -34,11 +34,12 @@ if [ "$MULTILIB" == "64" ]; then
     fi
     RCFLAGS="-F pe-x86-64"
     ASFLAGS="--64 -m i386:x86-64"
-    source setgcc gcc64seh
+    DLLTOOLFLAGS="--as-flags=--64 -m i386:x86-64"
+    source setgcc gcc48
 else
     alias configure="configure --prefix=$IPATH"
     export INTROSPECT=--enable-introspection=yes
-    source setgcc gcc4
+    source setgcc gcc48
 fi
 
 if [ "$2" == "90" ];then alias manifest='cmd //c /opt/bin/mtall90.bat'; else alias manifest=""; fi
@@ -49,20 +50,21 @@ RTVER="-m$1"
 fi
 
 export PKG_CONFIG_PATH=$IPATH/lib/pkgconfig:$IPATH/share/pkgconfig
-export CPPFLAGS="-I$IPATH/include"
+export CPPFLAGS=-I$IPATH/include
 if [ "$MULTILIB" != 64 ]; then
-export LDFLAGS="$RTVER -Wl,--large-address-aware -Wl,-s -Wl,--gc-sections -L$IPATH/lib"
+export LDFLAGS="$RTVER -Wl,-s -Wl,--large-address-aware  -L$IPATH/lib"
 export CC="gcc $RTVER -fno-unwind-tables -fno-asynchronous-unwind-tables"
 export CXX="g++ $RTVER -fno-unwind-tables -fno-asynchronous-unwind-tables"
 export CFLAGS="$RTVER -Os -pipe  -mno-sse2 -mno-avx -fno-lto -D_FILE_OFFSET_BITS=64"
 else
-export LDFLAGS="$RTVER -Wl,--gc-sections -Wl,-s -L$IPATH/lib"
+export LDFLAGS="$RTVER -Wl,-s -L$IPATH/lib"
 export CC="gcc $RTVER"
 export CXX="g++ $RTVER"
 export CFLAGS="$RTVER -Os -pipe -mno-sse3 -mno-avx -fno-lto -D_FILE_OFFSET_BITS=64"
 fi
 export CXXFLAGS=$CFLAGS
 export MOZ_TOOLS=/opt/bin
+unset LUA_PATH
 
 if [ "$CROSSX" == "1" ]; then
     # static build exes with no dependencies
@@ -97,7 +99,9 @@ else
 export SPATH=/d/Sources
 fi
 
-cd $SPATH/winpthreads
+:<<"XXX"
+
+cd $SPATH/../Tarball/mingw-w64-v4.0.4/mingw-w64-libraries/winpthreads
 configure --disable-static
 make clean
 make $PJOBS
@@ -106,10 +110,22 @@ make install
 rm $IPATH/lib/*.la
 rm $IPATH/include/pthread*.h
 
+cd $SPATH/libstdc++/
+set +e
+rm -rdf build
+rm $IPATH/lib/libstdc++.dll.a
+set -e
+mkdir build
+cd build
+../../../tarball/gcc-4.8.4/libstdc++-v3/configure --disable-multilib --enable-fully-dynamic-string CFLAGS="-Os -D_FILE_OFFSET_BITS=64" CXXFLAGS="-Os -D_FILE_OFFSET_BITS=64" CC="gcc $RTVER" CXX="g++ $RTVER"
+make $PJOBS
+cp src/.libs/libstdc++.dll.a $IPATH/lib/
+cp src/.libs/libstdc++-6.dll $IPATH/bin/
+
 cd $SPATH/zlib-1.2.8
 make -f win32/Makefile.gcc clean
 if [ "$MULTILIB" != 64 ]; then
-make -f win32/Makefile.gcc $PJOBS CFLAGS="$CFLAGS -DASMV" libz.a
+make -f win32/Makefile.gcc $PJOBS CFLAGS="$CFLAGS -O2 -DASMV" libz.a
 #this one is slightly faster on small data but way slower than vanilla on huge data
 #nasm -f win32 match.asm -o match.o
 jwasm -coff -8 -Fo match.o match686.asm
@@ -120,12 +136,12 @@ fi
 make -f win32/Makefile.gcc install $PJOBS INCLUDE_PATH=$IPATH/include BINARY_PATH=$IPATH/bin LIBRARY_PATH=$IPATH/lib
 cd $SPATH/bzip2
 make -f Makefile clean
-make -f Makefile-libbz2_so CFLAGS="$CFLAGS -Os" $PJOBS 
+make -f Makefile-libbz2_so $PJOBS  CFLAGS="$CFLAGS -O2"
 cp bzlib.h $IPATH/include/
 ar cru $IPATH/lib/libbz2.a bzlib.o blocksort.o compress.o crctable.o decompress.o huffman.o randtable.o
 ranlib $IPATH/lib/libbz2.a
 cd $SPATH/xz-5.2.1
-configure --disable-shared --enable-small  --enable-threads=posix --enable-assume-ram=1024 --disable-nls CFLAGS="$CFLAGS -Os"
+configure --disable-shared --enable-threads=posix --enable-assume-ram=1024 --disable-nls
 make clean
 make $PJOBS
 manifest
@@ -135,39 +151,133 @@ rm $IPATH/lib/*.la
 $CC $LDFLAGS -shared -o $IPATH/bin/libzzz.dll -Wl,--out-implib,$IPATH/lib/libz.dll.a -Wl,--whole-archive $IPATH/lib/libz.a $IPATH/lib/liblzma.a $IPATH/lib/libbz2.a -Wl,--no-whole-archive
 cp $IPATH/lib/libz.dll.a $IPATH/lib/liblzma.dll.a 
 cp $IPATH/lib/libz.dll.a $IPATH/lib/libbz2.dll.a
+echo 'prefix=
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+Name: zlib
+Description: zlib compression library
+Version: 1.2.8
+Requires:
+Libs: -L${libdir} -lz
+Cflags: -I${includedir}'> $IPATH/lib/pkgconfig/zlib.pc
+:<<"XXXX"
+# usable but no use for webkit or cairo or anything for now
+cd $SPATH/angle-chromium-2020/src
+echo "Making libcommon..."
+cd common
+$CXX $CXXFLAGS -DNDEBUG -DNOMINMAX -DANGLE_DISABLE_TRACE -DANGLE_DISABLE_PERF -DCOMPONENT_BUILD -DUNICODE -D_UNICODE  -std=c++11 -I../../include -I.. -c *.cpp
+if [ -f libcommon.a ]; then rm libcommon.a; fi
+ar cru libcommon.a *.o
+ranlib libcommon.a
+cd ../compiler
+echo "Making libcompiler..."
+#cd preprocessor
+#generate_parser.sh
+#cd ../translator
+#generate_parser.sh
+#cd ..
+$CXX $CXXFLAGS -DANGLE_TRANSLATOR_STATIC -DNDEBUG -DNOMINMAX -DANGLE_DISABLE_TRACE -DANGLE_DISABLE_PERF -DCOMPONENT_BUILD -DGL_APICALL= -DGL_GLEXT_PROTOTYPES= -DEGLAPI= -DANGLE_ENABLE_D3D9 -DUNICODE -D_UNICODE  -std=c++11 -I../../include -I.. -c preprocessor/*.cpp translator/*.cpp translator/timing/*.cpp translator/depgraph/*.cpp
+$CXX $CXXFLAGS -O2 -DANGLE_TRANSLATOR_IMPLEMENTATION -DNDEBUG -DNOMINMAX -DANGLE_DISABLE_TRACE -DANGLE_DISABLE_PERF -DCOMPONENT_BUILD -DUNICODE -D_UNICODE -std=c++11 -I../../include -I.. -c translator/Shader*.cpp
+if [ -f libcompiler.a ]; then rm libcompiler.a; fi
+ar cru libcompiler.a *.o
+ranlib libcompiler.a
+echo "Making libGLESv2..."
+cd ../libGLESv2
+$CXX $CXXFLAGS -O2 -DANGLE_TRANSLATOR_STATIC -DGL_APICALL= -DGL_GLEXT_PROTOTYPES= -DEGLAPI= -DANGLE_ENABLE_D3D9 -DNDEBUG -DNOMINMAX -DANGLE_DISABLE_TRACE -DANGLE_DISABLE_PERF -DCOMPONENT_BUILD -DUNICODE -D_UNICODE  -std=c++11 -I../../include -I.. -I. -c *.cpp renderer/*.cpp renderer/d3d9/*.cpp ../third_party/murmurhash/MurmurHash3.cpp ../third_party/compiler/*.cpp
+$CXX $CXXFLAGS -O2 -DANGLE_TRANSLATOR_STATIC -DGL_APICALL= -DGL_GLEXT_PROTOTYPES= -DEGLAPI= -DANGLE_ENABLE_D3D9 -DNDEBUG -DNOMINMAX -DANGLE_DISABLE_TRACE -DANGLE_DISABLE_PERF -DCOMPONENT_BUILD -DUNICODE -D_UNICODE  -std=c++11 -msse2 -I../../include -I.. -I. -c renderer/*sse2.cpp
+windres $RCFLAGS -O coff -i libGLESv2.rc -o libGLESv2.res
+#libGLESV2_mingw32.def
+$CXX -shared $LDFLAGS libGLESV2.def -Wl,--out-implib,$IPATH/lib/libglesv2.dll.a -o $IPATH/bin/libglesv2.dll *.o *.res ../common/libcommon.a ../compiler/libcompiler.a -ld3d9 -ldxguid
+echo "Making libEGL..."
+cd ../libEGL
+$CXX $CXXFLAGS -DANGLE_TRANSLATOR_STATIC -DGL_APICALL= -DGL_GLEXT_PROTOTYPES= -DEGLAPI= -DANGLE_ENABLE_D3D9 -DNDEBUG -DNOMINMAX -DANGLE_DISABLE_TRACE -DANGLE_DISABLE_PERF -DCOMPONENT_BUILD -DUNICODE -D_UNICODE  -std=c++11 -I../../include -I.. -I. -c *.cpp
+windres $RCFLAGS -O coff -i libEGL.rc -o libEGL.res
+$CXX -shared $LDFLAGS libegl.def  -Wl,--out-implib,$IPATH/lib/libegl.dll.a -o $IPATH/bin/libegl.dll *.o *.res ../compiler/libcompiler.a ../common/libcommon.a $IPATH/lib/libglesv2.dll.a -ld3d9 -ldxguid
+cd ../..
+cp -a include/* $IPATH/include/
+echo 'prefix=
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+Name: glesv2
+Description: ANGLE EGL GLESv2 layer for D3D
+Version: 1.3
+Requires: 
+Libs: -lGLESv2 
+Cflags: -I${includedir}'> $IPATH/lib/pkgconfig/glesv2.pc
+echo 'prefix=
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+Name: egl
+Description: ANGLE EGL GLESv2 layer for D3D
+Version: 1.3
+Requires: glesv2
+Libs: -lEGL 
+Cflags: -I${includedir}'> $IPATH/lib/pkgconfig/egl.pc
+XXXX
 
 cd $SPATH/libffi-3.2.1
-configure --libdir=$IPATH/lib --disable-static --enable-portable-binary
+configure --libdir=$IPATH/lib --disable-static --enable-portable-binary CFLAGS="$CFLAGS -O2"
 make clean
 make $PJOBS install
 if [ "$MULTILIB" == 64 ]; then
 set +e
 mv $IPATH/lib64/*.* $IPATH/lib/
+rm -rdf $IPATH/lib64/
 set -e
 fi
 rm $IPATH/lib/*.la
 
-# one day cairo can use it
-#cd $SPATH/glew-1.10.0
-#make clean
-#make install GLEW_DEST=$IPATH
-#rm -f $IPATH/lib/libglew32.dll.a $IPATH/bin/glew32.dll
-
-cd $SPATH/win-iconv-read-only
+cd $SPATH/win-iconv-0.0.6
 make clean
 make
 cp iconv.h $IPATH/include/
 cp libiconv.a $IPATH/lib/
 
+:<<"XXXX"
+# alternative
+cd $SPATH/libiconv-1.14
+configure -enable-static --enable-shared --enable-extra-encodings --disable-nls
+make clean
+cd libcharset/lib
+cd ..
+make install
+cd ../lib
+make libiconv.la
+rm $IPATH/bin/libcharset*.dll
+cp .libs/libiconv.a $IPATH/lib/
+cp ../include/iconv.h $IPATH/include/
+XXXX
 cd $SPATH/gettext-0.18.3.2
 if [ -f $IPATH/lib/libiconv.dll.a ]; then rm $IPATH/lib/libiconv.dll.a; fi
-configure --with-included-libxml --without-emacs --with-included-libcroco --with-included-libunistring --with-included-glib --with-included-gettext --disable-static --disable-java --disable-csharp --disable-curses --disable-openmp --enable-threads=win32
+configure --without-emacs --with-included-libxml --with-included-libcroco --with-included-libunistring --with-included-glib --with-included-gettext --disable-static --disable-java --disable-csharp --disable-curses --disable-openmp --enable-threads=posix 
+#CFLAGS="$CFLAGS -DLIBICONV_PLUG=1"
+cd gettext-runtime/intl
 make clean
 make $PJOBS 
 manifest
 make install
-rm $IPATH/lib/*.la $IPATH/lib/libgettextpo.dll.a
 cp $IPATH/lib/libintl.dll.a $IPATH/lib/libiconv.dll.a
+
+cd $SPATH/libxml2-2.9.2
+configure --without-python
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+#do not interfere msys
+rm $IPATH/bin/xmlcatalog.exe $IPATH/bin/xmllint.exe
+
+cd $SPATH/expat-2.1.0
+configure
+make clean
+make $PJOBS install
+set +e
+rm $IPATH/lib/*.la $IPATH/bin/libxml2-2.dll $IPATH/bin/libexpat-1.dll
+set -e
+$CC xmlxpat.def -shared -o $IPATH/bin/libxmlxpat.dll $LDFLAGS -Wl,--whole-archive $IPATH/lib/libxml2.a $IPATH/lib/libexpat.a -Wl,--no-whole-archive -L$IPATH/lib -lz -lws2_32 -lintl -Wl,--out-implib,$IPATH/lib/libxml2.dll.a
+cp $IPATH/lib/libxml2.dll.a $IPATH/lib/libexpat.dll.a
 
 cd $SPATH/libpng-1.6.16
 configure --disable-static
@@ -220,31 +330,24 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libxml2-2.9.2
-configure --without-python
+cd $SPATH/dbus-1.10.2
+configure --disable-static --disable-Werror
 make clean
 make $PJOBS install
+cp -a $IPATH/share/doc/dbus $IPATH/share/gtk-doc/html/
 rm $IPATH/lib/*.la
-#do not interfere msys
-rm $IPATH/bin/xmlcatalog.exe $IPATH/bin/xmllint.exe
 
-cd $SPATH/expat-2.1.0
-configure
+cd $SPATH/glib-2.46.2
+configure --disable-static --with-threads=posix CFLAGS="$CFLAGS -O2"
 make clean
-make $PJOBS install
-rm $IPATH/lib/*.la $IPATH/bin/libxml2-2.dll $IPATH/bin/libexpat-1.dll
-$CC xmlxpat.def -shared -o $IPATH/bin/libxmlxpat.dll $LDFLAGS -Wl,--whole-archive $IPATH/lib/libxml2.a $IPATH/lib/libexpat.a -Wl,--no-whole-archive -L$IPATH/lib -lz -lintl -lws2_32 -Wl,--out-implib,$IPATH/lib/libxml2.dll.a
-cp $IPATH/lib/libxml2.dll.a $IPATH/lib/libexpat.dll.a
-
-cd $SPATH/glib-2.42.2
-configure --disable-static --with-threads=win32 CFLAGS="$CFLAGS -O2"
-make clean
+if [ "$2" == "90" ]; then
 make $PJOBS
 manifest
-make install
+fi
+make $PJOBS install
 rm $IPATH/lib/*.la
 cp $IPATH/include/libintl.h $IPATH/include/glib-2.0/
-cp gio/gwin32*stream.h $IPATH/include/glib-2.0/gio/
+#cp gio/gwin32*stream.h $IPATH/include/glib-2.0/gio/
 #just in case
 if [ "$CROSSX" == "1" ]; then
 echo 'exec /opt/bin/${0##*/}.exe "$@"' > $IPATH/bin/glib-genmarshal
@@ -252,24 +355,18 @@ echo 'exec /opt/bin/${0##*/}.exe "$@"' > $IPATH/bin/glib-compile-schemas
 echo 'exec /opt/bin/${0##*/}.exe "$@"' > $IPATH/bin/glib-compile-resources
 fi
 
-cd $SPATH/dbus-1.8.18
-configure --disable-static --disable-Werror
-make clean
-make $PJOBS install
-cp -a $IPATH/share/doc/dbus $IPATH/share/gtk-doc/html/
-rm $IPATH/lib/*.la
-
 cd $SPATH/dbus-glib-0.104
 if [ "$CROSSX" == "1" ]; then
 if [ -f $IPATH/bin/glib-genmarshal.exe ]; then
 mv $IPATH/bin/glib-genmarshal.exe $IPATH/bin/glib-genmarshal.bak
 fi
-configure --disable-static --disable-tests --with-dbus-binding-tool=/opt/bin/dbus-binding-tool
+configure --disable-static --disable-bash-completion --disable-abstract-sockets --disable-tests --with-dbus-binding-tool=/opt/bin/dbus-binding-tool
 else
-configure --disable-static --disable-tests
+configure --disable-static --disable-bash-completion --disable-abstract-sockets
 fi
 make clean
 make $PJOBS install
+make check
 #just in case
 #echo 'exec /opt/bin/${0##*/}.exe "$@"' > $IPATH/bin/dbus-binding-tool
 rm $IPATH/lib/*.la
@@ -279,56 +376,96 @@ if [ "$CROSSX" == "1" ]; then
     fi
 fi
 
-cd $SPATH/freetype-2.5.5
+cd $SPATH/ICU52
 set +e
-make distclean
+rm $IPATH/lib/libicu*.dll.a
+rm $IPATH/bin/libicu*52.dll
 set -e
+configure --enable-shared --enable-static --disable-layout --disable-extras --disable-samples --with-data-packaging=archive --disable-tests --disable-dyload --with-library-bits=$CPUARCH
+make clean 
+make $PJOBS
+make install
+rm $IPATH/lib/libicu*52.dll
+$CXX -shared $LDFLAGS -o $IPATH/bin/libicu52.dll -Wl,--whole-archive lib/libsicuio.a lib/libsicuuc.a lib/libsicuin.a stubdata/libsicudt.a -Wl,--no-whole-archive -Wl,--out-implib,$IPATH/lib/libicudt.dll.a
+#some package innocently call these
+cp $IPATH/lib/libicudt.dll.a $IPATH/lib/libicudata.dll.a
+cp $IPATH/lib/libicudt.dll.a $IPATH/lib/libicuin.dll.a
+cp $IPATH/lib/libicudt.dll.a $IPATH/lib/libicuuc.dll.a
+cp $IPATH/lib/libicudt.dll.a $IPATH/lib/libicuio.dll.a
+cp $IPATH/lib/libicuin.dll.a $IPATH/lib/libicui18n.dll.a
+rm $IPATH/lib/libicu*.dll
+rm $IPATH/lib/libsicu*.a
+mv $IPATH/share/icu/52.1/icudt52l.dat $IPATH/bin/
+
+cd $SPATH/libepoxy-1.3.1
+configure --disable-static PYTHON=/c/python34/python
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/freetype-2.6.1
+# looks stupid but the build system is rather unclen to do in-source build
 if [ "$CROSSX" == "1" ]; then
 if [ -f objs/apinames.exe ]; then rm -f objs/apinames.exe; fi
 configure --disable-static --without-harfbuzz --prefix=$IPATH LIBPNG_CFLAGS="-I$IPATH/include/libpng16" LIBPNG_LDFLAGS="-lpng16" CC_BUILD=/mingw-w64/bin/gcc
+make distclean
+configure --disable-static --without-harfbuzz --prefix=$IPATH LIBPNG_CFLAGS="-I$IPATH/include/libpng16" LIBPNG_LDFLAGS="-lpng16" CC_BUILD=/mingw-w64/bin/gcc
 else
+configure --disable-static --without-harfbuzz --prefix=$IPATH LIBPNG_CFLAGS="-I$IPATH/include/libpng16" LIBPNG_LDFLAGS="-lpng16"
+make distclean
 configure --disable-static --without-harfbuzz --prefix=$IPATH LIBPNG_CFLAGS="-I$IPATH/include/libpng16" LIBPNG_LDFLAGS="-lpng16"
 fi
 make $PJOBS
 make install
+echo 'prefix=
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include/freetype2
+Name: FreeType 2
+URL: http://freetype.org
+Description: A free, high-quality, and portable font engine.
+Version: 17.4.11
+Requires:
+Requires.private: zlib
+Libs: -L${libdir} -lfreetype
+Libs.private: -lbz2 -lpng16
+Cflags: -I${includedir}'> $IPATH/lib/pkgconfig/freetype2.pc
 rm $IPATH/lib/*.la
 
-cd $SPATH/fontconfig-2.11.1
+cd $SPATH/fontconfig-2.11.94
 configure --disable-static --enable-iconv --disable-docs LIBS="-lregex -liconv"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-#cd $SPATH/glew-1.10.0
-#export CFLAGSEXTRA=$CFLAGS
-#make GLEW_DEST=$IPATH install $PJOBS
-#unset CFLAGSEXTRA
-
-cd $SPATH/pixman-0.32.6
+cd $SPATH/pixman-0.32.8
 if [ -f $IPATH/lib/libpixman-1.dll.a ];then
 rm $IPATH/lib/libpixman-1.dll.a
 fi
 if [ "$MULTILIB" == "64" ]; then
-configure --disable-shared --disable-ssse3 CFLAGS="$CFLAGS -O2"
+configure --disable-shared --disable-ssse3
 else
-configure --disable-shared --disable-sse2 CFLAGS="$CFLAGS -O2"
+configure --disable-shared --disable-sse2
 fi
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-cd $SPATH/cairo-1.14.2
+
+cd $SPATH/cairo-master
 #configure --disable-interpreter --enable-wgl --enable-gl --enable-xml --disable-egl CPPFLAGS="$CPPFLAGS -DGLEW_STATIC"
-configure --disable-interpreter --enable-pthread
+#-enable-glesv2 --enable-egl
+configure --disable-interpreter --enable-pthread CFLAGS="$CFLAGS -O2" CPPFLAGS="$CPPFLAGS -DGLEW_STATIC"
+#configure --disable-interpreter --enable-pthread
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la $IPATH/bin/libcairo-2.dll
 #name mangling
-echo "EXPORTS
+echo "LIBRARY \"libcairo-gobject-2.dll\"
+EXPORTS
 "> cairo_pixman_gobject.def
 nm -g -n -C --defined-only $IPATH/lib/libcairo-gobject.a $IPATH/lib/libcairo.a $IPATH/lib/libpixman-1.a | grep " [DT] " | cut -d" " -f3 | grep "^[^_]" >> cairo_pixman_gobject.def
-echo "LIBRARY libcairo-gobject-2.dll
-">> cairo_pixman_gobject.def
-$CC -shared cairo_pixman_gobject.def -Wl,--whole-archive $IPATH/lib/libcairo-gobject.a $IPATH/lib/libcairo.a -Wl,--no-whole-archive -o $IPATH/bin/libcairo-gobject-2.dll $LDFLAGS -lpixman-1 -lgdi32 -lpng -lz -lfontconfig -lfreetype -ldl -lgobject-2.0 -lglib-2.0 -lwinspool -lmsimg32 -Wl,--out-implib,$IPATH/lib/libcairo-gobject.dll.a
+$CC -shared cairo_pixman_gobject.def -Wl,--whole-archive $IPATH/lib/libcairo-gobject.a $IPATH/lib/libcairo.a -Wl,--no-whole-archive -o $IPATH/bin/libcairo-gobject-2.dll $LDFLAGS $IPATH/lib/libpixman-1.a -lgdi32 -lepoxy -lpng -lz -lfontconfig -lfreetype -ldl -lgobject-2.0 -lglib-2.0 -lwinspool -lmsimg32 -Wl,--out-implib,$IPATH/lib/libcairo-gobject.dll.a
+# -legl -lglesv2
 cp $IPATH/lib/libcairo-gobject.dll.a $IPATH/lib/libcairo.dll.a 
 cp $IPATH/lib/libcairo-gobject.dll.a $IPATH/lib/libpixman-1.dll.a
 
@@ -394,7 +531,7 @@ else
 fi
 # especially need for detection
 cp $IPATH/lib/libpython27.dll.a $IPATH/lib/libpython2.7.dll.a
-
+:<<"XXXX"
 cd $SPATH/dbus-python-1.2.0
 if [ "$2" == "90" ]; then
 list="27 31 32"
@@ -410,9 +547,10 @@ fi
 make clean
 make $PJOBS install
 done
+XXXX
 
 if [ "$CROSSX" != "1" ]; then
-cd $SPATH/gobject-introspection-1.42.0
+cd $SPATH/gobject-introspection-1.46.0
 # girs missing shared-library
 configure --with-cairo --disable-static PYTHON=python27$MULTILIB
 make clean
@@ -428,23 +566,20 @@ bindir=${exec_prefix}/bin
 datarootdir=${prefix}/share
 datadir=${datarootdir}
 includedir=${prefix}/include
-
 g_ir_scanner=${bindir}/g-ir-scanner
 g_ir_compiler=${bindir}/g-ir-compiler.exe
 g_ir_generate=${bindir}/g-ir-generate.exe
 gidatadir=${datadir}/gobject-introspection-1.0
 girdir=${datadir}/gir-1.0
 typelibdir=${libdir}/girepository-1.0
-
 Cflags: -I${includedir}/gobject-introspection-1.0 
 Requires: glib-2.0 gobject-2.0
 Requires.private: gmodule-2.0 libffi
 Libs: -L${libdir}
 Libs.private: 
-
 Name: gobject-introspection
 Description: GObject Introspection
-Version: 1.44.0' > $IPATH/lib/pkgconfig/gobject-introspection-1.0.pc
+Version: 1.46.0' > $IPATH/lib/pkgconfig/gobject-introspection-1.0.pc
 fi
 
 if [ "$CROSSX" != "1" ]; then
@@ -456,7 +591,7 @@ cd $SPATH/py2cairo-1.10.0/src
 if [ ! -d $IPATH/py27/lib/site-packages/cairo ]; then
 mkdir -p $IPATH/py27/lib/site-packages/cairo
 fi
-$CC -shared $CFLAGS -Os -I. `python27$MULTILIB-config --cflags` `pkg-config --cflags cairo` -o $IPATH/py27/lib/site-packages/cairo/_cairo.pyd *.c $LDFLAGS `python27$MULTILIB-config --ldflags` `pkg-config --libs cairo`
+$CC -shared $CFLAGS -O2 -I. `python27$MULTILIB-config --cflags` `pkg-config --cflags cairo` -o $IPATH/py27/lib/site-packages/cairo/_cairo.pyd *.c $LDFLAGS `python27$MULTILIB-config --ldflags` `pkg-config --libs cairo`
 cp __init__.py $IPATH/py27/lib/site-packages/cairo/
 cp pycairo.h $IPATH/include/pycairo/
 cp pycairo.pc $IPATH/lib/pkgconfig/
@@ -474,7 +609,7 @@ for i in $list; do
     if [ ! -d $IPATH/py$i/lib/site-packages/cairo ]; then
         mkdir -p $IPATH/py$i/lib/site-packages/cairo
     fi
-    $CC -shared $CFLAGS -Os -I. `python$i$MULTILIB-config --cflags` `pkg-config --cflags cairo` -o $IPATH/py$i/lib/site-packages/cairo/_cairo.pyd *.c $LDFLAGS `python$i$MULTILIB-config --ldflags` `pkg-config --libs cairo`
+    $CC -shared $CFLAGS -O2 -I. `python$i$MULTILIB-config --cflags` `pkg-config --cflags cairo` -o $IPATH/py$i/lib/site-packages/cairo/_cairo.pyd *.c $LDFLAGS `python$i$MULTILIB-config --ldflags` `pkg-config --libs cairo`
     cp __init__.py $IPATH/py$i/lib/site-packages/cairo/
 done
 cp py3cairo.h $IPATH/include/pycairo/
@@ -482,14 +617,14 @@ cp py3cairo.pc $IPATH/lib/pkgconfig/
 fi
 
 if [ "$CROSSX" != "1" ]; then
-cd $SPATH/pygobject-3.14.0
+cd $SPATH/pygobject-3.18.2
 if [ "$2" == "90" ]; then
 list="27 31 32"
 else
 list="33 34"
 fi
 for i in $list; do
-configure --enable-cairo --enable-compile-warnings=minimum --with-python=python$i$MULTILIB --prefix=$IPATH/py$i LIBS=-lffi
+configure --enable-cairo --enable-compile-warnings=minimum --with-python=python$i$MULTILIB --prefix=$IPATH/py$i LIBS=-lffi CFLAGS="$CFLAGS -O2"
 make clean
 make $PJOBS V=1 install
 done
@@ -504,18 +639,15 @@ make install
 cp src/CMakeFiles/graphite2.dir/objects.a $IPATH/lib/libgraphite2.a
 rm $IPATH/lib/libgraphite2.dll.a $IPATH/bin/libgraphite2.dll
 
-cd $SPATH/harfbuzz-0.9.41
-# gir need to fix unneeded dll in shared-library
-configure --with-uniscribe --with-graphite2 --with-gobject $INTROSPECT CPPFLAGS="$CPPFLAGS -DGRAPHITE2_STATIC" 
+cd $SPATH/harfbuzz-1.0.3
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
+configure --with-uniscribe --with-graphite2 --with-gobject $INTROSPECT CPPFLAGS="$CPPFLAGS -DGRAPHITE2_STATIC" --with-icu
 make clean
 make $PJOBS install 
 rm $IPATH/lib/*.la
-#rm $IPATH/lib/*.la $IPATH/bin/libharfbuzz-0.dll
-#cd src
-#$CXX -shared harfbuzz-gobject.def .libs/libharfbuzz_gobject_la-hb-gobject-structs.o .libs/libharfbuzz_gobject_la-hb-gobject-enums.o .libs/libharfbuzz.a $LDFLAGS -lgraphite2 -lgobject-2.0 -lglib-2.0 -lws2_32 -lole32 -lwinmm -lshlwapi -lintl -lfreetype -lpng16 -lz -lusp10 -lgdi32 -lrpcrt4  -o $IPATH/bin/libharfbuzz-gobject-0.dll -Wl,--out-implib,$IPATH/lib/libharfbuzz-gobject.dll.a
-#cp $IPATH/lib/libharfbuzz-gobject.dll.a $IPATH/lib/libharfbuzz.dll.a
+mv  $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
 
-cd $SPATH/atk-2.16.0
+cd $SPATH/atk-2.18.0
 configure --disable-static $INTROSPECT
 make clean
 make $PJOBS 
@@ -535,15 +667,15 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/pango-1.36.7
-configure --disable-static --with-included-modules --with-dynamic-modules=no  $INTROSPECT
+cd $SPATH/pango-1.38.0
+configure --disable-static $INTROSPECT
 make clean
 make $PJOBS
 manifest
 make install
 rm $IPATH/lib/*.la
 
-cd $SPATH/gdk-pixbuf-2.31.5
+cd $SPATH/gdk-pixbuf-2.32.0
 configure --disable-static --with-included-loaders=png --disable-modules $INTROSPECT
 make clean
 make $PJOBS
@@ -551,13 +683,13 @@ manifest
 make install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libcroco-0.6.8
+cd $SPATH/libcroco-0.6.9
 configure --disable-shared --enable-static
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/librsvg-2.40.10
+cd $SPATH/librsvg-2.40.11
 configure --disable-static --disable-pixbuf-loader $INTROSPECT
 make clean
 make $PJOBS install
@@ -568,16 +700,7 @@ rm $IPATH/lib/*.la
 #tar -xf $SPATH/boost_1_55_0/boost.tar.xz
 #fi
 
-#cd $SPATH/libopenraw
-#configure --disable-gnome --disable-static --with-boost=$GCC_LOC/i686-w64-mingw32
-#make clean
-#make $PJOBS install
-#if [ ! -d $IPATH/include/libopenraw-0.1/libopenraw-gnome ]; then mkdir $IPATH/include/libopenraw-0.1/libopenraw-gnome; fi
-#cp gnome/include/libopenraw-gnome/gdkpixbuf.h $IPATH/include/libopenraw-0.1/libopenraw-gnome/
-#cp $IPATH/lib/pkgconfig/libopenraw-0.1.pc $IPATH/lib/pkgconfig/libopenraw-1.0.pc
-#rm $IPATH/lib/*.la
-
-cd $SPATH/gdk-pixbuf-2.31.5
+cd $SPATH/gdk-pixbuf-2.32.0
 configure $INTROSPECT --disable-static --with-included-loaders --with-gdiplus --with-libjasper --with-libtiff --with-libjpeg --disable-modules CPPFLAGS="$CPPFLAGS -I$IPATH/include/librsvg-2.0/librsvg -I$IPATH/include/cairo" LIBS="-lrsvg-2 -lwebp -ljpeg -lgdiplus"
 make clean
 make $PJOBS
@@ -585,13 +708,60 @@ manifest
 make install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libepoxy-1.2
-configure --disable-static PYTHON=/c/python34/python
+cd $SPATH/orc-0.4.24
+configure --disable-static --enable-backend=sse,mmx CFLAGS="$CFLAGS -O2"
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+#just in case
+if [ "$CROSSX" == "1" ]; then
+echo 'exec /opt/bin/${0##*/}.exe "$@"' > $IPATH/bin/orcc
+fi
+
+cd $SPATH/SDL-1.2.15
+configure --disable-static --disable-stdio-redirect CFLAGS="$CFLAGS -O2"
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la $IPATH/bin/sdl-config
+
+cd $SPATH/gstreamer-1.6.1
+configure --disable-static $INTROSPECT CFLAGS="$CFLAGS -O2"
+make clean
+make $PJOBS install
+cd libs/gst/check
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/gtk+-3.14.15
+cd $SPATH/json-glib-1.0.4
+configure --disable-static  $INTROSPECT
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/cogl-1.22.0
+# --with-gles2-libname=libglesv2.dll --enable-null-egl-platform --enable-cogl-gles2 --enable-gles2
+configure --enable-sdl $INTROSPECT CFLAGS="$CFLAGS -O2"
+make clean
+set +e
+make $PJOBS
+set -e
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/gettext-0.18.3.2
+if [ -f $IPATH/lib/libiconv.dll.a ]; then rm $IPATH/lib/libiconv.dll.a; fi
+configure --without-emacs --with-included-libunistring --with-included-gettext --disable-java --disable-csharp --disable-curses --disable-openmp --enable-threads=posix 
+#CFLAGS="$CFLAGS -DLIBICONV_PLUG=1"
+make clean
+make $PJOBS 
+manifest
+make install
+rm $IPATH/lib/*.la 
+rm $IPATH/lib/libgettextpo.dll.a
+cp $IPATH/lib/libintl.dll.a $IPATH/lib/libiconv.dll.a
+
+cd $SPATH/gtk+-3.18.5
 set +e
 rm gtk/extract-strings.exe
 rm gtk/extract-strings
@@ -610,31 +780,27 @@ fi
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-#cd $SPATH/gtk+-3.8.9
-#set +e
-#rm gtk/gtkbuiltincache.h 
-#rm gtk/stock-icons/icon-theme.cache
-#set -e
-#if [ "$CROSSX" == "1" ]; then
-#configure --enable-win32-backend --with-included-immodules --enable-broadway-backend --enable-gtk2-dependency PKG_CONFIG_FOR_BUILD=pkg-config --prefix=$IPATH/gtkold $INTROSPECT CFLAGS="$CFLAGS -O2"
-#else
-#if [ -d "$IPATH/gtkold" ]; then rm -rdf $IPATH/gtkold; fi
-#configure --enable-win32-backend --with-included-immodules --enable-broadway-backend --prefix=$IPATH/gtkold $INTROSPECT CFLAGS="$CFLAGS -O2"
-#fi
-#make clean
-#if [ "$2" == "90" ]; then
-#make $PJOBS
-#manifest
-#fi
-#make $PJOBS install
-#rm $IPATH/gtkold/lib/*.la
+cd $SPATH/unico-1.0.3+14.04.20140109
+configure --disable-static
+make clean
+make $PJOBS install
 
-cd $SPATH/libgpg-error-1.12
+cd $SPATH/clutter-1.24.2
+# --enable-egl-backend
+configure --disable-static --enable-gdk-backend $INTROSPECT
+make clean
+if [ -f clutter/win32/resources.o ];then
+rm clutter/win32/resources.o
+fi
+make $PJOBS
+manifest
+make install
+rm $IPATH/lib/*.la
+
+cd $SPATH/libgpg-error-1.20
 echo '#!/bin/sh
 exec /opt/bin/win_iconv.exe "$@"' > $IPATH/bin/iconv
-if [ -f $IPATH/lib/libgpg-error.dll.a ]; then
-rm $IPATH/lib/libgpg-error.dll.a
-fi
+if [ -f $IPATH/lib/libgpg-error.dll.a ]; then rm $IPATH/lib/libgpg-error.dll.a; fi
 if [ "$CROSSX" == "1" ]; then
 configure --disable-shared --enable-static --disable-nls CC_FOR_BUILD=/mingw-w64/bin/gcc.exe
 else
@@ -646,23 +812,23 @@ rm $IPATH/lib/*.la
 rm $IPATH/bin/iconv
 
 cd $SPATH/libgcrypt-1.5.4
-if [ -f $IPATH/lib/libgcrypt.dll.a ]; then
-rm $IPATH/lib/libgcrypt.dll.a
-fi
+if [ -f $IPATH/lib/libgcrypt.dll.a ]; then rm $IPATH/lib/libgcrypt.dll.a; fi
+if [ -f $IPATH/lib/libgpg-error.dll.a ]; then rm $IPATH/lib/libgpg-error.dll.a; fi
 if [ "$MULTILIB" == "64" ]; then
     if [ "$CROSSX" == "1" ]; then
-    configure --disable-shared --disable-asm --disable-padlock-support CC_FOR_BUILD=/mingw-w64/bin/gcc.exe
+    configure --disable-static --enable-shared --disable-asm --disable-padlock-support CC_FOR_BUILD=/mingw-w64/bin/gcc.exe
     else
-    configure --disable-shared --disable-asm --disable-padlock-support
+    configure --disable-static --enable-shared --disable-asm --disable-padlock-support
     fi
 else 
-configure --disable-shared
+configure --disable-static --enable-shared
 fi
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
+cp $IPATH/lib/libgcrypt.dll.a $IPATH/lib/libgpg-error.dll.a
 
-cd $SPATH/libtasn1-2.14
+cd $SPATH/libtasn1-4.7
 if [ -f $IPATH/lib/libtasn1.dll.a ]; then
 rm $IPATH/lib/libtasn1.dll.a
 fi
@@ -671,8 +837,14 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/p11-kit-0.22.1
+cd $SPATH/p11-kit-0.23.1
 configure --disable-static --without-trust-paths --disable-nls LIBS=-lffi
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/libidn-1.29
+configure --disable-static --disable-nls --disable-csharp --disable-java 
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -682,43 +854,51 @@ set +e
 make distclean
 set -e
 if [ "$MULTILIB" == "64" ]; then
-configure --enable-static --disable-shared ABI=64
+configure --disable-shared --enable-static ABI=64 --host=x86_64-w64-mingw32
+#--host=x86_64-w64-mingw32
+#--enable-fat
+#--host=pentium3-w64-mingw32
 else
-configure --enable-static --disable-shared ABI=32 --build=pentium3-w64-mingw32
+configure --disable-shared --enable-static ABI=32 --host=pentium3-w64-mingw32
 fi
 make $PJOBS install
 rm $IPATH/lib/*.la
+#rm $IPATH/lib/libgmp-10.dll
+#rm $IPATH/lib/libgmp.lib
 
 cd $SPATH/nettle-2.7.1
+#cd $SPATH/nettle-3.1.1
+if [ -f $IPATH/lib/libgmp.dll.a ]; then rm $IPATH/lib/libgmp.dll.a; fi
 set +e
 make distclean
 set -e
 configure --disable-shared --disable-openssl
-make $PJOBS install
+make $PJOBS
+make install
+#rm $IPATH/lib/libnettle.dll.a $IPATH/lib/libhogweed.dll.a
 
-cd $SPATH/gnutls-2.12.23
-if [ -f $IPATH/lib/libgcrypt.dll.a ]; then
-rm $IPATH/lib/libgcrypt.dll.a
-fi
-if [ -f $IPATH/lib/libtasn1.dll.a ]; then
-rm $IPATH/lib/libtasn1.dll.a
-fi
-if [ -f $IPATH/lib/libgpg-error.dll.a ]; then
-rm $IPATH/lib/libgpg-error.dll.a
-fi
-configure --disable-static --with-libgcrypt --disable-nls --with-included-libtasn1 --disable-guile --disable-openssl-compatibility --disable-cxx
+#cd $SPATH/gnutls-2.12.23
+#cd $SPATH/gnutls-3.4.4.1
+cd $SPATH/gnutls-3.2.21
+if [ -f $IPATH/lib/libnettle.dll.a ]; then rm $IPATH/lib/libnettle.dll.a; fi
+if [ -f $IPATH/lib/libtasn1.dll.a ]; then rm $IPATH/lib/libtasn1.dll.a; fi
+if [ -f $IPATH/lib/libgmp.dll.a ]; then rm $IPATH/lib/libgmp.dll.a; fi
+if [ -f $IPATH/lib/libhogweed.dll.a ]; then rm $IPATH/lib/libhogweed.dll.a; fi
+configure --disable-static --disable-nls --disable-doc --with-included-libtasn1 --disable-guile --disable-openssl-compatibility --disable-cxx
+#configure --disable-static --with-libgcrypt --disable-nls --disable-doc --with-included-libtasn1 --disable-guile --disable-openssl-compatibility --disable-cxx
 make clean
-make 
+make $PJOBS
 make $PJOBS install
 rm $IPATH/lib/*.la
 cp $IPATH/lib/libgnutls.dll.a $IPATH/lib/libtasn1.dll.a
-cp $IPATH/lib/libgnutls.dll.a $IPATH/lib/libgcrypt.dll.a
-cp $IPATH/lib/libgnutls.dll.a $IPATH/lib/libgpg-error.dll.a
+cp $IPATH/lib/libgnutls.dll.a $IPATH/lib/libnettle.dll.a
+cp $IPATH/lib/libgnutls.dll.a $IPATH/lib/libhogweed.dll.a
+cp $IPATH/lib/libgnutls.dll.a $IPATH/lib/libgmp.dll.a
 
-cd $SPATH/p11-kit-0.22.1
+cd $SPATH/p11-kit-0.23.1
 configure --disable-static --without-trust-paths --disable-nls LIBS=-lffi
 make clean
-make $PJOBS install
+make install
 rm $IPATH/lib/*.la
 
 cd $SPATH/sqlite-autoconf-3080600
@@ -744,12 +924,12 @@ mv $IPATH/liblibproxy.dll.a $IPATH/lib/libproxy.dll.a
 mv $IPATH/libproxy.dll $IPATH/bin/libproxy.dll
 mv $IPATH/proxy.exe $IPATH/bin/proxy.exe
 
-cd $SPATH/gsettings-desktop-schemas-3.14.1
+cd $SPATH/gsettings-desktop-schemas-3.18.1
 configure $INTROSPECT
 make clean
 make install
 
-cd  $SPATH/glib-networking-2.42.1
+cd  $SPATH/glib-networking-2.46.1
 configure --with-ca-certificates=curl-ca-bundle.crt --disable-static
 make clean
 make $PJOBS
@@ -764,35 +944,23 @@ else
 make install
 fi
 
-cd $SPATH/libsoup-2.48.1
-configure --disable-static $INTROSPECT 
+cd $SPATH/libsoup-2.52.2
+configure --disable-static $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
 cd $SPATH/rest-0.7.93
-configure --without-gnome --with-ca-certificates=curl-ca-bundle.crt $INTROSPECT
+configure --without-gnome --with-ca-certificates=curl-ca-bundle.crt  $INTROSPECT
 set +e
 make clean -k
 set -e
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/json-glib-1.0.4
-configure --disable-static  $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-#cd $SPATH/gnome-themes-standard-3.14.0
-#configure --disable-gtk2-engine
-#make $PJOBS
-
-#cd $SPATH/gnome-themes-standard-3.8.4
-#configure --disable-gtk2-engine --prefix=$IPATH/gtkold
-#make clean
-#make
-#make install
+cd $SPATH/gnome-themes-standard-3.18.0
+configure --disable-gtk2-engine
+make $PJOBS
 
 cd $SPATH/hicolor-icon-theme-0.12
 configure
@@ -802,15 +970,15 @@ mkdir -p $IPATH/share/icons/gnome
 cp $IPATH/share/icons/hicolor/index.theme $IPATH/share/icons/gnome/
 fi
 
-#cd $SPATH/adwaita-icon-theme-3.14.0
-#configure
-#make install
-
 cd $SPATH/iso-codes-3.23
 configure
 make clean
 make install
-
+:<<"XXXX"
+cd $SPATH/adwaita-icon-theme-3.18.0
+configure
+make install
+XXXX
 cd $SPATH/libeasyfc-0.13.0
 configure --disable-static $INTROSPECT
 make clean
@@ -826,27 +994,17 @@ make install
 #make clean
 #make install
 
-cd $SPATH/libnotify-0.7.6
-configure --disable-static $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
 cd $SPATH/libexif
 configure --disable-shared --disable-nls
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/orc-0.4.23
-configure --disable-static --enable-backend=sse,mmx
+cd $SPATH/libnotify-0.7.6
+configure --disable-static $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-#just in case
-if [ "$CROSSX" == "1" ]; then
-echo 'exec /opt/bin/${0##*/}.exe "$@"' > $IPATH/bin/orcc
-fi
 
 cd $SPATH/glade-3.18.3
 configure --enable-gladeui $INTROSPECT 
@@ -869,20 +1027,8 @@ make $PJOBS
 cp .libs/libgladepython.dll $IPATH/lib/glade/modules/libgladepython$i.dll
 done
 
-#cd $SPATH/gtksourceview-3.8.2
-#configure --prefix=$IPATH/gtkold --disable-static --enable-glade-catalog $INTROSPECT PKG_CONFIG_PATH="$IPATH/gtkold/lib/pkgconfig:$PKG_CONFIG_PATH"
-#make clean
-#make $PJOBS install
-#rm $IPATH/gtkold/lib/*.la
-
-cd $SPATH/gtksourceview-3.14.4
+cd $SPATH/gtksourceview-3.18.1
 configure --disable-static --enable-glade-catalog $INTROSPECT 
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/gstreamer-1.4.5
-configure --disable-static $INTROSPECT --enable-check CFLAGS="$CFLAGS -O2"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -911,7 +1057,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/opus-1.1.1-beta
+cd $SPATH/opus-1.1
 configure --disable-shared --enable-float-approx --enable-custom-modes
 make clean
 make $PJOBS install
@@ -940,8 +1086,8 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/gst-plugins-base-1.4.5
-configure --disable-static --enable-experimental $INTROSPECT
+cd $SPATH/gst-plugins-base-1.6.1
+configure --disable-static --enable-experimental $INTROSPECT LIBS=-logg
 make clean
 make $PJOBS install
 cd docs/plugins
@@ -949,7 +1095,7 @@ make install
 rm $IPATH/lib/*.la
 
 # fixme crashed in 64bit
-cd $SPATH/gst-python-1.4.0
+cd $SPATH/gst-python-1.6.1
 if [ "$2" == "90" ]; then
 list="27 31 32"
 else
@@ -958,54 +1104,27 @@ fi
 for i in $list; do
 PYINC=`python$i$MULTILIB-config --cflags`
 echo $PYINC
-configure PYTHON=python$i CPPFLAGS="$CPPFLAGS $PYINC" LIBS=-lpython$i PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py$i/lib/pkgconfig" --prefix=$IPATH/py$i --with-pygi_overrides_dir=$IPATH/py$i/lib/site-packages/gi/overrides PYTHON_INCLUDES=$PYINC
+set +e
+make distclean -k
+find . -name *.Plo -exec rm {} +
+set -e
+configure --disable-static PYTHON=python$i CPPFLAGS="$CPPFLAGS $PYINC" LIBS=-lpython$i PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py$i/lib/pkgconfig" --prefix=$IPATH/py$i --with-pygi-overrides-dir=$IPATH/py$i/lib/site-packages/gi/overrides PYTHON_INCLUDES=$PYINC CFLAGS="$CFLAGS -O2"
 make clean
-make V=1 install 
-mv $IPATH/py$i/lib/bin/libgstpythonplugin.dll libgstpythonplugin-py$i.dll
+make install 
+mv $IPATH/py$i/lib/bin/libgstpythonplugin.dll $IPATH/py$i/lib/gstreamer-1.0/libgstpythonplugin-py$i.dll
 done
 
-cd $SPATH/SDL-1.2.15
-configure --disable-static --disable-stdio-redirect CFLAGS="$CFLAGS -O2"
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la $IPATH/bin/sdl-config
-
-cd $SPATH/cogl-1.20.0
-configure --enable-sdl $INTROSPECT CFLAGS="$CFLAGS -O2"
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-#$CC coglpath.def -shared $LDFLAGS -o $IPATH/bin/libcogl-20.dll -Wl,--whole-archive cogl/.libs/libcogl.a cogl-path/.libs/libcogl-path.a -Wl,--no-whole-archive -Wl,--out-implib,$IPATH/lib/libcogl.dll.a `pkg-config --libs gobject-2.0 gmodule-no-export-2.0 gdk-pixbuf-2.0 sdl` -lopengl32
-#cp $IPATH/lib/libcogl.dll.a $IPATH/lib/libcogl-path.dll.a
-#mv $IPATH/lib/bin/libgstcogl.dll $IPATH/lib/gstreamer-1.0/libgstcogl.dll
-#rm $IPATH/lib/*.la $IPATH/bin/libcogl-path-20.dll
-
-cd $SPATH/clutter-1.22.4
-configure --disable-static $INTROSPECT
-make clean
-if [ -f clutter/win32/resources.o ];then
-rm clutter/win32/resources.o
-fi
-make
-manifest
-make install
-rm $IPATH/lib/*.la
-
 cd $SPATH/clutter-box2d-master
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
 configure --disable-static $INTROSPECT CXXFLAGS="$CXXFLAGS -O2"
 make clean
 make $PJOBS 
 make install
 rm $IPATH/lib/*.la
+mv $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
 
 cd $SPATH/clutter-gtk-1.6.2
 configure --disable-static --enable-debug=minimum $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/libidn-1.29
-configure --disable-static --disable-nls --disable-csharp --disable-java 
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -1021,7 +1140,7 @@ export CC__=$CC
 export CXX__=$CXX
 export CC=gcc
 export CXX=g++
-cd $SPATH/openssl-1.0.1l
+cd $SPATH/openssl-1.0.2d
 ./configure mingw$MULTILIB enable-static-engine zlib threads --prefix=$IPATH $CFLAGS $LDFLAGS
 make clean
 make
@@ -1034,15 +1153,16 @@ rm -f $IPATH/lib/libcrypto.dll.a $IPATH/lib/libssl.dll.a $IPATH/bin/libeay32.dll
 $CC -shared -o $IPATH/bin/libopenssl.dll -Wl,--out-implib,$IPATH/lib/libssl.dll.a -Wl,--whole-archive libssl.a libcrypto.a -Wl,--no-whole-archive $LDFLAGS -lz -lws2_32 -lgdi32 -lcrypt32 -lsecur32
 cp $IPATH/lib/libssl.dll.a $IPATH/lib/libcrypto.dll.a
 
-cd $SPATH/libssh2-1.4.3
-configure --disable-shared --enable-static --with-openssl --with-libz CPPFLAGS="$CPPFLAGS -DLIBSSH2_LIBRARY=1"
+cd $SPATH/libssh2-1.6.0
+configure --disable-shared --enable-static --with-libgcrypt -without-openssl --without-wincng --with-libz CPPFLAGS="$CPPFLAGS -DLIBSSH2_LIBRARY=1"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libgit2-0.22.2
+cd $SPATH/libgit2-0.23.2
 if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
-cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH  -DCMAKE_BUILD_TYPE=MinSizeRel -DUSE_ICONV=ON -DUSE_SSH=ON -DBUILD_SHARED_LIBS=OFF -DTHREADSAFE=ON -DOPENSSL_ROOT_DIR=$IPATH -DOPENSSL_LIBRARIES=$IPATH/lib -DOPENSSL_INCLUDE_DIR=$IPATH/include -DSSL_EAY=$IPATH/lib/libssl.dll.a -DBUILD_CLAR=OFF -DLIB_EAY=$IPATH/lib/libcrypto.dll.a
+cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH  -DCMAKE_BUILD_TYPE=MinSizeRel -DUSE_ICONV=ON -DUSE_SSH=ON -DBUILD_SHARED_LIBS=OFF -DTHREADSAFE=ON -DBUILD_CLAR=OFF
+#-DOPENSSL_ROOT_DIR=$IPATH -DOPENSSL_LIBRARIES=$IPATH/lib -DOPENSSL_INCLUDE_DIR=$IPATH/include -DSSL_EAY=$IPATH/lib/libssl.dll.a  -DLIB_EAY=$IPATH/lib/libcrypto.dll.a
 make clean
 make $PJOBS install
 echo 'prefix=
@@ -1051,10 +1171,10 @@ libdir=${exec_prefix}/lib
 includedir=${prefix}/include
 Name: libgit2
 Description: The git library, take 2
-Version: 0.22.2
-Requires: libssh2,libssl,libcrypto,zlib
+Version: 0.23.2
+Requires: libssh2,zlib
 Cflags: -I${includedir}
-Libs: -L${libdir} -lgit2
+Libs: -L${libdir} -lgit2 -lrpcrt4 -lole32 -lwinhttp -lcrypt32
 ' > $IPATH/lib/pkgconfig/libgit2.pc
 
 cd $SPATH/lcms2-2.7
@@ -1081,6 +1201,139 @@ Libs.private: -lm
 Cflags: -I${includedir}
 ' > $IPATH/lib/pkgconfig/libopenjp2.pc
 
+if [ "$CROSSX" != "1" ]; then
+cd $SPATH/ilmbase-2.2.0
+# need explicitly sse2 opt otherwise it break
+configure CXXFLAGS="$CXXFLAGS -msse2"
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+cd $SPATH/openexr-2.2.0
+configure CXXFLAGS="$CXXFLAGS -msse2"
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+$CXX $LDFLAGS -shared -o $IPATH/bin/libopenexr-2.dll -Wl,-whole-archive $IPATH/lib/libIlmImf.a $IPATH/lib/libIlmImfUtil.a $IPATH/lib/libIlmThread.a $IPATH/lib/libImath.a $IPATH/lib/libIexMath.a $IPATH/lib/libIex.a $IPATH/lib/libHalf.a -Wl,--no-whole-archive -Wl,--out-implib,$IPATH/lib/libIlmImf.dll.a -lz
+cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libIlmThread.dll.a
+cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libIlmImfUtil.dll.a
+cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libImath.dll.a
+cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libIexMath.dll.a
+cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libIex.dll.a
+cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libHalf.dll.a
+cd $IPATH/bin/
+rm libIlmImf*.dll libIlmThread*.dll libImath*.dll libIex*.dll libHalf*.dll
+fi
+
+:<<"XXXX"
+# use luajit below
+cd $SPATH/lua-5.1.5
+make PREFIX=$IPATH mingw clean
+make PREFIX=$IPATH $PJOBS mingw
+make PREFIX=$IPATH $PJOBS mingw install
+echo '
+prefix=
+exec_prefix=${prefix}
+libdir=${prefix}/lib
+includedir=${prefix}/include
+Name: Lua
+Description: An Extensible Extension Language
+Version: 5.1.5
+Requires: 
+Libs: -L${libdir} -llua -lm
+Cflags: -I${includedir}
+' > $IPATH/lib/pkgconfig/lua5.1.pc
+XXXX
+
+cd $SPATH/luajit-2.0.3/src
+make clean
+make HOST_CC="$CC" CFLAGS="$CFLAGS -O3" TARGET_SYS=Windows PREFIX=$IPATH $PJOBS
+cd ..
+make PREFIX=$IPATH install
+cp src/liblua51.dll $IPATH/bin/
+cp src/luajitw.exe $IPATH/bin/
+cp $IPATH/include/luajit-2.0/* $IPATH/include/
+cp src/liblua.dll.a $IPATH/lib/
+cp src/liblua.dll.a $IPATH/lib/libluajit-2.0.dll.a
+cp $IPATH/lib/pkgconfig/luajit.pc $IPATH/lib/pkgconfig/lua.pc
+#cp -a $IPATH/share/luajit-2.0.3/jit $IPATH/share/lua/5.1/
+echo '
+prefix=
+exec_prefix=${prefix}
+includedir=${prefix}/include
+libdir=${prefix}/lib
+Name: Lua
+Description: Just-in-time compiler for Lua
+URL: http://luajit.org
+Version: 5.1.5
+Requires:
+Libs: -L${libdir} -llua
+Libs.private: -Wl,-E -lm -ldl
+Cflags: -I${includedir}
+'>$IPATH/lib/pkgconfig/lua5.1.pc
+
+cd $SPATH/lgi-0.9.0
+make clean
+make CFLAGS="$CFLAGS $CPPFLAGS -O2"
+make install PREFIX=$IPATH
+
+cd $SPATH/libspiro
+configure --enable-static --disable-shared
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/exiv2
+set +e
+make distclean
+set -e
+configure --disable-shared --enable-static CPPFLAGS="$CPPFLAGS $(pkg-config --cflags glib-2.0)" LIBS="$(pkg-config --libs glib-2.0)"
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/lensfun-0.2.5/libs/lensfun
+set +e
+rm *.o *.a
+set -e
+if [ "$MULTILIB" == "64" ]; then
+$CXX $CFLAGS $CPPFLAGS -msse2 $(pkg-config --cflags glib-2.0) -DVECTORIZATION_SSE2=1 -fvisibility=hidden -Wno-non-virtual-dtor -I../../include -c *.cpp
+else
+set +e
+$CXX $CFLAGS $CPPFLAGS $(pkg-config --cflags glib-2.0) -DVECTORIZATION_SSE=1 -fvisibility=hidden -Wno-non-virtual-dtor -I../../include -c *.cpp
+set -e
+fi
+ar cru $IPATH/lib/liblensfun.a *.o
+ranlib $IPATH/lib/liblensfun.a
+cp $SPATH/lensfun-0.2.5/include/lensfun/lensfun.h $IPATH/include/
+echo 'prefix=
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+Name: lensfun
+Description: A photographic lens database and access library
+Version: 0.2.5
+Requires: glib-2.0,libpng
+Cflags: -I${includedir}
+Libs: -L${libdir} -llensfun -lregex
+' > $IPATH/lib/pkgconfig/lensfun.pc
+
+cd $SPATH/babl-0.1.12
+if [ "$MULTILIB" == "64" ]; then
+configure --disable-static CFLAGS="$CFLAGS -O2"
+else
+configure --disable-sse2 --disable-static CFLAGS="$CFLAGS -O2"
+fi
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/hspell-1.2
+configure --enable-fatverb
+make clean
+make libhspell.a
+cp hspell.h $IPATH/include/
+cp libhspell.a $IPATH/lib/
+
+#begin c++
 cd $SPATH/aspell
 configure --disable-static --enable-win32-relocatable --enable-compile-in-filters --disable-nls
 make clean
@@ -1093,13 +1346,6 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/hspell-1.2
-configure --enable-fatverb
-make clean
-make libhspell.a
-cp hspell.h $IPATH/include/
-cp libhspell.a $IPATH/lib/
-
 cd $SPATH/libvoikko-3.5
 configure  --disable-shared
 cp config.h.w64 config.h
@@ -1107,6 +1353,7 @@ touch config.h
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
+#end c++
 
 cd $SPATH/enchant
 configure --disable-static  LIBS="-laspell -lstdc++"
@@ -1114,7 +1361,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/gssdp-0.14.11
+cd $SPATH/gssdp-0.14.12
 configure --disable-static $INTROSPECT
 make clean
 make $PJOBS install
@@ -1126,7 +1373,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/gdl-3.14.0
+cd $SPATH/gdl-3.18.0
 configure --disable-static $INTROSPECT 
 make clean
 make $PJOBS install
@@ -1148,7 +1395,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libchamplain-0.12.10
+cd $SPATH/libchamplain-0.12.11
 configure --enable-memphis --disable-static --disable-debug $INTROSPECT 
 make clean
 make $PJOBS install
@@ -1183,7 +1430,7 @@ rm $IPATH/bin/xsltproc.exe
 
 cd $SPATH/ghostscript-9.14
 #configure --with-drivers=FILES --with-system-libtiff --with-libidn --with-jbig2dec --enable-threadsafe --enable-cairo --enable-fontconfig --enable-freetype --without-x --disable-contrib --disable-openjpeg --with-gs=gswin${CPUARCH}c 
-configure --with-drivers=FILES,display,djvusep,djvumask --disable-cups --enable-cairo --with-system-libtiff --with-jbig2dec --disable-openjpeg --enable-fontconfig --enable-freetype --disable-contrib --without-x LIBS=-lopenjp2
+configure --with-drivers=display,plan,planc,plang,plank,planm,epswrite,ps2write,eps2write,pdfwrite --disable-cups --enable-cairo --with-system-libtiff --with-jbig2dec --disable-openjpeg --enable-fontconfig --enable-freetype --disable-contrib --without-x LIBS=-lopenjp2
 make soclean
 make $PJOBS so
 make soinstall
@@ -1199,7 +1446,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/goffice-0.10.23
+cd $SPATH/goffice-0.10.24
 configure --with-config-backend=gsettings --enable-compile-warnings=no $INTROSPECT
 make clean
 make $PJOBS install
@@ -1224,19 +1471,75 @@ mv $IPATH/bin/glib-genmarshal.bak $IPATH/bin/glib-genmarshal.exe
 fi
 fi
 
-if [ ! -d $SPATH/webkitgtk-1.10.2/$2-$CPUARCH ];then mkdir $SPATH/webkitgtk-1.10.2/$2-$CPUARCH; fi
-cd $SPATH/webkitgtk-1.10.2/$2-$CPUARCH
-../configure $triplet --prefix=$IPATH --with-target=win32 --with-gstreamer=1.0 --enable-animation-api --enable-link-prefetch --enable-register-protocol-handler --enable-device-orientation --enable-page-visibility-api --enable-css3-flexbox --enable-css3-text-decoration --enable-css-regions --enable-css-compositing --enable-style-scoped --enable-microdata --enable-web-timing --enable-video-track --enable-media-statistics --enable-media-stream --enable-mutation-observers --disable-webkit2 --disable-plugin-process --disable-jit --with-unicode-backend=glib --with-font-backend=pango $INTROSPECT
-# --with-gtk=2.0
+cd $SPATH/geocode-glib-3.18.0
+configure $INTROSPECT
 make clean
-# memory exhaustion may occured during build so unset errorchecking temporary
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/libsecret-0.18.3
+configure --disable-static $INTROSPECT
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+# 32 webkit need -O2 for libwebkit_Sources
+# 64 webkit need -Os for libwebkit_Sources
+# change in Gnumakefile.in
+# static link only add up 140kb
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
+if [ "$2" == "90" ]; then
+if [ ! -d $SPATH/webkitgtk-2.2.8/$2-$CPUARCH ];then mkdir $SPATH/webkitgtk-2.2.8/$2-$CPUARCH; fi
+cd $SPATH/webkitgtk-2.2.8/$2-$CPUARCH
+../configure $triplet --prefix=$IPATH --with-target=win32 --disable-webgl LDFLAGS="$LDFLAGS -Wl,--no-keep-memory" CXXFLAGS="$CXXFLAGS -DUSE_PTHREADS -DWTF_USE_PTHREADS" $INTROSPECT
+make clean
+set +e
+if [ ! -f libwebkit2gtk-3.0.la ]; then make $PJOBS; fi
+if [ ! -f libwebkit2gtk-3.0.la ]; then make $PJOBS; fi
+if [ ! -f libwebkit2gtk-3.0.la ]; then make $PJOBS; fi
+if [ ! -f libwebkit2gtk-3.0.la ]; then make $PJOBS; fi
+if [ ! -f libwebkit2gtk-3.0.la ]; then make $PJOBS; fi
+set -e
+make install
+rm $IPATH/lib/*.la
+else
+cd $SPATH/webkitgtk-2.2.8/90-$CPUARCH
+if [ -f libwebkit2gtk-3.0.la ]; then
+sed --in-place -e "s;LDFLAGS = -m$CPUARCH -vcr90;LDFLAGS = -m$CPUARCH -vcr$2;" -e "s;prefix = /e/rtvc90-$CPUARCH;prefix = $IPATH;" -e "s;CXX = g++ -m$CPUARCH -vcr90;CXX = g++ -m$CPUARCH -vcr$2;" -e "s;G_IR_COMPILER = e:/rtvc90-$CPUARCH;G_IR_COMPILER = $IPATH;" -e "s;G_IR_GENERATE = e:/rtvc90-$CPUARCH;G_IR_GENERATE = $IPATH;" -e "s;G_IR_SCANNER = e:/rtvc90-$CPUARCH;G_IR_SCANNER = $IPATH;" GNUmakefile
+sed --in-place -e "s;-lmsvcr90;-lmsvcr$2;g" -e "s; -vcr90 ; -vcr100 ;" -e "s;d:/moluccas/gcc48/bin/../lib/gcc/i686-w64-mingw32/4.8.5/../../../../i686-w64-mingw32/lib/../lib$MULTILIB/vc90dllman.o;;" libtool
+rm libjavascriptcoregtk-3.0.la libwebkit2gtk-3.0.la libwebkitgtk-3.0.la
+fi
+make install
+rm $IPATH/lib/*.la
+fi
+mv $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
+
+:<<"XXXX"
+cd $SPATH/hyphen-2.8.8
+configure --disable-shared --enable-static
+make clean
+make $PJOBS install 
+rm $IPATH/lib/*.la
+
+if [ ! -d $SPATH/webkitgtk-2.10.0/mingw ]; then
+mkdir $SPATH/webkitgtk-2.10.0/mingw
+fi
+export PATH=$SPATH/webkitgtk-2.10.0/mingw/bin:$PATH
+cd $SPATH/webkitgtk-2.10.0/mingw
+#if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
+#cmake -G "MSYS Makefiles" -DENABLE_ACCELERATED_2D_CANVAS=ON -DUSE_SYSTEM_MALLOC=ON -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel -DPORT=GTK ..
+#make clean
 set +e
 make $PJOBS
-make $PJOBS
-make $PJOBS
+if [ ! -f bin/libwebkit2gtk-4.0.dll ]; then make $PJOBS; fi
+if [ ! -f bin/libwebkit2gtk-4.0.dll ]; then make $PJOBS; fi
+if [ ! -f bin/libwebkit2gtk-4.0.dll ]; then make $PJOBS; fi
+if [ ! -f bin/libwebkit2gtk-4.0.dll ]; then make $PJOBS; fi
+if [ ! -f bin/libwebkit2gtk-4.0.dll ]; then make $PJOBS; fi
+if [ ! -f bin/libwebkit2gtk-4.0.dll ]; then make $PJOBS; fi
 set -e
-make 
-rm $IPATH/lib/*.la
+make install
+export PATH=$(echo $PATH | sed -e "s;$SPATH/webkitgtk-2\.10\.0/mingw/bin:;;")
 
 cd $SPATH/libproxy-0.4.11/
 # gir need recompile
@@ -1254,23 +1557,24 @@ cp libmodman/libmodman.a $IPATH/lib/libmodman.a
 mv $IPATH/liblibproxy.dll.a $IPATH/lib/libproxy.dll.a
 mv $IPATH/libproxy.dll $IPATH/bin/libproxy.dll
 mv $IPATH/proxy.exe $IPATH/bin/proxy.exe
+XXXX
 
-cd $SPATH/curl-7.38.0
-configure --with-winssl --with-ca-bundle=curl-ca-bundle.crt --disable-debug --disable-gopher --disable-telnet --disable-ldap --disable-static --enable-shared --without-ssl --with-libidn --without-librtmp --without-polarssl --enable-threaded-resolver --disable-imap --disable-pop3 --disable-rtsp --disable-ares --disable-manual --enable-sspi --without-libssh2 --disable-dict --enable-ipv6 LIBS=-liconv
+cd $SPATH/curl-7.43.0
+configure --with-winssl --with-ca-bundle=curl-ca-bundle.crt --disable-debug --disable-gopher --disable-telnet --disable-ldap --disable-static --enable-shared --without-ssl --with-libidn --without-librtmp --without-polarssl --enable-threaded-resolver --disable-imap --disable-pop3 --disable-rtsp --disable-ares --disable-manual --enable-sspi --with-libssh2 --disable-dict --enable-ipv6 LIBS=-liconv
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/poppler-0.34.0
-# gir remove poppler dll
+#c++
+cd $SPATH/poppler-0.38.0
 configure --enable-zlib --enable-libcurl --enable-libopenjpeg=openjpeg2 --with-font-configuration=fontconfig --disable-poppler-cpp CXXFLAGS="$CXXFLAGS -DSPLASH_CMYK" CFLAGS="$CFLAGS -DSPLASH_CMYK" $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-#rm $IPATH/lib/*.la $IPATH/bin/libpoppler-??.dll
-#cd glib
-#$CXX -shared $LDFLAGS .libs/*.o  -Wl,--whole-archive ../poppler/.libs/libpoppler-cairo.a ../poppler/.libs/libpoppler.a -Wl,--no-whole-archive -lcurl -lgio-2.0 -lgobject-2.0 -lglib-2.0 -lintl -lcairo -lfontconfig -lfreetype -ljpeg -lpng16 -ltiff -llcms2 -lopenjp2 -lz -Wl,--enable-auto-import -o $IPATH/bin/libpoppler-glib-8.dll -Wl,--out-implib,$IPATH/lib/libpoppler-glib.dll.a
-#cp $IPATH/lib/libpoppler-glib.dll.a $IPATH/lib/libpoppler.dll.a
+rm $IPATH/bin/libpoppler-??.dll
+cd glib
+$CXX -shared $LDFLAGS .libs/*.o ../poppler/.libs/libpoppler-cairo.a ../poppler/.libs/libpoppler.a -lgio-2.0 -lgobject-2.0 -lglib-2.0 -lintl -lcairo -lfontconfig -lfreetype -ljpeg -lpng16 -ltiff -llcms2 -lopenjp2 -lz -Wl,--enable-auto-import -o $IPATH/bin/libpoppler-glib-8.dll -Wl,--out-implib,$IPATH/lib/libpoppler-glib.dll.a
+cp $IPATH/lib/libpoppler-glib.dll.a $IPATH/lib/libpoppler.dll.a
 
 cd $SPATH/discident-glib
 configure $INTROSPECT
@@ -1284,7 +1588,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libnice-0.1.8
+cd $SPATH/libnice-0.1.13
 # gir missing shared-library
 configure --enable-compile-warnings=minimum --disable-static $INTROSPECT
 make clean
@@ -1297,47 +1601,47 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
+if [ -d $IPATH/include/libavcodec ]; then rm -rdf $IPATH/include/libavcodec; fi
+if [ -d $IPATH/include/libavformat ]; then rm -rdf $IPATH/include/libavformat; fi
+if [ -d $IPATH/include/libavutil ]; then rm -rdf $IPATH/include/libavutil; fi
+cd $SPATH/gst-libav-1.6.1
+# dont use --enable-small
+if [ "$MULTILIB" == "64" ]; then
+configure --with-libav-extra-configure="--disable-runtime-cpudetect --disable-sse42 --disable-sse4 --disable-ssse3 --disable-sse3 --optflags=-Os" CFLAGS="$CFLAGS -Os"
+else
+configure --with-libav-extra-configure="--disable-runtime-cpudetect --disable-sse42 --disable-sse4 --disable-ssse3 --disable-sse3 --disable-sse2 --optflags=-Os" CFLAGS="$CFLAGS -Os"
+fi
+make clean
+make $PJOBS install
+cd gst-libs/ext/libav
+make install
+
+cd $SPATH/gegl-0.3.0
+if [ "$CROSSX" == "1" ]; then
+configure --disable-static --enable-workshop $INTROSPECT --disable-gtk-doc-html --disable-gtk-doc --disable-docs CFLAGS="$CFLAGS -O2" LIBS="-lstdc++ -ljpeg"
+else
+configure --disable-static --enable-workshop --disable-gtk-doc-html --disable-gtk-doc --disable-docs $INTROSPECT CFLAGS="$CFLAGS -O2" LIBS="-lstdc++ -ljpeg"
+fi
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
 cd $SPATH/wavpack-4.70.0
 configure --disable-shared --enable-mmx
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-if [ -d $IPATH/include/libavcodec ]; then rm -rdf $IPATH/include/libavcodec; fi
-if [ -d $IPATH/include/libavformat ]; then rm -rdf $IPATH/include/libavformat; fi
-if [ -d $IPATH/include/libavutil ]; then rm -rdf $IPATH/include/libavutil; fi
-cd $SPATH/gst-libav-1.4.5
-# dont use --enable-small
-if [ "$MULTILIB" == "64" ]; then
-configure --enable-lgpl --with-libav-extra-configure="--disable-runtime-cpudetect --disable-sse42 --disable-sse4 --disable-ssse3 --disable-sse3 --optflags=-Os" CFLAGS="$CFLAGS -Os"
-else
-configure --enable-lgpl --with-libav-extra-configure="--disable-runtime-cpudetect --disable-sse42 --disable-sse4 --disable-ssse3 --disable-sse3 --disable-sse2 --optflags=-Os" CFLAGS="$CFLAGS -Os"
-fi
-make clean
-make $PJOBS install
-if [ ! -d $IPATH/include/libavutil ]; then mkdir $IPATH/include/libavutil; fi
-cd gst-libs/ext/libav/libavutil
-cp attributes.h avconfig.h avutil.h macros.h buffer.h frame.h cpu.h dict.h log.h mem.h old_pix_fmts.h pixfmt.h rational.h samplefmt.h version.h $IPATH/include/libavutil/
-cp libavutil.a $IPATH/lib/
-if [ ! -d $IPATH/include/libavformat ]; then mkdir $IPATH/include/libavformat; fi
-cd ../libavformat
-cp avformat.h $IPATH/include/libavformat/
-if [ ! -d $IPATH/include/libavcodec ]; then mkdir $IPATH/include/libavcodec; fi
-cd ../libavcodec/
-#cp old_codec_ids.h avfft.h avcodec.h version.h $IPATH/include/libavcodec
-cp avfft.h avcodec.h version.h $IPATH/include/libavcodec/
-cp libavcodec.a $IPATH/lib/
-
-cd $SPATH/libcaca-0.99.beta18
-configure --enable-static --disable-shared --disable-java --disable-ruby --disable-cxx --disable-csharp --disable-python --disable-doc
+cd $SPATH/libcaca-0.99.beta19
+configure --enable-static --disable-shared --disable-java --disable-ruby --disable-cxx --disable-csharp --disable-python --disable-doc CPPFLAGS="$CPPFLAGS -DCACA_STATIC"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-#set +e
-#b2 --prefix=$IPATH --without-python --without-mpi --disable-icu --layout=system variant=release link=static runtime-link=static threading=multi toolset=gcc optimization=space address-model=$CPUARCH cflags="-msse2 -D__MSVCRT_VERSION__=0x0900 -D_FILE_OFFSET_BITS=64" cxxflags="-msse2 -D__MSVCRT_VERSION__=0x0900 -D_FILE_OFFSET_BITS=64" -sNO_ZLIB=0 -sZLIB_INCLUDE=$IPATH/include -sZLIB_LIBPATH=$IPATH/lib -sICONV_LIBPATH=$IPATH/lib clean
-#b2 $PJOBS --prefix=$IPATH --without-python --without-mpi --disable-icu --layout=system variant=release link=static runtime-link=static threading=multi toolset=gcc optimization=space address-model=$CPUARCH cflags="-msse2 -D__MSVCRT_VERSION__=0x0900 -D_FILE_OFFSET_BITS=64" cxxflags="-msse2 -D__MSVCRT_VERSION__=0x0900 -D_FILE_OFFSET_BITS=64" -sNO_ZLIB=0 -sZLIB_INCLUDE=$IPATH/include -sZLIB_LIBPATH=$IPATH/lib -sICONV_LIBPATH=$IPATH/lib install
-#set -e
+:<<"XXXX"
+cd $SPATH/boost_1_55_0
+b2 --prefix=$GCC_LOC/$GCC_TRI --libdir=$GCC_LOC/$GCC_TRI/lib$MULTILIB --without-python --without-mpi --disable-icu --layout=system variant=release link=static runtime-link=static threading=multi toolset=gcc optimization=space address-model=$CPUARCH clean
+b2 --prefix=$GCC_LOC/$GCC_TRI --libdir=$GCC_LOC/$GCC_TRI/lib$MULTILIB --without-python --without-mpi --disable-icu --layout=system variant=release link=static runtime-link=static threading=multi toolset=gcc optimization=space address-model=$CPUARCH cflags="$CFLAGS" cxxflags="$CXXFLAGS -Wno-deprecated-declarations -Wno-unused-variable -Wno-unused-local-typedefs -std=c++11" $PJOBS install
+XXXX
 
 cd $SPATH/taglib-1.9.1
 if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
@@ -1381,22 +1685,6 @@ rm $IPATH/lib/*.la
 $CC $LDFLAGS -shared -o $IPATH/bin/libfftw3.dll -Wl,--whole-archive $IPATH/lib/libfftw3.a $IPATH/lib/libfftw3f.a -Wl,--no-whole-archive -Wl,--out-implib,$IPATH/lib/libfftw3.dll.a
 cp $IPATH/lib/libfftw3.dll.a $IPATH/lib/libfftw3f.dll.a
 
-cd $SPATH/chromaprint-1.0
-if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
-cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_SHARED_LIBS=OFF -DWITH_FFTW3=OFF -DWITH_AVFFT=OFF
-make clean
-make $PJOBS install
-echo 'prefix=
-exec_prefix=${prefix}
-libdir=${exec_prefix}/lib
-includedir=${prefix}/include
-Name: chromaprint
-Description: Audio fingerprint library
-Version: 1.0.0
-Cflags: -I${includedir} -DCHROMAPRINT_NODLL
-Libs: -L${libdir} -lchromaprint -lavcodec -lavutil -lstdc++
-' > $IPATH/lib/pkgconfig/libchromaprint.pc
-
 cd $SPATH/speex
 configure --with-fft=smallft --enable-static --disable-shared
 make clean
@@ -1423,6 +1711,14 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
+if [ ! -d $SPATH/eigen3/mingw ]; then
+mkdir $SPATH/eigen3/mingw
+fi
+cd $SPATH/eigen3/mingw
+if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
+cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=Release ..
+make install
+
 cd $SPATH/tbb40_20120613oss/src
 set +e
 if [ "$MULTILIB" == "64" ]; then
@@ -1443,18 +1739,10 @@ ar cru $IPATH/lib/libtbbmalloc_proxy.a proxy.o tbb_function_replacement.o
 ranlib $IPATH/lib/libtbbmalloc_proxy.a
 cp -a $SPATH/tbb40_20120613oss/include/tbb $IPATH/include/
 
-if [ ! -d $SPATH/eigen3/mingw ]; then
-mkdir $SPATH/eigen3/mingw
-fi
-cd $SPATH/eigen3/mingw
-if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
-cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=Release ..
-make install
-
 if [ ! -d $SPATH/OpenCV-2.4.11/mingw ]; then mkdir $SPATH/OpenCV-2.4.11/mingw; fi
 cd $SPATH/OpenCV-2.4.11/mingw
 if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
-cmake -G "MSYS Makefiles"  -DCMAKE_CXX_COMPILER=$GCC_LOC/bin/g++.exe -DCMAKE_INSTALL_PREFIX=$IPATH -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_SHARED_LIBS=OFF -DBUILD_DOCS=OFF -DWITH_TBB=ON -DWITH_PNG=OFF -DWITH_JASPER=OFF -DWITH_JPEG=OFF -DENABLE_FAST_MATH=ON -DWITH_OPENEXR=OFF -DWITH_FFMPEG=OFF -DWITH_TIFF=OFF -DBUILD_opencv_python=OFF ..
+cmake -G "MSYS Makefiles"  -DCMAKE_CXX_COMPILER=$GCC_LOC/bin/g++.exe -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_SHARED_LIBS=OFF -DBUILD_DOCS=OFF -DWITH_TBB=ON -DWITH_PNG=OFF -DWITH_JASPER=OFF -DWITH_JPEG=OFF -DENABLE_FAST_MATH=ON -DWITH_OPENEXR=OFF -DWITH_FFMPEG=OFF -DWITH_TIFF=OFF -DBUILD_opencv_python=OFF ..
 make clean
 make $PJOBS install
 if [ -f $IPATH/x64/mingw/staticlib/OpenCVConfig.cmake ]; then
@@ -1488,11 +1776,11 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libvpx-1.4.0
+cd $SPATH/libvpx-1.5.0
 if [ "$MULTILIB" == "64" ]; then 
-./configure64 --target=x86_64-win64-gcc --disable-shared --disable-unit-tests --disable-examples --enable-vp8 --enable-vp9 --disable-runtime-cpu-detect --enable-multi-res-encoding --enable-postproc --enable-vp9-postproc --prefix=$IPATH
+./configure --target=x86_64-win64-gcc --disable-shared --disable-unit-tests --disable-examples --enable-vp8 --enable-vp9 --disable-runtime-cpu-detect --disable-sse3 --disable-ssse3 --disable-sse4_1 --disable-avx --disable-avx2 --enable-small --enable-multithread --enable-multi-res-encoding --enable-postproc --enable-vp9-postproc --prefix=$IPATH
 else
-./configure --disable-shared --disable-unit-tests --disable-examples --enable-vp8 --enable-vp9 --disable-runtime-cpu-detect --enable-multi-res-encoding --enable-postproc --enable-vp9-postproc --prefix=$IPATH
+./configure --disable-shared --disable-unit-tests --disable-examples --enable-vp8 --enable-vp9 --disable-runtime-cpu-detect --disable-sse2 --disable-sse3 --disable-ssse3 --disable-sse4_1 --disable-avx --disable-avx2 --enable-multithread --enable-small --enable-multi-res-encoding --enable-postproc --enable-vp9-postproc --prefix=$IPATH
 fi
 make clean
 make $PJOBS install
@@ -1510,7 +1798,6 @@ exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${exec_prefix}/include
 server_libs= -ljackserver
-
 Name: jack2
 Description: the Jack Audio Connection Kit: a low-latency synchronous callback-based media server
 Version: 1.9.10
@@ -1531,20 +1818,27 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
+cd $SPATH/libltdl
+configure --disable-shared
+make clean
+make $PJOBS install
+cp -a ltdl.h libltdl $IPATH/include/
+cp .libs/libltdlc.a $IPATH/lib/libltdl.a
+
 cd $SPATH/pulseaudio-6.0
 configure --disable-shared --enable-static --enable-static-bins --enable-force-preopen --disable-gconf --disable-avahi --disable-dbus  --disable-systemd-daemon --disable-default-build-tests --disable-tests --disable-bluez4 --disable-bluez5 --disable-openssl --without-speex --without-fftw LIBS="-lregex -ldl"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la $IPATH/lib/pulseaudio/*.la
 
-cd $SPATH/gst-plugins-good-1.4.5
-configure --disable-static --enable-experimental
+cd $SPATH/gst-plugins-good-1.6.1
+configure --disable-static --enable-experimental CPPFLAGS="$CPPFLAGS -DCACA_STATIC" LIBS="-logg -lz"
 make clean
 make $PJOBS install
 cd docs/plugins
 make install
 
-cd $SPATH/clutter-gst-3.0.6
+cd $SPATH/clutter-gst-3.0.14
 configure --disable-static $INTROSPECT
 make clean
 make $PJOBS install
@@ -1552,13 +1846,13 @@ rm $IPATH/lib/*.la
 mv $IPATH/lib/gstreamer-1.0/libgstclutter-3.0.dll $IPATH/lib/gstreamer-1.0/libgstclutter.dll
 
 cd $SPATH/a52dec-0.7.4
-configure --disable-shared
+configure --disable-shared #CFLAGS="$CFLAGS -fno-inline"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
 cd $SPATH/libmpeg2-0.5.1
-configure --disable-accel-detect --disable-sdl --disable-shared
+configure --disable-accel-detect --disable-sdl --disable-shared #CFLAGS="$CFLAGS -fno-inline"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -1593,31 +1887,30 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
+cd $SPATH/x264-snapshot-20141218-2245-stable
+configure --enable-static CFLAGS="$CFLAGS -O2"
+make clean
+make $PJOBS install
+
 cd $SPATH/libsidplay-1.36.59
 configure --disable-shared --prefix=$IPATH
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/x264-snapshot-20141218-2245-stable
-configure --enable-static --disable-gpl --enable-win32thread CFLAGS="$CFLAGS -O2"
-make clean
-make $PJOBS install
-
-cd $SPATH/gst-plugins-ugly-1.4.5
+cd $SPATH/gst-plugins-ugly-1.6.1
 configure --disable-static --enable-experimental LIBS=-ldl
 make clean
 make $PJOBS install
 cd docs/plugins
 make install
 
-cd $SPATH/gst-validate-1.4.0
+cd $SPATH/gst-validate-1.6.0
 configure PYTHON=python27$MULTILIB
 make clean
 make $PJOBS install
-rm $IPATH/lib/*.la
 
-cd $SPATH/gstreamer-editing-services-1.4.0
+cd $SPATH/gstreamer-editing-services-1.6.1
 configure --with-gtk=3.0 $INTROSPECT
 make clean
 make $PJOBS install
@@ -1625,63 +1918,13 @@ cd docs/libs
 make install
 rm $IPATH/lib/*.la
 
-cd $SPATH/gnonlin-1.4.0
-configure
-make clean
-make $PJOBS install
-
-#cd $SPATH/gst-omx-1.2.0
-#configure --with-omx-target=generic
-#make clean
-#make $PJOBS install
-
-cd $SPATH/gst-rtsp-server-1.4.5
+cd $SPATH/gst-rtsp-server-1.6.1
 configure $INTROSPECT --disable-tests
 make clean
 make $PJOBS install
 cd docs/libs
 make install
 rm $IPATH/lib/*.la
-
-cd $SPATH/libspiro
-configure --enable-static --disable-shared
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/exiv2
-set +e
-make distclean
-set -e
-configure --disable-shared --enable-static CPPFLAGS="$CPPFLAGS $(pkg-config --cflags glib-2.0)" LIBS="$(pkg-config --libs glib-2.0)"
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/lensfun-0.2.5/libs/lensfun
-set +e
-rm *.o *.a
-set -e
-if [ "$MULTILIB" == "64" ]; then
-$CXX $CFLAGS $CPPFLAGS -msse2 $(pkg-config --cflags glib-2.0) -DVECTORIZATION_SSE2=1 -fvisibility=hidden -Wno-non-virtual-dtor -I../../include -c *.cpp
-else
-set +e
-$CXX $CFLAGS $CPPFLAGS $(pkg-config --cflags glib-2.0) -DVECTORIZATION_SSE=1 -fvisibility=hidden -Wno-non-virtual-dtor -I../../include -c *.cpp
-set -e
-fi
-ar cru $IPATH/lib/liblensfun.a *.o
-ranlib $IPATH/lib/liblensfun.a
-cp $SPATH/lensfun-0.2.5/include/lensfun/lensfun.h $IPATH/include/
-echo 'prefix=
-exec_prefix=${prefix}
-libdir=${exec_prefix}/lib
-includedir=${prefix}/include
-Name: lensfun
-Description: A photographic lens database and access library
-Version: 0.2.5
-Requires: glib-2.0,libpng
-Cflags: -I${includedir}
-Libs: -L${libdir} -llensfun -lregex
-' > $IPATH/lib/pkgconfig/lensfun.pc
 
 cd $SPATH/clutter-imcontext-0.1.6
 configure --disable-shared
@@ -1699,115 +1942,6 @@ rm $IPATH/lib/*.la
 
 cd $SPATH/mx-1.4.7
 configure --disable-gtk-widgets --with-winsys=none $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-if [ "$CROSSX" != "1" ]; then
-cd $SPATH/ilmbase-2.2.0
-# need explicitly sse2 opt otherwise it break
-configure CXXFLAGS="$CXXFLAGS -msse2 -Os"
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-cd $SPATH/openexr-2.2.0
-configure CXXFLAGS="$CXXFLAGS -msse2 -Os"
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-$CXX $LDFLAGS -shared -o $IPATH/bin/libopenexr-2.dll -Wl,-whole-archive $IPATH/lib/libIlmImf.a $IPATH/lib/libIlmImfUtil.a $IPATH/lib/libIlmThread.a $IPATH/lib/libImath.a $IPATH/lib/libIexMath.a $IPATH/lib/libIex.a $IPATH/lib/libHalf.a -Wl,--no-whole-archive -Wl,--out-implib,$IPATH/lib/libIlmImf.dll.a -lz
-cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libIlmThread.dll.a
-cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libIlmImfUtil.dll.a
-cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libImath.dll.a
-cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libIexMath.dll.a
-cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libIex.dll.a
-cp $IPATH/lib/libIlmImf.dll.a $IPATH/lib/libHalf.dll.a
-cd $IPATH/bin/
-rm libIlmImf*.dll libIlmThread*.dll libImath*.dll libIex*.dll libHalf*.dll
-fi
-
-cd $SPATH/lua-5.2.3
-make PREFIX=$IPATH mingw clean
-make PREFIX=$IPATH $PJOBS mingw $PJOBS
-make PREFIX=$IPATH $PJOBS mingw install
-echo '
-prefix=
-exec_prefix=${prefix}
-libdir=${prefix}/lib
-includedir=${prefix}/include
-Name: Lua
-Description: An Extensible Extension Language
-Version: 5.2.3
-Requires: 
-Libs: -L${libdir} -llua -lm
-Cflags: -I${includedir}
-' > $IPATH/lib/pkgconfig/lua.pc
-
-cd $SPATH/babl-0.1.12
-if [ "$MULTILIB" == "64" ]; then
-configure --disable-static CFLAGS="$CFLAGS -O2"
-else
-configure --disable-sse2 --disable-static CFLAGS="$CFLAGS -O2"
-fi
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-#cd $SPATH/openblas
-#make clean
-#make TARGET=BANIAS NO_LAPACKE=1 NO_LAPACK=1 NOFORTRAN=2 COMMON_OPT="$CFLAGS -DOS_MINGW32_NT" USE_SIMPLE_THREADED_LEVEL3=1 NO_WARMUP=1 -j2
-#make PREFIX=$IPATH install
-#cp *.a $IPATH/lib/libgoto2.a
-
-#cd $SPATH/UMFPACK-5.1.0/AMD
-#make clean
-#make library
-#if [ ! -d $IPATH/include/suitesparse ]; then mkdir $IPATH/include/suitesparse; fi
-#cp include/*.h $IPATH/include/suitesparse
-#cp lib/libamd.a $IPATH/lib
-#cd $SPATH/UMFPACK-5.1.0/UFConfig/xerbla
-#make clean
-#make ccode
-#cp ../UFconfig.h $IPATH/include/suitesparse
-#cd $SPATH/UMFPACK-5.1.0/UMFPACK
-#make clean
-#make library
-#cp include/*.h $IPATH/include/suitesparse
-#cp lib/libumfpack.a $IPATH/lib
-
-cd $SPATH/gegl-0.3.0
-if [ "$CROSSX" == "1" ]; then
-configure --disable-static --enable-workshop $INTROSPECT --disable-gtk-doc-html --disable-gtk-doc --disable-docs CFLAGS="$CFLAGS -O2" LIBS="-lstdc++ -ljpeg"
-else
-configure --disable-static --enable-workshop --disable-gtk-doc-html --disable-gtk-doc --disable-docs $INTROSPECT CFLAGS="$CFLAGS -O2" LIBS="-lstdc++ -ljpeg"
-fi
-#LIBS="-lamd -lgoto2 -lstdc++"
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/geglgit/gegl-gtk
-configure --without-vala $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/gtkspell3-3.0.3
-configure $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/gtkdatabox
-configure --disable-static --enable-glade $INTROSPECT 
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-cd glade
-$CC -shared .libs/libgladedatabox_la-gladeui-databox.o -L$IPATH/gladeold/lib -lgladeui-2 -L$IPATH/lib -lgtk-3 -lgobject-2.0 -Wl,-s -o $IPATH/lib/glade/modules/libgladedataboxold.dll
-
-cd $SPATH/adg-0.8.0/build
-../configure $triplet --prefix=$IPATH --disable-static $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -1838,15 +1972,9 @@ make $PJOBS install
 ar cru $IPATH/lib/libgvc.a $SPATH/graphviz-2.16.1/lib/common/*.o
 rm $IPATH/lib/*.la
 
-cd $SPATH/goocanvas-2.0.2
-configure --disable-static --disable-python $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
 cd $SPATH/mysql-connector-c-6.0.2
 if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
-cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel -DCMAKE_CXX_FLAGS="$CXXFLAGS -D_TIMESPEC_DEFINED=1" -DWITH_OPENSSL=ON -DCMAKE_C_FLAGS="$CFLAGS $CPPFLAGS -D_TIMESPEC_DEFINED=1" -DOPENSSL_LIBRARIES=$IPATH/lib -DOPENSSL_INCLUDE_DIR=$IPATH/include -DSSL_EAY=$IPATH/lib/libssl.dll.a -DLIB_EAY=$IPATH/lib/libcrypto.dll.a
+cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel -DCMAKE_CXX_FLAGS="$CXXFLAGS -D_TIMESPEC_DEFINED=1" -DWITH_OPENSSL=ON -DCMAKE_C_FLAGS="$CFLAGS $CPPFLAGS -D_TIMESPEC_DEFINED=1" -D_OPENSSL_VERSION=1.0.2d -DOPENSSL_LIBRARIES=$IPATH/lib -DOPENSSL_INCLUDE_DIR=$IPATH/include -DSSL_EAY=$IPATH/lib/libssl.dll.a -DLIB_EAY=$IPATH/lib/libcrypto.dll.a
 make clean
 make $PJOBS install
 ar d $IPATH/lib/libmysqlclient.a adler32.c.obj compress.c.obj crc32.c.obj deflate.c.obj infback.c.obj inffast.c.obj inflate.c.obj inftrees.c.obj trees.c.obj zutil.c.obj
@@ -1897,13 +2025,11 @@ cp $IPATH/lib/libgssapi.dll.a $IPATH/lib/libkrb5.dll.a
 rm $IPATH/lib/*.la
 
 cd $SPATH/postgresql-9.3.5
-configure --prefix=$IPATH --with-system-tzdata=/share/zoneinfo --with-libxml --with-libxslt --with-openssl --with-ldap --with-gssapi --with-krb5 CPPFLAGS="-I$IPATH/include -I$IPATH/include/heimdal" CFLAGS="$RTVER -Os -fno-lto" CXXFLAGS="$RTVER -Os -fno-lto"
+# krb5/gssapi is just alternative on windows
+configure --prefix=$IPATH --with-system-tzdata=/share/zoneinfo --with-libxml --with-libxslt --with-openssl --with-ldap --without-gssapi --without-krb5 CPPFLAGS="-I$IPATH/include -I$IPATH/include/heimdal" CFLAGS="$RTVER -Os -fno-lto" CXXFLAGS="$RTVER -Os -fno-lto"
 cd $SPATH/postgresql-9.3.5/src/interfaces/libpq
 make clean
-if [ "$MULTILIB" == "64" ]; then
-#dllwrap will fail in win64 target
 set +e
-fi
 make $PJOBS libpq.dll
 make install -k
 rm $IPATH/lib/libpq.*
@@ -1929,10 +2055,10 @@ Libs: -L${libdir} -lpq -lgssapi -lcrypto -lwldap32 -lshfolder -lwsock32 -lws2_32
 rm $IPATH/bin/libpq.dll
 set -e
 
-cd $SPATH/db4/build_unix
-../dist/configure $triplet --enable-smallbuild --enable-mingw --prefix=$IPATH 
+cd $SPATH/db-5.3.28/build_unix
+../dist/configure $triplet --enable-smallbuild --enable-mingw --enable-sql --prefix=$IPATH CPPFLAGS="" CFLAGS="$CFLAGS -DSQLITE_ENABLE_COLUMN_METADATA"
 make clean
-make
+make $PJOBS
 make install_include 
 make install_lib
 rm $IPATH/lib/*.la
@@ -1945,59 +2071,62 @@ configure --with-gss_impl=heimdal --with-sqlite3=$IPATH --with-openssl CPPFLAGS=
 set +e
 make
 set -e
-$CC -shared -o $IPATH/bin/libsasl2.dll -Wl,--whole-archive lib/.libs/libsasl2.a -Wl,--no-whole-archive -L./plugins/.libs -L$IPATH/lib -lws2_32 -ldl -lanonymous -lcrammd5 -ldigestmd5 -lgssapiv2 -lgs2 -llogin -lotp -lplain -lsrp -lsasldb -lntlm -lsql -lcrypto -lsqlite3 -lgssapi -lws2_32 -ldb-4.8 -Wl,-s -Wl,--out-implib,$IPATH/lib/libsasl2.dll.a
+$CC -shared -o $IPATH/bin/libsasl2.dll -Wl,--whole-archive lib/.libs/libsasl2.a -Wl,--no-whole-archive -L./plugins/.libs -L$IPATH/lib -lws2_32 -ldl -lanonymous -lcrammd5 -ldigestmd5 -lgssapiv2 -lgs2 -llogin -lotp -lplain -lsrp -lsasldb -lntlm -lsql -lcrypto -lsqlite3 -lgssapi -lws2_32 -ldb-5.3 -Wl,-s -Wl,--out-implib,$IPATH/lib/libsasl2.dll.a
 cp libsasl2.pc $IPATH/lib/pkgconfig/
 cp $IPATH/lib/libsasl2.dll.a $IPATH/lib/libsasl.dll.a
 cd include
 make install
 
 cd $SPATH/openldap-2.4.38
-configure --disable-shared --with-tls=openssl
+configure --disable-shared --without-cyrus-sasl --disable-slapd --with-tls=openssl
 make clean
 make $PJOBS 
 manifest
 make install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libsecret-0.18.3
-configure --disable-static $INTROSPECT
+cd $SPATH/geglgit/gegl-gtk
+configure --without-vala $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libgnome-keyring-3.12.0
+cd $SPATH/gtkspell3-3.0.3
 configure $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-cd $SPATH/libgda-5.2.2
-# too many hassle for cross compile...
-if [ ! "$CROSSX" == "1" ]; then
-configure --with-mdb --with-bdb=$IPATH --with-ldap=$IPATH --with-mysql=$IPATH --with-mysql-libdir-name=lib --with-bdb-libdir-name=lib --enable-json --with-graphviz --disable-system-mdbtools --with-gtksourceview --with-ui --with-goocanvas --with-libsoup --without-help LIBS="-lcrypto -lexpat -lz" $INTROSPECT --enable-gdaui-gi CFLAGS="$CFLAGS -DGVSTATIC"
+:<<"XXXX"
+cd $SPATH/gtkdatabox
+configure --disable-static --enable-glade $INTROSPECT 
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+cd glade
+$CC -shared .libs/libgladedatabox_la-gladeui-databox.o -L$IPATH/gladeold/lib -lgladeui-2 -L$IPATH/lib -lgtk-3 -lgobject-2.0 -Wl,-s -o $IPATH/lib/glade/modules/libgladedataboxold.dll
+XXXX
+cd $SPATH/adg-0.8.0/build
+../configure $triplet --prefix=$IPATH --disable-static $INTROSPECT
 make clean
 make $PJOBS
 manifest
 make install
 rm $IPATH/lib/*.la
-fi
 
-cd $SPATH/sofia-sip-1.12.11
-configure --disable-shared --enable-experimental --with-openssl LIBS="-lws2_32 -liphlpapi"
+cd $SPATH/goocanvas-2.0.2
+configure --disable-static --disable-python $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libusbx-1.0.17
-configure --disable-static
-make clean
-make $PJOBS
-manifest
-make install
-rm $IPATH/lib/*.la
+#cd $SPATH/libgnome-keyring-3.12.0
+#configure $INTROSPECT
+#make clean
+#make $PJOBS install
+#rm $IPATH/lib/*.la
 
-cd $SPATH/usbredir-0.6
-configure --disable-shared
+cd $SPATH/sofia-sip-1.12.11
+configure --disable-shared --enable-experimental --with-openssl LIBS="-lws2_32 -liphlpapi"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -2015,15 +2144,87 @@ cp lib/liblz4.a $IPATH/lib
 cp lib/liblz4.pc $IPATH/lib/pkgconfig
 cp lib/*.h $IPATH/include
 
-cd $SPATH/spice-gtk-0.29
-configure --enable-lz4 --with-audio=gstreamer --disable-werror $INTROSPECT LIBS=-lusb-1.0
+cd $SPATH/libusb-1.0.19
+configure --disable-static
+make clean
+make $PJOBS
+manifest
+make install
+rm $IPATH/lib/*.la
+
+cd $SPATH/usbredir-0.6
+configure --disable-shared
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/libgusb-0.2.6
+configure --disable-static $INTROSPECT
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/colord-1.2.12
+configure --disable-argyllcms-sensor --disable-static --disable-bash-completion --disable-examples --disable-polkit --disable-print-profiles --disable-sane --disable-session-example --disable-systemd-login --disable-udev --without-pic --with-systemdsystemunitdir=/tmp --with-udevrulesdir=/tmp
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+mv $IPATH/lib/bin/*private.dll $IPATH/lib/colord-sensors/
+
+cd $SPATH/colord-gtk-0.1.26
+configure --disable-static 
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/firebird-mingw-w64-2_5
+configure --with-system-icu --disable-shared
+make clean
+if [ -f gen/jrd/version.res ]; then rm gen/jrd/version.res; fi
+cd gen
+make includes
+make $PJOBS -f ../gen/Makefile.libfbstatic libfbstatic
+make $PJOBS -f ../gen/Makefile.boot.gpre gpre_boot
+make $PJOBS -f ../gen/Makefile.libfbclient libfbclient
+if [ ! -d $IPATH/include/firebird ]; then mkdir $IPATH/include/firebird; fi
+cp firebird/include/*.h $IPATH/include/firebird
+cp firebird/lib/libfbclient.a $IPATH/lib/
+echo 'prefix=
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include/firebird
+Name: fbclient
+Description: Firebird client
+Version: 2.5.3
+Requires:
+Libs: -L${libdir} -lfbclient -lmpr -lversion -lws2_32 -lole32 -lsupc++
+Cflags: -I${includedir}'> $IPATH/lib/pkgconfig/fbclient.pc
+
+cd $SPATH/libgda-5.2.2
+#for firebird client use static stdc++
+# too many hassle for cross compile...
+if [ ! "$CROSSX" == "1" ]; then
+configure --with-firebird --with-mdb --with-bdb=$IPATH --with-ldap=$IPATH --with-mysql=$IPATH --with-mysql-libdir-name=lib --with-bdb-libdir-name=lib --enable-json --with-graphviz --disable-system-mdbtools --with-gtksourceview --with-ui --with-goocanvas --with-libsoup --without-help LIBS="-lcrypto -lexpat -lz" $INTROSPECT --enable-gdaui-gi CFLAGS="$CFLAGS -DGVSTATIC"
+make clean
+make $PJOBS
+manifest
+make install
+rm $IPATH/lib/*.la
+fi
+
+cd $SPATH/spice-protocol-0.12.10
+configure
+make $PJOBS install
+
+cd $SPATH/spice-gtk-0.30
+configure --enable-lz4 --with-audio=gstreamer --disable-werror $INTROSPECT LIBS="-lusb-1.0 -lxml2"
 make clean
 make $PJOBS install
 make check
 rm $IPATH/lib/*.la
 
 cd $SPATH/gtk-vnc-0.5.4
-configure --with-gtk=3.0 --disable-vala $INTROSPECT
+configure --with-gtk=3.0 --without-pulseaudio --disable-vala $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -2043,73 +2244,6 @@ rm -rdf *.la .libs
 make libsilcclient.a
 make libsilc.a
 cp .libs/*.a $IPATH/lib/
-
-cd $SPATH/pidgin-2.10.9
-set +e
-mv $IPATH/bin/gconftool-2 $IPATH/bin/gconftool
-set -e
-configure --disable-consoleui --disable-nss --disable-avahi --disable-nm --disable-perl --disable-tcl --without-x --disable-gtkui --disable-consoleui --enable-cyrus-sasl
-make clean
-make $PJOBS
-manifest
-make install
-rm $IPATH/lib/*.la
-set +e
-mv $IPATH/bin/gconftool $IPATH/bin/gconftool-2
-set -e
-
-cd $SPATH/libsodium-0.4.5
-configure --disable-static
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/toxcore-fixed-receipts
-configure --disable-shared
-make clean
-make $PJOBS
-make install
-
-cd $SPATH/tox-prpl-0.4.2
-configure --disable-static
-make clean
-make $PJOBS
-make install
-
-cd $SPATH/rediffbol-prpl-0.3.1
-configure --disable-static
-make clean
-make $PJOBS
-make install
-
-cd $SPATH/pidgin-facebookchat
-make clean
-make libfacebook.dll  $PJOBS
-cp libfacebook.dll $IPATH/lib/purple-2
-
-cd $SPATH/whatsapp-purple-0.7
-make clean
-make $PJOBS install
-
-cd $SPATH/prpltwtr-0.14.0
-configure --without-pidgin LIBS="-lpurple -lxml2"
-make clean
-make $PJOBS install
-
-cd $SPATH/okcupid-pidgin
-make clean
-make libokcupid.dll $PJOBS
-cp libokcupid.dll $IPATH/lib/purple-2
-
-cd $SPATH/libqq-pidgin
-configure LIBS="-lpurple -lws2_32"
-make clean
-make $PJOBS install
-
-cd $SPATH/pidgin-gfire-0.9.6
-configure --disable-gtk --disable-update-notify LIBS="-lws2_32 -lpsapi"
-make clean
-make $PJOBS install
 
 cd $SPATH/telepathy-glib-0.24.1
 configure $INTROSPECT
@@ -2134,13 +2268,13 @@ configure LIBS=-lws2_32
 make clean
 make install
 
-cd $SPATH/telepathy-gabble-0.18.2
-configure --with-ca-certificates=curl-ca-bundle.crt --disable-Werror --with-tls=gnutls --disable-debug LIBS="-lforknt -lws2_32"
+cd $SPATH/telepathy-idle-0.2.0
+configure LIBS=-lws2_32
 make clean
 make $PJOBS install
 
-cd $SPATH/telepathy-idle-0.2.0
-configure LIBS=-lws2_32
+cd $SPATH/telepathy-gabble-0.18.2
+configure --with-ca-certificates=curl-ca-bundle.crt --disable-Werror --with-tls=gnutls --disable-debug LIBS="-lforknt -lws2_32"
 make clean
 make $PJOBS install
 
@@ -2161,18 +2295,6 @@ make distclean
 set -e
 configure --with-backend=bonjour --disable-avahi-tests --disable-debug LIBS="-lforknt -lws2_32"
 make $PJOBS install
-
-cd $SPATH/telepathy-haze-0.8.0
-configure LIBS=-ldbus-glib-1
-make clean
-make $PJOBS install
-
-cd $SPATH/devhelp-3.8.2
-configure --without-webkit2
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-#postw32 -m gui -i $IPATH/bin/devhelp.exe
 
 cd $SPATH/game-music-emu-0.5.5/gme
 echo '
@@ -2215,17 +2337,33 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/daala-7de1b85
+cd $SPATH/daala-c602bc3
 configure --disable-shared --disable-unit-tests --disable-player
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
 cd $SPATH/libdca-0.0.5
-configure --disable-shared 
+configure --disable-shared #CFLAGS="$CFLAGS -fno-inline"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
+
+cd $SPATH/chromaprint-1.2
+if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
+cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_SHARED_LIBS=OFF -DWITH_FFTW3=OFF -DWITH_AVFFT=ON
+make clean
+make $PJOBS install
+echo 'prefix=
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+Name: chromaprint
+Description: Audio fingerprint library
+Version: 1.0.0
+Cflags: -I${includedir} -DCHROMAPRINT_NODLL
+Libs: -L${libdir} -lchromaprint -lavcodec -lavutil -lstdc++
+' > $IPATH/lib/pkgconfig/libchromaprint.pc
 
 cd $SPATH/libofa-0.9.3
 configure --enable-static --disable-shared
@@ -2234,7 +2372,7 @@ make $PJOBS install
 rm $IPATH/lib/*.la
 
 cd $SPATH/schroedinger
-configure --enable-static --disable-shared --with-thread=win32
+configure --enable-static --disable-shared --with-thread=pthread
 cd $SPATH/schroedinger/schroedinger
 make clean
 make $PJOBS install
@@ -2306,6 +2444,7 @@ make uninstall
 make install
 
 cd $SPATH/spandsp-0.0.6
+if [ -d $IPATH/lib64 ]; then rm -rdf $IPATH/lib64; fi
 # consider to patch telephony.h ?
 configure --libdir=$IPATH/lib --enable-static --disable-shared CFLAGS="$CFLAGS -DLIBSPANDSP_EXPORTS" CXXFLAGS="$CXXFLAGS -DLIBSPANDSP_EXPORTS"
 make clean
@@ -2324,19 +2463,26 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libass
+cd $SPATH/fribidi-0.19.6
+configure --disable-shared --with-glib=no CFLAGS="$CFLAGS -Os"
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/libass-0.12.2
 configure --disable-shared --enable-static --enable-enca
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
+#c++
 cd $SPATH/libmodplug
 configure --disable-shared
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/rtmpdump/librtmp
+cd $SPATH/rtmpdump-git/librtmp
 make clean
 make $PJOBS install prefix=$IPATH
 rm $IPATH/bin/librtmp.* $IPATH/lib/librtmp.dll.a
@@ -2353,7 +2499,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/neon-0.30.0
+cd $SPATH/neon-0.30.1
 # using SSPI instead of GSSAPI
 configure --disable-shared --disable-nls --without-gssapi --enable-threadsafe-ssl=posix --with-ssl=gnutls --with-ca-bundle=curl-ca-bundle.crt CPPFLAGS="$CPPFLAGS $(pkg-config --cflags glib-2.0) -DUSE_GETADDRINFO -DHAVE_SSPI -DNE_HAVE_IPV6 -DNE_HAVE_LFS"
 make clean
@@ -2382,33 +2528,33 @@ fi
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/xapian-core-1.2.21
-configure --disable-shared
+# FIXME: gir generation failed
+cd $SPATH/graphene-1.2.10
+#configure --disable-gcc-vector --disable-sse2 --enable-debug=minimum
+if [ "$MULTILIB" == "64" ]; then 
+configure --enable-debug=minimum CFLAGS="$CFLAGS -O2" --enable-introspection=no
+else
+configure --enable-debug=minimum --disable-gcc-vector --disable-sse2 CFLAGS="$CFLAGS -O2" --enable-introspection=no
+fi
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/xapian-glib-2.4.0
-configure --disable-static LIBS="-lxapian -lz -lstdc++ -lws2_32 -lrpcrt4"
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/libtimezonemap-0.4.4
-configure --disable-static
+cd $SPATH/wildmidi-0.2.3.5
+configure --disable-static --enable-shared --disable-werror CFLAGS="$CFLAGS -DWILDMIDI_BUILD"
 make clean
 make install
 rm $IPATH/lib/*.la
 
-# FIXME: gir generation failed
-cd $SPATH/graphene-1.2.6
-#configure --disable-gcc-vector --disable-sse2 --enable-debug=minimum
-configure --enable-debug=minimum CFLAGS="$CFLAGS -O2"
+cd $SPATH/libbs2b-3.1.0
+configure
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
+#begin c++
 cd $SPATH/OpenNI2-2.2-beta2
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
 make clean
 make $PJOBS ALLOW_WARNINGS=1 SSE_GENERATION=2 core
 if [ -d $IPATH/include/openni2 ]; then
@@ -2435,41 +2581,75 @@ Version: 2.2
 Libs: -lopenni2 -lxnlib -ljpeg
 Cflags: -I${includedir}
 ' > $IPATH/lib/pkgconfig/libopenni2.pc
+mv $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
 
-#crashed
-#cd $SPATH/wildmidi-0.2.3.5
-#configure --disable-static --enable-shared --disable-werror
-#make clean
-#make install
-#rm $IPATH/lib/*.la
-
-cd $SPATH/gst-plugins-bad-1.4.5
-configure --disable-static --enable-experimental $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/cfitsio
-if [ "$MULTILIB" == "64" ]; then
-configure --enable-sse2 --disable-ssse3 --enable-reentrant
+cd $SPATH/libde265-1.0.2
+if [ "$MULTILIB" == "64" ]; then 
+configure --disable-shared --disable-dec265 --disable-sherlock265
 else
-configure --disable-sse2 --disable-ssse3 --enable-reentrant
+configure --disable-shared --disable-dec265 --disable-sherlock265 CFLAGS="$CFLAGS -O2"
 fi
 make clean
-make $PJOBS
-ar cru lib/libcfitsio.a *.o
-ranlib lib/libcfitsio.a
-cp include/*.h $IPATH/include/
-cp lib/*.a $IPATH/lib/
-cp cfitsio.pc $IPATH/lib/pkgconfig/
+make $PJOBS install
+rm $IPATH/lib/*.la
 
-cd $SPATH/matio
-configure --disable-shared --enable-extended-sparse=yes --enable-mat73=yes
+cd $SPATH/x265-1.7/source
+if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
+cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DENABLE_SHARED=OFF -DWINXP_SUPPORT=ON -DENABLE_CLI=OFF
+make clean
+make $PJOBS install
+
+cd $SPATH/openh264-1.4.0
+make clean
+if [ "$MULTILIB" == "64" ]; then 
+make ENABLE64BIT=Yes $PJOBS
+else
+make ENABLE64BIT=No $PJOBS
+fi
+make install PREFIX=$IPATH
+rm $IPATH/lib/libopenh264.dll.a $IPATH/bin/libopenh264.dll
+
+cd $SPATH/xapian-core-1.2.21
+configure --disable-shared
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+#end c++
+
+cd $SPATH/xapian-glib-2.4.0
+configure --disable-static LIBS="-lxapian -lz -lstdc++ -lws2_32 -lrpcrt4"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libgit2-glib-0.22.6
+cd $SPATH/gst-plugins-bad-1.6.1
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
+configure --disable-static --enable-experimental $INTROSPECT
+make clean
+make $PJOBS 
+make install
+rm $IPATH/lib/*.la
+mv $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
+
+cd $SPATH/devhelp-3.16.1
+configure
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/pcre-8.35
+configure --disable-shared --disable-cpp --enable-pcre16 --enable-pcre32 --enable-unicode-properties
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/libtimezonemap-0.4.4
+configure --disable-static
+make clean
+make install
+rm $IPATH/lib/*.la
+
+cd $SPATH/libgit2-glib-0.23.6
 configure --disable-vala --disable-python
 make clean
 if [ "$CROSSX" == "1" ]; then
@@ -2530,40 +2710,44 @@ export CFLAGS=$_CFLAGS
 #cp $IPATH/lib/libnspr4.dll.a $IPATH/lib/libplds4.dll.a
 #cp $IPATH/lib/libnspr4.dll.a $IPATH/lib/libplc4.dll.a
 
-#export PYTHON=python27
-#export CPP=cpp
-#export CXXCPP="gcc -E"
-#cd $SPATH/mozjs-24.2.0/js/src
-#if [ -f config.cache ]; then rm config.cache; fi
-#configure --disable-debug --disable-debug-symbols --enable-optimize=-Os --with-system-zlib --enable-system-ffi --enable-threadsafe --enable-system-ffi --with-system-zlib=$IPATH --disable-shared-js --disable-intl-api --with-nspr-libs="-L$IPATH/lib -lplds4 -lplc4 -lnspr4" --with-nspr-cflags="-I$IPATH/include/nspr -DNSPR_STATIC"
-#make clean
-#make $PJOBS 
-#make install
-#rm $IPATH/bin/js24-config
-#echo 'prefix=
-#exec_prefix=${prefix}
-#libdir=${exec_prefix}/lib
-#includedir=${prefix}/include
-#Name: SpiderMonkey 24.2.0
-#Description: The Mozilla library for JavaScript
-#Version: 24.2.0
-#Requires: nspr,zlib,libffi
-#Cflags: -include ${includedir}/mozjs-24/js/RequiredDefines.h -I${includedir}/mozjs-24 -DSTATIC_JS_API
-#Libs: -L${libdir} -lmozjs-24 -lpsapi
-#' > $IPATH/lib/pkgconfig/mozjs-24.pc
-#unset PYTHON
+#c++
+export PYTHON=python27
+export CPP=cpp
+export CXXCPP="gcc -E"
+cd $SPATH/mozjs-24.2.0/js/src
+if [ -f config.cache ]; then rm config.cache; fi
+# pass -DENABLE_INTL_API and -licuuc to enable Intl but it crashed with GJS ????
+configure --disable-debug --disable-debug-symbols --enable-optimize=-O2 --with-system-zlib --enable-system-ffi --enable-threadsafe --enable-system-ffi --with-system-zlib=$IPATH --disable-shared-js --disable-intl-api --with-nspr-libs="-L$IPATH/lib -lplds4 -lplc4 -lnspr4" --with-nspr-cflags="-I$IPATH/include/nspr -DNSPR_STATIC"
+make clean
+make $PJOBS 
+make install
+rm $IPATH/bin/js24-config
+echo 'prefix=
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+Name: SpiderMonkey 24.2.0
+Description: The Mozilla library for JavaScript
+Version: 24.2.0
+Requires: nspr,zlib,libffi
+Cflags: -include ${includedir}/mozjs-24/js/RequiredDefines.h -I${includedir}/mozjs-24 -DSTATIC_JS_API
+Libs: -L${libdir} -lmozjs-24 -lpsapi
+' > $IPATH/lib/pkgconfig/mozjs-24.pc
+unset PYTHON
 
-#cd $SPATH/gjs-1.42.0
-#set +e
-#make distclean
-#set -e
-#configure --prefix=$IPATH/js LIBS=-lforknt
-#make $PJOBS install
-#rm $IPATH/js/lib/*.la
-#if [ ! -d $IPATH/js/share/gjs-1.0 ]; then
-#mkdir $IPATH/js/share/gjs-1.0
-#fi
-#cp -a modules/overrides modules/tweener modules/*.js $IPATH/js/share/gjs-1.0/
+cd $SPATH/gjs-1.44.0
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
+set +e
+make distclean
+set -e
+configure --prefix=$IPATH LIBS=-lforknt
+make $PJOBS install
+rm $IPATH/lib/*.la
+if [ ! -d $IPATH/share/gjs-1.0 ]; then
+mkdir $IPATH/share/gjs-1.0
+fi
+cp -a modules/overrides modules/tweener modules/*.js $IPATH/share/gjs-1.0/
+mv $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
 
 cd $SPATH/gimo-master
 if [ "$2" == "90" ]; then
@@ -2581,9 +2765,29 @@ rm $IPATH/lib/*.la
 done
 
 cd $SPATH/djvulibre-3.5.27
-configure --disable-static --disable-desktopfiles LDFLAGS="$LDFLAGS -liconv"
+configure --disable-shared --enable-static --disable-desktopfiles  --disable-xmltools  LDFLAGS="$LDFLAGS -liconv"
 make clean
 make install
+rm $IPATH/lib/*.la
+
+cd $SPATH/cfitsio
+if [ "$MULTILIB" == "64" ]; then
+configure --enable-sse2 --disable-ssse3 --enable-reentrant
+else
+configure --disable-sse2 --disable-ssse3 --enable-reentrant
+fi
+make clean
+make $PJOBS
+ar cru lib/libcfitsio.a *.o
+ranlib lib/libcfitsio.a
+cp include/*.h $IPATH/include/
+cp lib/*.a $IPATH/lib/
+cp cfitsio.pc $IPATH/lib/pkgconfig/
+
+cd $SPATH/matio
+configure --disable-shared --enable-extended-sparse=yes --enable-mat73=yes
+make clean
+make $PJOBS install
 rm $IPATH/lib/*.la
 
 cd $SPATH/openslide-3.4.1
@@ -2601,20 +2805,22 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libfpx-1.2.0.13
-make -f makefile.gcc clean
-cp fpxlib.h $IPATH/include
-cp obj/libfpx.a $IPATH/lib
+#the only magick deps thats need stdc++
+#cd $SPATH/libfpx-1.2.0.13
+#make -f makefile.gcc clean
+#cp fpxlib.h $IPATH/include
+#cp obj/libfpx.a $IPATH/lib
 
-cd $SPATH/ImageMagick-6.9.1-1
+cd $SPATH/ImageMagick-6.9.1-10
 # configured as fallback for *8bit* image loader and vector-rasterizer and keep it LGPL friendly
-configure --without-perl --with-djvu --with-fontconfig --with-freetype --without-magick-plus-plus --with-quantum-depth=8 --with-rsvg --without-lcms --without-fftw --disable-static CPPFLAGS="$CPPFLAGS -I$IPATH/include/libxml2" LIBS="-lws2_32"
+configure --without-perl --without-wmf --without-fpx --without-gvc --without-djvu --with-fontconfig --with-freetype --without-magick-plus-plus --with-quantum-depth=8 --with-rsvg --without-lcms --without-fftw --disable-static CPPFLAGS="$CPPFLAGS -I$IPATH/include/libxml2" LIBS=-lws2_32
+#if use fpx LIBS=-lws2_32-lole32 -lstdc++
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/vips-8.0.2
-configure --without-fftw --disable-static $INTROSPECT CFLAGS="$CFLAGS -O2" #--disable-cxx
+cd $SPATH/vips-8.1.1
+configure --without-fftw --without-python --disable-static $INTROSPECT CFLAGS="$CFLAGS -O2"
 make clean
 make install
 rm $IPATH/lib/*.la
@@ -2624,38 +2830,45 @@ configure --disable-mono --disable-vala --disable-cryptography $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-cd $SPATH/pidgin-sipe-1.19.0
-configure --disable-nss --without-krb5 --disable-gssapi-only CPPFLAGS="$CPPFLAGS -DSIP_SEC_WINDOWS_SSPI=1" LIBS=-lsecur32
+:<<"XXXX"
+# messed up, gmp already linked into gnutls
+cd $SPATH/mpfr-3.1.2
+configure --enable-static --disable-shared
 make clean
-make $PJOBS
-make install
+make $PJOBS install
+rm $IPATH/lib/*.la
+XXXX
+cd $SPATH/gnome-js-common-0.1
+configure --disable-seed --disable-gjs
+make install-pkgconfigDATA
 
-#cd $SPATH/gnome-js-common-0.1
-#configure --disable-seed --disable-gjs
-#make install-pkgconfigDATA
+cd $SPATH/seed-3.8.1
+configure --disable-mpfr-module --disable-static --disable-os-module
+make clean
+if [ "$CROSSX" == "1" ]; then
+set +e
+make $PJOBS install -k
+set -e
+else
+make $PJOBS install
+fi
+rm $IPATH/lib/*.la
 
-#cd $SPATH/mpfr-3.1.2
-#configure --enable-static --disable-shared
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
+cd $SPATH/GConf-3.2.6
+configure --enable-gsettings-backend --disable-orbit $INTROSPECT LIBS=-lws2_32
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
 
-#cd $SPATH/seed-3.8.1
-#configure --prefix=$IPATH/js --disable-readline-module --disable-static --disable-os-module LIBS=-lgmp
-#make clean
-#if [ "$CROSSX" == "1" ]; then
-#set +e
-#make $PJOBS install -k
-#set -e
-#else
-#make $PJOBS install
-#fi
-#rm $IPATH/js/lib/*.la
+cd $SPATH/liboauth-1.0.3
+configure --disable-shared
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
 
 if [ "$2" == "90" ]; then
-cd $SPATH/libpeas-1.12.1
-configure --enable-glade-catalog --disable-seed --enable-gtk --disable-python3 --enable-python2 PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py27/lib/pkgconfig" PYTHON2=/usr/bin/python27$MULTILIB PYTHON=/usr/bin/python27$MULTILIB PYTHON2_CONFIG=/bin/python27$MULTILIB-config
+cd $SPATH/libpeas-1.16.0
+configure --enable-glade-catalog --enable-compile-warnings=minimum --enable-gtk --disable-python3 --enable-python2 PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py27/lib/pkgconfig" PYTHON2=/usr/bin/python27$MULTILIB PYTHON=/usr/bin/python27$MULTILIB PYTHON2_CONFIG=/bin/python27$MULTILIB-config
 make clean
 make $PJOBS install
 mv $IPATH/lib/libpeas-1.0/loaders/libpythonloader.dll $IPATH/lib/libpeas-1.0/loaders/libpython27-loader.dll
@@ -2668,62 +2881,45 @@ else
 list="33 34"
 fi
 for i in $list; do
-cd $SPATH/libpeas-1.12.1
-configure --enable-glade-catalog --disable-seed --enable-gtk --disable-python2 --enable-python3 PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py$i/lib/pkgconfig" PYTHON=/usr/bin/python$i$MULTILIB PYTHON3_CONFIG=/usr/bin/python$i$MULTILIB-config
+cd $SPATH/libpeas-1.16.0
+configure --enable-glade-catalog  --enable-compile-warnings=minimum --enable-gtk --disable-python2 --enable-python3 PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py$i/lib/pkgconfig" PYTHON=/usr/bin/python$i$MULTILIB PYTHON3_CONFIG=/usr/bin/python$i$MULTILIB-config
 make clean
 make $PJOBS install
 mv $IPATH/lib/libpeas-1.0/loaders/libpython3loader.dll $IPATH/lib/libpeas-1.0/loaders/libpython$i-loader.dll
 done
 
-cd $SPATH/GConf-3.2.6
-configure --enable-gsettings-backend --disable-orbit $INTROSPECT LIBS=-lws2_32
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/gcr-3.14.0
+#need gcrypt
+cd $SPATH/gcr-3.18.0
 # need fix gir version 3.broken
 configure --disable-static $INTROSPECT LDFLAGS="$LDFLAGS -Wl,--allow-multiple-definition"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/liboauth-1.0.2
-configure --disable-shared
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/libaccounts-glib-1.8
-configure --disable-static --disable-tests
-make clean
-make $PJOBS install
-cd docs
-make install
-rm $IPATH/lib/*.la
-
 # TODO:  --enable-kerberos, need MIT shim for heimdal
+# >=3.16 need wbkit2 4.0 lst working 3.14.x
 cd $SPATH/gnome-online-accounts-3.14.4
 configure --disable-static --enable-inspector --without-x --enable-compile-warnings=minimum --enable-schemas-compile $INTROSPECT
 make clean
 make $PJOBS 
 make install
 rm $IPATH/lib/*.la
-
-cd $SPATH/uhttpmock-0.3.3
-configure --disable-static $INTROSPECT LIBS=-lws2_32
+:<<"XXXX"
+# replaced by internal GTKGL, conflict
+cd $SPATH/gtkglext3-master
+configure --enable-win32-backend --enable-debug=minimum $INTROSPECT
+make clean
+make $PJOBS 
+rm $IPATH/lib/*.la
+XXXX
+cd $SPATH/uhttpmock-0.4.0
+configure --disable-static --disable-vala $INTROSPECT LIBS=-lws2_32
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
 cd $SPATH/libgdata-0.16.1
-configure --enable-gnome --enable-goa $INTROSPECT LIBS=-lws2_32
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/geocode-glib-3.14.0
-configure $INTROSPECT
+configure --disable-gnome --enable-compile-warnings=no $INTROSPECT LIBS=-lws2_32
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -2734,23 +2930,17 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libgxps-0.2.3
+cd $SPATH/libgxps-0.2.3.2
 set +e
 rm -rdf $IPATH/include/libgxps
 set -e
-configure --disable-static LIBS=-lpng
+configure --disable-static
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libgweather-3.14.3
+cd $SPATH/libgweather-3.18.0
 configure $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/gtkglext-master
-configure --enable-win32-backend --enable-debug=minimum $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -2767,9 +2957,9 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/vala-0.22.1
-echo '#define BUILD_VERSION "0.22.1"'> ccode/version.h
-echo '#define BUILD_VERSION "0.22.1"'> vala/version.h
+cd $SPATH/vala-0.30.0
+echo '#define BUILD_VERSION "0.30.0"'> ccode/version.h
+echo '#define BUILD_VERSION "0.30.0"'> vala/version.h
 configure --disable-static --enable-silent-rules
 make clean
 make $PJOBS install
@@ -2778,17 +2968,13 @@ rm $IPATH/lib/*.la
 #cp /local/lib/pkgconfig/libvala-0.24.pc /local/lib/pkgconfig/libvala-0.20.pc
 #cp /local/lib/pkgconfig/libvala-0.24.pc /local/lib/pkgconfig/libvala-0.22.pc
 
-cd $SPATH/valadoc-0.3.2
-configure
-find . -name *.lo -exec rm {} +
-find . -name *.o -exec rm {} +
-make $PJOBS install
-rm $IPATH/lib/*.la
-
 cd $SPATH/gxml-0.4.0
 # gir missing shared-library
 configure --disable-static  --disable-docs $INTROSPECT
-make clean
+find . -name *.lo -exec rm {} +
+find . -name *.exe -exec rm {} +
+find . -name *.o -exec rm {} +
+echo "">gxml/gxml_0_4_la_vala.stamp
 make install
 rm $IPATH/lib/*.la
 
@@ -2811,6 +2997,9 @@ export NS_USE_GCC=1
 export OPT_CODE_SIZE=1
 export ALLOW_OPT_CODE_SIZE=1
 export _CPPFLAGS="$CPPFLAGS -DNSPR_STATIC"
+export _LDFLAGS="-Wl,--allow--multiple-definition"
+# for gcc5
+#export CPPFLAGS="$CPPFLAGS -fno-inline -I$IPATH/include/nspr"
 export CPPFLAGS="$CPPFLAGS -I$IPATH/include/nspr"
 cd $SPATH/nss-3.15.5
 set +e
@@ -2833,7 +3022,8 @@ cd $SPATH/nss-3.15.5/dist/WIN954.0_gcc_64_OPT.OBJ/lib
 else
 cd $SPATH/nss-3.15.5/dist/WIN954.0_gcc_OPT.OBJ/lib
 fi
-rm *.dll.a libzlib.a $IPATH/lib/libnspr4.dll.a $IPATH/lib/libplc4.dll.a $IPATH/lib/libplds4.dll.a
+rm *.dll.a libzlib.a 
+rm $IPATH/lib/libnspr4.dll.a $IPATH/lib/libplc4.dll.a $IPATH/lib/libplds4.dll.a
 mv libnss.a $IPATH/lib/libnss3.a
 mv libsmime.a $IPATH/lib/libsmime3.a
 mv libssl.a $IPATH/lib/libssl3.a
@@ -2877,8 +3067,23 @@ cp $IPATH/lib/libical-glib-1.0.dll.a $IPATH/lib/libicalvcal.dll.a
 cp $IPATH/lib/libical-glib-1.0.dll.a $IPATH/lib/libical.dll.a
 cp $IPATH/lib/libical-glib-1.0.dll.a $IPATH/lib/libicalss.dll.a
 
-cd $SPATH/evolution-data-server-3.10.4
-configure  --enable-file-locking=flock --with-openldap --disable-uoa --with-krb5 --with-krb5-includes=$IPATH/include/heimdal --with-krb5-libs=$IPATH/lib $INTROSPECT
+cd $SPATH/protobuf-2.4.1
+configure --disable-shared --enable-static
+make clean
+make $PJOBS
+make install
+rm $IPATH/lib/*.la
+
+cd $SPATH/libphonenumber/cpp
+if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
+cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel
+make clean
+make $PJOBS install
+cp src/phonenumbers/base/*.h $IPATH/include/phonenumbers/base/
+cp src/phonenumbers/base/memory/*.h $IPATH/include/phonenumbers/base/memory/
+
+cd $SPATH/evolution-data-server-3.18.1
+configure --with-openldap --disable-uoa --with-krb5 --with-krb5-includes=$IPATH/include/heimdal --with-krb5-libs=$IPATH/lib $INTROSPECT LIBS="-lsasl2 -lssl -lws2_32 -lwldap32"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -2907,18 +3112,6 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libssh2-1.4.3
-configure --disable-shared --enable-static --with-libgcrypt --with-libz CPPFLAGS="$CPPFLAGS -DLIBSSH2_LIBRARY=1"
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/pcre-8.35
-configure --disable-shared --disable-cpp --enable-pcre16 --enable-pcre32 --enable-unicode-properties
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
 cd $SPATH/hivex-1.3.10
 configure --disable-ruby --disable-ocaml --disable-python --disable-perl --disable-shared
 make clean
@@ -2926,7 +3119,7 @@ make $PJOBS install
 rm $IPATH/lib/*.la
 
 cd $SPATH/libguestfs-1.22.9
-configure --enable-threads=windows --disable-static --disable-daemon --disable-appliance --disable-lua --disable-ruby --disable-python --disable-erlang --disable-perl --disable-ocaml --disable-haskell --disable-php --without-libvirt $INTROSPECT
+configure --enable-threads=windows --disable-static --disable-daemon --disable-appliance --disable-lua --disable-ruby --disable-python --disable-erlang --disable-perl --disable-ocaml --disable-haskell --disable-php --without-libvirt $INTROSPECT LIBS=-lregex
 set +e
 rm $IPATH/lib/libguestfs*
 rm -rdf $IPATH/include/guestfs*
@@ -2957,22 +3150,9 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libsocialweb-0.25.21
-configure --without-gnome --enable-all-services --disable-vala-bindings $INTROSPECT
-make clean
-( cat libsocialweb-client/libsocialweb-client-hack-for-vala.h.header.in; \
-            for include in sw-client.h sw-item.h sw-contact.h sw-client-service.h sw-client-lastfm.h sw-client-item-view.h sw-client-contact-view.h; do \
-            echo "#include <libsocialweb-client/$include>"; \
-            done; \
-            cat libsocialweb-client/libsocialweb-client-hack-for-vala.h.footer.in \
-        ) > libsocialweb-client/libsocialweb-client-hack-for-vala.h
-make $PJOBS install
-cp libsocialweb-client/libsocialweb-client-hack-for-vala.h $IPATH/include/libsocialweb/libsocialweb-client/
-rm $IPATH/lib/*.la
-
 cd $SPATH/folks-0.10.1
 # gir missing shared-library
-configure --disable-vala --disable-static --disable-tests
+configure --disable-vala --disable-eds-backend --disable-static --disable-tests
 find . -name *.lo -exec rm {} +
 find . -name *.exe -exec rm {} +
 find . -name *.o -exec rm {} +
@@ -3006,17 +3186,6 @@ cd $SPATH/glib-controller
 configure $INTROSPECT
 make clean
 make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/gpaste-3.10
-cp libgpaste/daemon.mk.ori libgpaste/daemon.mk
-configure --disable-x-keybinder --prefix=$IPATH
-make clean
-make $PJOBS
-rm libgpaste/daemon/libgpaste-daemon.la
-cp libgpaste/daemon.mk.ok libgpaste/daemon.mk
-touch libgpaste/daemon.mk
-make install
 rm $IPATH/lib/*.la
 
 echo 'prefix=
@@ -3339,34 +3508,19 @@ rm $IPATH/lib/frei0r-1/test*.dll
 rm $IPATH/lib/frei0r-1/facebl0r.dll
 rm $IPATH/lib/frei0r-1/facedetect.dll
 #crashed
-rm $IPATH/lib/frei0r-1/partik0l.dll
+#rm $IPATH/lib/frei0r-1/partik0l.dll
 
 cd $SPATH/libvisual-plugins-0.4.0
+#corona error with c++11
+#configure --disable-gforce --disable-corona --disable-nls --disable-static CFLAGS="$CFLAGS -O2"
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
 configure --disable-gforce --disable-nls --disable-static CFLAGS="$CFLAGS -O2"
 make clean
 make $PJOBS install
 cd plugins/input/jack
 make clean
 make $PJOBS install
-
-cd $SPATH/libltdl
-configure --disable-shared
-make clean
-make $PJOBS install
-cp -a ltdl.h libltdl $IPATH/include/
-cp .libs/libltdlc.a $IPATH/lib/libltdl.a
-
-cd $SPATH/libcanberra-0.30
-configure LIBS=-ldl
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-cd $SPATH/gsound-1.0.1
-configure --disable-static $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
+mv $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
 
 cd $SPATH/lunar-date-2.4.0 
 configure --disable-static $INTROSPECT
@@ -3380,69 +3534,15 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-#cd $SPATH/emerillon-0.1.90
-#configure --disable-maintainer-mode $INTROSPECT 
-#make clean
-#make install
-#rm $IPATH/lib/*.la
-
 cd $SPATH/desktop-file-utils-0.22
 configure
 make clean
 make install
 
-cd $SPATH/appstream-glib-0.2.8
-configure --disable-static $INTROSPECT
-make clean
-cd libappstream-glib
-make $PJOBS
-cd ../libappstream-builder
-make $PJOBS libappstream-builder.la
-cd ..
-make install
-rm $IPATH/lib/*.la
-
-cd $SPATH/appdata-tools-0.1.8
-configure 
-make clean
-make $PJOBS install
-
-cd $SPATH/gucharmap-3.14.2
-configure $INTROSPECT
-make clean
-make
-manifest
-make install
-cd docs
-make install
-rm $IPATH/lib/*.la
-
-cd $SPATH/gettext-0.18.3.2
-configure --with-included-libxml --without-emacs --with-included-libcroco --with-included-libunistring --with-included-glib --with-included-gettext --disable-shared --disable-java --disable-csharp --enable-threads=win32
-cd $SPATH/gettext-0.18.3.2/gettext-tools/intl
-make clean
-make $PJOBS
-cd $SPATH/gettext-0.18.3.2/gettext-tools/libgettextpo
-make clean
-make $PJOBS install
-set +e
-rm $IPATH/lib/*.la
-set -e
-
-cd $SPATH/gnome-dictionary-3.14.2
+cd $SPATH/gnome-dictionary-3.18.0
 configure LIBS=-lws2_32 CPPFLAGS="$CPPFLAGS -DENABLE_IPV6"
 make clean
 make $PJOBS
-make install
-rm $IPATH/lib/*.la
-
-cd $SPATH/gtranslator-2.91.7
-configure LIBS=-lintl $INTROSPECT
-make clean
-make
-manifest
-make install
-cd doc
 make install
 rm $IPATH/lib/*.la
 
@@ -3464,25 +3564,61 @@ mv $IPATH/py$i/bin/gdb.exe $IPATH/py$i/bin/gdb-py$i.exe
 mv $IPATH/py$i/bin/gdbserver.exe $IPATH/py$i/bin/gdbserver-py$i.exe 
 done
 
-cd $SPATH/gedit-3.10.4
-configure --disable-maintainer-mode --enable-compile-warnings=minimum $INTROSPECT
+cd $SPATH/gucharmap-3.18.0
+configure $INTROSPECT
 make clean
-if [ "$2" == "90" ]; then
-set +e
-make -k
-manifest
-set -e
-else
 make
-fi
+manifest
+make install
+cd docs
 make install
 rm $IPATH/lib/*.la
 
-cd $SPATH/gedit-plugins-3.10.1
-configure PYTHON=/usr/bin/python34
+cd $SPATH/gtranslator-2.91.7
+configure LIBS=-lintl $INTROSPECT
 make clean
 make
+manifest
 make install
+cd doc
+make install
+rm $IPATH/lib/*.la
+
+# to be replaced with gnome builder
+cd $SPATH/gedit-3.18.2
+if [ -f gedit/gedit-res.o ]; then rm gedit/gedit-res.o; fi
+if [ "$2" == "90" ]; then
+configure --disable-user-help --disable-updater --disable-maintainer-mode --enable-compile-warnings=minimum --disable-introspection
+else
+configure  --enable-python --disable-user-help --disable-updater --disable-maintainer-mode --enable-compile-warnings=minimum $INTROSPECT PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py34/lib/pkgconfig" PYTHON=/usr/bin/python34
+fi
+make clean
+make $PJOBS
+manifest
+make install
+
+cd $SPATH/gedit-plugins-3.18.0
+if [ "$2" == "90" ]; then
+configure
+else
+configure  --enable-python PYTHON=/usr/bin/python34 PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py34/lib/pkgconfig"
+fi
+make clean
+make $PJOBS
+make install
+
+cd $SPATH/gedit-code-assistance-3.16.0
+configure --disable-static
+find . -name *.lo -exec rm {} +
+make install
+
+cd $SPATH/ghex-3.18.0
+configure --enable-compile-warnings=minimum
+make clean
+make 
+make install
+rm $IPATH/lib/*.la
+#postw32 -m gui -i $IPATH/bin/ghex.exe
 
 cd $SPATH/msitools-0.94
 configure --disable-static $INTROSPECT
@@ -3493,31 +3629,72 @@ set -e
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/ghex-3.10.1
-configure --enable-compile-warnings=minimum
-make clean
-make 
-make install
-rm $IPATH/lib/*.la
-#postw32 -m gui -i $IPATH/bin/ghex.exe
-
-#cd $SPATH/egg-list-box
-#configure --enable-maintainer-mode --disable-static $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
-
-cd $SPATH/gedit-code-assistance-3.14.1
-configure --disable-static
-find . -name *.lo -exec rm {} +
-make install
-
 if [ ! -d $IPATH/lib/ladspa ]; then mkdir $IPATH/lib/ladspa; fi
+
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
 cd $SPATH/ladspa_sdk/cmt
 cd src
 make clean
 make $PJOBS 
 cp ../plugins/cmt.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/caps-0.9.24
+make clean
+make $PJOBS 
+cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/VCO-plugins-0.3.0
+make clean 
+make $PJOBS 
+cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/REV-plugins-0.3.1
+make clean 
+make $PJOBS 
+cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/AMB-plugins-0.1.0
+make clean 
+make $PJOBS
+cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/MCP-plugins-0.3.0
+make clean
+make $PJOBS 
+cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/LEET-plugins-0.2
+make clean
+make $PJOBS  all
+cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/aweight
+make clean 
+make $PJOBS awplug.dll
+cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/blepvco-0.1.0
+make clean 
+make $PJOBS
+cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/vocoder-0.3
+make clean 
+make $PJOBS 
+cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/pvoc-0.1.12
+make clean 
+make $PJOBS 
+cp *.dll $IPATH/lib/ladspa/
+mv $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
+
+#begin c++
+cd $SPATH/ladspa_sdk/vlevel-0.5
+make clean 
+make $PJOBS 
+cp *.dll $IPATH/lib/ladspa/vlevel.dll
+
+cd $SPATH/ladspa_sdk/guitarix-0.28.2/ladspa
+$CXX $CXXFLAGS -shared -o guitarix_crybaby.dll crybaby.cpp $LDFLAGS
+$CXX $CXXFLAGS -shared -o guitarix_distortion.dll distortion.cpp $LDFLAGS
+$CXX $CXXFLAGS -shared -o guitarix_echo.dll echo.cpp $LDFLAGS
+$CXX $CXXFLAGS -shared -o guitarix_freeverb.dll freeverb.cpp $LDFLAGS
+$CXX $CXXFLAGS -shared -o guitarix.dll guitarix-ladspa.cpp $LDFLAGS
+$CXX $CXXFLAGS -shared -o guitarix_compressor.dll monocompressor.cpp $LDFLAGS
+$CXX $CXXFLAGS -shared -o guitarix_amp.dll monoamp.cpp $LDFLAGS
+$CXX $CXXFLAGS -shared -o guitarix_IR.dll impulseresponse.cpp $LDFLAGS
+cp *.dll $IPATH/lib/ladspa/
 
 cd $SPATH/ladspa_sdk/calf-master
 configure --without-lv2 --without-lash --enable-sse --without-dssi LIBS=-lws2_32
@@ -3529,34 +3706,6 @@ set -e
 else
 make $PJOBS install
 fi
-
-cd $SPATH/ladspa_sdk/blop-0.2.8
-configure --disable-nls LIBS=-ldl
-make clean
-make
-if [ ! -d $IPATH/lib/ladspa/blop_files ]; then mkdir $IPATH/lib/ladspa/blop_files; fi
-cp src/*.dll $IPATH/lib/ladspa/
-mv $IPATH/lib/ladspa/*data.dll $IPATH/lib/ladspa/blop_files/
-
-cd $SPATH/ladspa_sdk/caps-0.4.5
-make clean
-make $PJOBS 
-cp *.dll $IPATH/lib/ladspa/
-
-cd $SPATH/ladspa_sdk/MCP-plugins-0.3.0
-make clean
-make $PJOBS 
-cp *.dll $IPATH/lib/ladspa/
-
-cd $SPATH/ladspa_sdk/invada-studio-plugins-0.3.1
-make clean
-make $PJOBS 
-cp *.dll $IPATH/lib/ladspa/
-
-cd $SPATH/ladspa_sdk/LEET-plugins-0.2
-make clean
-make $PJOBS  all
-cp *.dll $IPATH/lib/ladspa/
 
 cd $SPATH/ladspa_sdk/lemux-0.2
 make clean
@@ -3578,14 +3727,35 @@ cd $SPATH/ladspa_sdk/rubberband-1.7.0
 configure
 make clean 
 make $PJOBS install
+rm $IPATH/lib/ladspa/*.cat
 
-cd $SPATH/ladspa_sdk/pvoc-0.1.12
-make clean 
-make $PJOBS 
-cp *.dll $IPATH/lib/ladspa/
+cd $SPATH/ladspa_sdk/faust-2.0.a30
+cd examples
+rm ladspadir/*.dll
+if [ ! -d $SPATH/ladspa_sdk/faust-2.0.a30/examples/ladspadir ]; then mkdir $SPATH/ladspa_sdk/faust-2.0.a30/examples/ladspadir; fi
+export FAUST_LIB_PATH=/opt/lib/faust
+make -f Makefile.ladspacompile V=1 $PJOBS
+rm ladspadir/*ester.dll
+cp ladspadir/*.dll $IPATH/lib/ladspa
+unset FAUST_LIB_PATH
+#endf C++
 
-cd $SPATH/ladspa_sdk/REV-plugins-0.3.1
-make clean 
+cd $SPATH/ladspa_sdk/blop-0.2.8
+configure --disable-nls LIBS=-ldl
+make clean
+make
+if [ ! -d $IPATH/lib/ladspa/blop_files ]; then mkdir $IPATH/lib/ladspa/blop_files; fi
+cp src/*.dll $IPATH/lib/ladspa/
+mv $IPATH/lib/ladspa/*data.dll $IPATH/lib/ladspa/blop_files/
+
+cd $SPATH/ladspa_sdk/csa-0.5.100810
+configure --disable-nls
+make clean
+make $PJOBS install
+rm $IPATH/lib/ladspa/*.a $IPATH/lib/ladspa/*.la
+
+cd $SPATH/ladspa_sdk/invada-studio-plugins-0.3.1
+make clean
 make $PJOBS 
 cp *.dll $IPATH/lib/ladspa/
 
@@ -3594,37 +3764,11 @@ configure
 make clean 
 make $PJOBS install
 
-cd $SPATH/ladspa_sdk/guitarix-0.28.2/ladspa
-$CXX $CXXFLAGS -shared -o guitarix_crybaby.dll crybaby.cpp $LDFLAGS
-$CXX $CXXFLAGS -shared -o guitarix_distortion.dll distortion.cpp $LDFLAGS
-$CXX $CXXFLAGS -shared -o guitarix_echo.dll echo.cpp $LDFLAGS
-$CXX $CXXFLAGS -shared -o guitarix_freeverb.dll freeverb.cpp $LDFLAGS
-$CXX $CXXFLAGS -shared -o guitarix.dll guitarix-ladspa.cpp $LDFLAGS
-$CXX $CXXFLAGS -shared -o guitarix_compressor.dll monocompressor.cpp $LDFLAGS
-$CXX $CXXFLAGS -shared -o guitarix_amp.dll monoamp.cpp $LDFLAGS
-$CXX $CXXFLAGS -shared -o guitarix_IR.dll impulseresponse.cpp $LDFLAGS
-cp *.dll $IPATH/lib/ladspa/
-
-cd $SPATH/ladspa_sdk/AMB-plugins-0.1.0
-make clean 
-make $PJOBS
-cp *.dll $IPATH/lib/ladspa/
-
 cd $SPATH/ladspa_sdk/vcf-0.0.5
 set +e
 rm *.o *.dll
 set -e
 make $PJOBS
-cp *.dll $IPATH/lib/ladspa/
-
-cd $SPATH/ladspa_sdk/aweight
-make clean 
-make $PJOBS awplug.dll
-cp *.dll $IPATH/lib/ladspa/
-
-cd $SPATH/ladspa_sdk/VCO-plugins-0.3.0
-make clean 
-make $PJOBS 
 cp *.dll $IPATH/lib/ladspa/
 
 cd $SPATH/ladspa_sdk/njl-plugins
@@ -3633,24 +3777,6 @@ rm *.o *.dll
 set -e
 make $PJOBS
 cp *.dll $IPATH/lib/ladspa/
-
-cd $SPATH/ladspa_sdk/vlevel-0.5
-make clean 
-make $PJOBS 
-cp *.dll $IPATH/lib/ladspa/vlevel.dll
-
-cd $SPATH/ladspa_sdk/blepvco-0.1.0
-make clean 
-make $PJOBS
-cp *.dll $IPATH/lib/ladspa/
-
-cd $SPATH/ladspa_sdk/vocoder-0.3
-make clean 
-make $PJOBS 
-cp *.dll $IPATH/lib/ladspa/
-
-#cd $SPATH/ladspa_sdk/nova_filters-0.2
-#$CXX $CXXFLAGS $CPPFLAGS -Inova/source -shared -o $IPATH/lib/ladspa/nova_filters.dll filters.cpp $LDFLAGS
 
 cd $SPATH/ladspa_sdk/tap-plugins-0.7.1
 make clean 
@@ -3676,54 +3802,29 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/evince-3.14.2
-configure --disable-viewer --disable-previewer --disable-thumbnailer --disable-static --disable-browser-plugin --disable-nautilus --disable-libgnome-desktop --with-platform=win32 $INTROSPECT
+cd $SPATH/evince-3.18.1
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
+configure --disable-thumbnailer --disable-static --disable-browser-plugin --disable-nautilus --disable-libgnome-desktop --with-platform=win32 $INTROSPECT LIBS="-ljpeg -lstdc++"
 make clean
 make
 manifest
 if [ "$CROSSX" == "1" ]; then
 set +e
-make install -k
+make $PJOBS install -k
 set -e
 else
-make install
+make $PJOBS install
 fi
 rm $IPATH/lib/*.la
-
-#obsolete, newer version getting unixish
-#cd $SPATH/libmediaart-0.3.0
-#configure --disable-unit-tests $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
-
-#irrelevant?
-#cd $SPATH/sugar-toolkit-gtk3-0.101.4
-#configure --disable-static
-#cd src/sugar3/event-controller
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
-
-# Reject: declared obsolete
-#cd $SPATH/libcryptui-3.12.2
-#configure --disable-static --disable-gpg-check $INTROSPECT
-#make clean
-#cd libcryptui
-#make $PJOBS install
-#rm $IPATH/lib/*.la
-
-# all libraries require this has been rejected
-#cd $SPATH/libgee-0.6.8
-#configure $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
+mv $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
 
 cd $SPATH/libisocodes-1.0
 # gir missing shared-library
 configure --disable-static
-make clean
+find . -name *.lo -exec rm {} +
+find . -name *.exe -exec rm {} +
+find . -name *.o -exec rm {} +
+echo "">libisocodes_la_vala.stamp
 make $PJOBS install
 rm $IPATH/lib/*.la
 
@@ -3732,23 +3833,6 @@ configure --disable-shared --enable-static
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-#apps
-#cd $SPATH/clinica-0.3.0
-#if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
-#cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel
-# there is patched autogenerated c file, so don't make clean
-#find . -name *.obj -exec rm {} +
-#make $PJOBS
-#make install
-#cp plugins/libCodiceFiscale.dll $IPATH/lib/clinica/plugins
-
-#gee confict
-#cd $SPATH/libgtkmusic-0.21
-#configure --disable-static $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
 
 cd $SPATH/libskk-1.0.2
 #gir fix shared-library
@@ -3778,45 +3862,13 @@ make install
 set -e
 rm $IPATH/lib/*.la
 
-#cd $SPATH/marisa-0.2.4
-#configure --enable-sse2 --disable-shared
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
-
-# Reject: Messy build files
-#cd $SPATH/libkkc-0.3.3
-#configure $INTROSPECT
-#find . -name *.lo -exec rm {} +
-#cd $SPATH/libkkc-0.3.3/marisa-glib
-#make V=1 Marisa.gir
-#cd $SPATH/libkkc-0.3.3/libkkc
-#make install-libLTLIBRARIES
-#make install-girDATA
-#make install-pkgconfigDATA
-#make install-libkkcincludeHEADERS
-#rm $IPATH/lib/*.la
-
-#isn't this ubuntu specific?
-#cd $SPATH/libdbusmenu-12.10.2
-#configure --disable-static --disable-dumper $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
-
 cd $SPATH/dee-1.2.7
-configure --disable-icu --disable-tests $INTROSPECT
+configure --disable-tests $INTROSPECT LIBS=-licuuc
 make clean
 make $PJOBS install
 cd doc/reference/dee-1.0
 make install
 rm $IPATH/lib/*.la
-
-#cd $SPATH/libzapojit-0.0.3
-#configure --disable-static $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
 
 cd $SPATH/totem-pl-parser-3.10.5
 configure --disable-static $INTROSPECT
@@ -3824,19 +3876,13 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/grilo-0.2.12
+cd $SPATH/grilo-0.2.15
 configure --disable-static --disable-vala $INTROSPECT
 make clean
 make $PJOBS install
 cd doc/grilo
 make install
 rm $IPATH/lib/*.la
-
-#cd $SPATH/libindicate-12.10.1
-#configure --disable-static --disable-python $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
 
 #patch makefile.in exclude vala subdir
 cd $SPATH/gupnp-av-0.12.7
@@ -3856,8 +3902,8 @@ rm $IPATH/lib/*.la
 #make clean
 #make $PJOBS install
 
-cd $SPATH/libdmapsharing-DMAPD_2_9_24
-configure --with-mdns=dns_sd LIBS="-ldns_sd -lws2_32"
+cd $SPATH/libdmapsharing-2.9.32
+configure --disable-static --with-mdns=dns_sd LIBS="-ldns_sd -lws2_32"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -3868,7 +3914,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/grilo-plugins-0.2.14
+cd $SPATH/grilo-plugins-0.2.16
 configure --disable-static --enable-compile-warnings=minimum
 make clean
 make $PJOBS install
@@ -3880,19 +3926,6 @@ configure --enable-dbus --disable-bacon $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-cd $SPATH/libgusb-0.1.6
-configure --disable-static --disable-gudev $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-#cd $SPATH/GICR-master
-#configure --disable-static $INTROSPECT
-#make clean
-#make install
-#rm $IPATH/lib/*.la
-#mv $IPATH/lib/libgicr-0.dll $IPATH/bin
 
 cd $SPATH/catch-glib-master
 configure --enable-debug=minimum $INTROSPECT LIBS=-lws2_32
@@ -3922,15 +3955,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/mee-master
-# gir missing shared-library
-# enabling doc causes error
-configure --disable-static $INTROSPECT LIBS="-lz -lregex -lforknt -lws2_32 -lshlwapi"
-find . -name *.lo -exec rm {} +
-find . -name *.la -exec rm {} +
-make $PJOBS install
-rm $IPATH/lib/*.la
-
+#c++
 cd $SPATH/libtorrent-rasterbar-1.0.6
 configure --disable-shared --enable-static --with-boost-system=boost_system CXXFLAGS="$CXXFLAGS -DTORRENT_USE_WSTRING -D_UNICODE -DUNICODE -DTORRENT_BUILDING_SHARED -DBOOST_ASIO_SOURCE"
 make clean
@@ -3938,6 +3963,7 @@ make $PJOBS install
 rm $IPATH/lib/*.la
 
 cd $SPATH/torrent-glib
+# wsock32 needed by ASIO inlines
 configure --disable-static --enable-shared CXXFLAGS="$CXXFLAGS -DBOOST_ASIO_SOURCE" LIBS="-lcrypto -lssl -lws2_32 -lwsock32"
 make clean
 make $PJOBS install
@@ -3948,7 +3974,14 @@ configure --disable-static --disable-vala $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
+XXX
+cd $SPATH/gspell-0.2.1
+configure $INTROSPECT
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+:<<"XXX"
+#c++
 cd $SPATH/GtkScintilla-master
 configure --disable-static $INTROSPECT
 make clean
@@ -3961,23 +3994,11 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/uhttpmock-0.3.3
-configure --disable-static --disable-vala $INTROSPECT LIBS=-lws2_32
+cd $SPATH/cattle-1.2.0
+configure --disable-static $INTROSPECT CFLAGS="$CFLAGS -O2"
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-cd $SPATH/cattle-cattle-1.0.1
-configure --disable-static $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
-#cd $SPATH/replay-0.8.1
-#configure --disable-static $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
 
 cd $SPATH/iris-master
 # gir need recompile
@@ -4005,22 +4026,19 @@ Libs: -L${libdir} -lfreenect
 Cflags: -I${includedir}
 ' > $IPATH/lib/pkgconfig/libfreenect.pc
 
-cd $SPATH/m17n-db-1.6.5
-configure --disable-nls --with-charmaps=glibc-2.3.2/localedata/charmaps
-make install
-
-cd $SPATH/m17n-lib-1.6.4
-configure --disable-shared
-make clean
-make install
-rm $IPATH/lib/*.la
-
-cd $SPATH/libtranslit-0.0.3
-configure --disable-static --enable-m17n-lib $INTROSPECT
+cd $SPATH/GFreenect-master
+configure --disable-static $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
+cd $SPATH/libtranslit-0.0.3
+configure --disable-static --disable-m17n-lib --enable-icu $INTROSPECT
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+#c++
 cd $SPATH/zeromq-3.2.4
 configure --enable-static --disable-shared CPPFLAGS="$CPPFLAGS -DZMQ_STATIC"
 make clean
@@ -4033,37 +4051,17 @@ make clean
 make install
 rm $IPATH/lib/*.la
 
-cd $SPATH/GFreenect-master
-configure --disable-static $INTROSPECT
-make clean
-make $PJOBS install
-rm $IPATH/lib/*.la
-
 cd $SPATH/swe-glib-1.0.1
 configure --disable-static --disable-nls $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-#cd $SPATH/mee-gtk-master
-# gir missing shared-library
-#configure --disable-static $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
-
 cd $SPATH/megatools-1.9.93
 configure --disable-static --disable-docs-build $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-# reject: premilinary?
-#cd $SPATH/ctpl-master
-#configure --disable-static $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
 
 cd $SPATH/bayes-glib-master
 configure --disable-static --enable-debug=minimum --disable-maintainer-mode $INTROSPECT LIBS=-lws2_32
@@ -4082,14 +4080,6 @@ configure --disable-static --enable-debug=minimum --disable-maintainer-mode $INT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-#cd $SPATH/libuca-2.1.1
-#if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
-#cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel -DOPENCL_LIBRARIES=$IPATH/lib/libopencl.a -DOPENCL_INCLUDE_DIRS=$IPATH/include
-#make clean
-#make $PJOBS install
-#cp ufo/*.dll $IPATH/bin/
-#cp ufo/*.a $IPATH/lib/
 
 cd $SPATH/oclfft-1.2.0
 if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
@@ -4114,18 +4104,6 @@ make clean
 make $PJOBS install
 cp build/*.dll $IPATH/lib/ufo/
 
-cd $SPATH/ufo-filters-0.8.0
-export PATH=$PATH:$SPATH/ufo-filters-0.8.0/src
-if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
-cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DOPENCL_LIBRARIES=$IPATH/lib/libopencl.a -DOPENCL_INCLUDE_DIRS=$IPATH/include
-make clean
-make $PJOBS install
-export PATH=$(echo $PATH | sed -e "s;:$SPATH/ufo-filters-0\.8\.0/src;;")
-cp src/*.dll $IPATH/lib/ufo/
-#cd docs/reference
-#if [ ! -d $IPATH/share/gtk-doc/html/UfoFilters ]; then mkdir $IPATH/share/gtk-doc/html/UfoFilters; fi
-#cp *.html *.css *.png *.sgml *.devhelp2 $IPATH/share/gtk-doc/html/UfoFilters/
-
 cd $SPATH/libhdate-1.6.02
 configure --disable-shared --disable-perl --disable-gpc --disable-ruby --disable-fpc --disable-python --disable-php --disable-hcal CPPFLAGS="$CPPFLAGS $(pkg-config --cflags glib-2.0)"
 make clean
@@ -4138,41 +4116,35 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-# reject: its GPL and there much better alternative
-#cd $SPATH/gplugin-master
-#for i in 31 32 33 34; do
-#if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
-#cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_LUA=OFF -DPYTHON3_INCLUDE_DIRS=/c/python$i/include -DPYGOBJECT_INCLUDE_DIRS=$IPATH/py$i/include/pygobject-3.0 -DPYTHON3_LIBRARIES=$IPATH/lib/libpython$i.dll.a
-#make clean
-#make $PJOBS install
-#mv $IPATH/lib/gplugin/gplugin-python.dll $IPATH/lib/gplugin/gplugin-python$i.dll
-#mv $IPATH/lib/libgplugin*.dll $IPATH/bin
-#done
-
-# reject: unrelated
-#cd $SPATH/gtkaml-0.5.94
-#configure --disable-tests --enable-docs 
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
-#cp -a valadoc/Gtkaml $IPATH/share/gtk-doc/html
-#cp libgtkaml/*.gir $IPATH/share/gir-1.0
-
 cd $SPATH/telepathy-ring-2.2.2
 configure --disable-static
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-#reject: An Application
-#cd $SPATH/Chimara-master
-#configure --disable-static $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
+cd $SPATH/gplugin-pkg-upstream-0.0.20
+if [ "$2" == "90" ]; then
+list="31 32"
+else
+list="33 34"
+fi
+for i in $list; do
+if [ -f CMakeCache.txt ]; then rm -rdf CMakeFiles/ CMakeCache.txt; fi
+cmake -G "MSYS Makefiles" -DCMAKE_INSTALL_PREFIX=$IPATH -DCMAKE_BUILD_TYPE=MinSizeRel -DPYTHON3_INCLUDE_DIRS=/c/python$i/include -DPYGOBJECT_INCLUDE_DIRS=$IPATH/py$i/include/pygobject-3.0 -DPYTHON3_LIBRARIES=$IPATH/lib/libpython$i.dll.a
+make clean
+make $PJOBS install
+mv $IPATH/lib/gplugin/gplugin-python.dll $IPATH/lib/gplugin/gplugin-python$i.dll
+mv $IPATH/lib/libgplugin*.dll $IPATH/bin
+done
+
+cd $SPATH/pidgin3
+configure --disable-nss --disable-avahi --disable-nm --disable-consoleui --disable-gtkui --without-x --with-win32-dirs=fhs --enable-cyrus-sasl $INTROSPECT
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
 
 cd $SPATH/model
-configure --disable-static $INTROSPECT
+configure --disable-static
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
@@ -4180,16 +4152,12 @@ rm $IPATH/lib/*.la
 cd $SPATH/libcereal-master
 # gir missing shared-library
 configure
-make clean
+find . -name *.lo -exec rm {} +
+find . -name *.exe -exec rm {} +
+find . -name *.o -exec rm {} +
+echo "">cereal/libcereal_la_vala.stamp
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-# reject: An Application
-#cd $SPATH/cluttersmith-master
-#configure --disable-static
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
 
 cd $SPATH/log4g-0.1.2
 configure $INTROSPECT LIBS=-lws2_32
@@ -4203,6 +4171,7 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
+#c++
 cd $SPATH/kytea-0.4.6
 configure --disable-shared
 make clean
@@ -4210,6 +4179,7 @@ make $PJOBS install
 rm $IPATH/lib/*.la
 
 cd $SPATH/groonga-4.0.8
+mv $IPATH/lib/libstdc++.dll.a $IPATH/lib/libstdc++_s.a
 configure --disable-groonga-httpd --disable-document --with-zlib --disable-static --disable-benchmark LIBS=-lws2_32
 make clean
 cd vendor/onigmo-source
@@ -4217,6 +4187,7 @@ make $PJOBS
 cd ../../
 make install
 rm $IPATH/lib/*.la
+mv $IPATH/lib/libstdc++_s.a $IPATH/lib/libstdc++.dll.a
 
 cd $SPATH/groonga-gobject-1.0.1
 configure --disable-static
@@ -4230,26 +4201,12 @@ make $PJOBS install
 fi
 rm $IPATH/lib/*.la
 
-#cd $SPATH/libzippler-master
-#make clean
-#make $PJOBS
-#cp Zippler-1.0.gir $IPATH/share/gir-1.0
-#cp libzippler.dll $IPATH/bin
-#cp libzippler.dll.a $IPATH/lib
-
 if [ "$2" == "90" ]; then
 cd $SPATH/gtkparasite-master
 configure --disable-static PYTHON=python27$MULTILIB PYGTK_CFLAGS=-I$IPATH/py27/include/pygobject-3.0 PYGTK_LIBS=-lpython27 PYTHON_CONFIG=/bin/python27-config LIBS=-ldl
 make clean
 make $PJOBS install
 fi
-
-# obsolete
-#cd $SPATH/LibPaged-master
-#configure --disable-static $INTROSPECT
-#make clean
-#make $PJOBS install
-#rm $IPATH/lib/*.la
 
 cd $SPATH/Skeltrack-0.1.14
 configure --disable-static $INTROSPECT
@@ -4262,13 +4219,6 @@ configure --disable-static $INTROSPECT
 make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
-
-# reject: An Application
-#cd $SPATH/RhythmCat2-master
-#configure --disable-static --with-native-plugins --without-gtk-ui $INTROSPECT
-#make clean
-#make install
-#rm $IPATH/lib/*.la
 
 cd $SPATH/gob_2_0_19
 configure
@@ -4287,27 +4237,15 @@ make clean
 make install
 rm $IPATH/lib/*.la
 
-# reject: An Application
-#cd $SPATH/rookie-master
-#set +e
-#configure $INTROSPECT
-#set -e
-#make clean
-#make install
-#rm $IPATH/lib/*.la
-
 cd $SPATH/libfso-glib-2012.07.27.2
 # gir missing shared-library
 configure --enable-typelib
-make clean
+find . -name *.lo -exec rm {} +
+find . -name *.exe -exec rm {} +
+find . -name *.o -exec rm {} +
+echo "">src/libfso_glib_la_vala.stamp
 make install
 rm $IPATH/lib/*.la
-
-cd $SPATH/zenity-3.6.0
-configure --enable-libnotify --enable-webkitgtk LIBS="-lmsvcr$2 -lntdll"
-make clean
-make 
-make install
 
 cd $SPATH/hiredis-win32-master
 make clean
@@ -4319,20 +4257,31 @@ make clean
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-cd $SPATH/libgteonoma-master
-# gir missing shared-library
-configure 
-make clean
+cd $SPATH/libntlm-1.4
+configure --disable-shared --enable-static
+make clean 
 make $PJOBS install
 rm $IPATH/lib/*.la
 
-# reject: An Application
-#cd $SPATH/gwibber-3.6.0
-#configure --disable-unity
-#find . -name *.lo -exec rm {} +
-#find . -name *.la -exec rm {} +
-#make $PJOBS install
-#rm $IPATH/lib/*.la
+cd $SPATH/libgsasl-1.6.1
+configure --disable-shared --enable-static --enable-kerberos_v5 --with-gssapi-impl=heimdal CPPFLAGS="$CPPFLAGS -I$IPATH/include/heimdal" LIBS=-lntlm
+make clean 
+make $PJOBS install
+rm $IPATH/lib/*.la
+
+cd $SPATH/libinfinity-master
+source setgcc gcc5
+configure --disable-static $INTROSPECT LIBS="-lgssapi32 -lgcrypt -lidn -lntlm"
+make clean 
+make install
+rm $IPATH/lib/*.la
+source setgcc gcc48
+
+cd $SPATH/libmediaart-0.3.0
+configure --disable-unit-tests $INTROSPECT
+make clean
+make $PJOBS install
+rm $IPATH/lib/*.la
 
 cd $SPATH/aravis-0.3.6
 configure  --enable-gst-plugin --disable-static --enable-viewer $INTROSPECT LIBS=-lws2_32
@@ -4348,17 +4297,220 @@ rm $IPATH/lib/*.la
 mv $IPATH/lib/gstreamer-1.0/libgstaravis-0.4.dll $IPATH/lib/gstreamer-1.0/libgstaravis.dll
 
 cd $SPATH/ctags-deploy
+configure LIBS=-lregex --disable-external-sort
+make clean
+make $PJOBS install
+
+cd $SPATH/pinpoint-0.1.8
 configure
 make clean
 make $PJOBS install
 
-cd $SPATH/pinpoint-0.1.6
-configure
+cd $SPATH/gtkhtml-4.10.0
+configure --enable-static --disable-shared
 make clean
 make $PJOBS install
+:<<"XXXX"
+cd $SPATH/gnome-devel-docs-3.18.0
+find . -name *.html -exec rm {} +
+find . -name *.css -exec rm {} +
+find . -name *.cache -exec rm {} +
+cd $SPATH/gnome-devel-docs-3.18.0/programming-guidelines/C
+yelp-build html *.page
+cd $SPATH/gnome-devel-docs-3.18.0/platform-overview/C
+yelp-build html *.page
+cd $SPATH/gnome-devel-docs-3.18.0/platform-demos/C
+yelp-build html *.page
+cd $SPATH/gnome-devel-docs-3.18.0/optimization-guide/C
+yelp-build html *.page
+cd $SPATH/gnome-devel-docs-3.18.0/hig/C
+yelp-build html *.page
+cd $SPATH/gnome-devel-docs-3.18.0/accessibility-devel-guide/C
+db2html index.docbook
+
+cd $SPATH/mypaint-git
+if [ "$2" == "90" ]; then
+export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py27/lib/pkgconfig"
+else
+export PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py34/lib/pkgconfig"
+fi
+/c/python27/scripts/scons -c 
+set +e
+/c/python27/scripts/scons enable_introspection=1
+set -e
+$CC $LDFLAGS $CXXFLAGS -fopenmp -shared -o libmypaint.dll brushlib/brushmodes.o brushlib/fifo.o brushlib/helpers.o brushlib/mapping.o brushlib/mypaint-brush-settings.o brushlib/mypaint-brush.o brushlib/mypaint-fixed-tiled-surface.o brushlib/mypaint-rectangle.o brushlib/mypaint-surface.o brushlib/mypaint-tiled-surface.o brushlib/mypaint.o brushlib/operationqueue.o brushlib/rng-double.o brushlib/tilemap.o brushlib/utils.o -L$IPATH/lib -lm -ljson-c -lgobject-2.0 -lglib-2.0 -lintl -Wl,--out-implib,brushlib/libmypaint.a
+
+g-ir-scanner -o brushlib/MyPaint-1.1.gir --warn-all --namespace=MyPaint --nsversion=1.1 -I./brushlib -L./brushlib --add-include-path=./ --identifier-prefix=MyPaint --symbol-prefix=mypaint_ --pkg=glib-2.0 -I./ --library=mypaint brushlib/brushmodes.c brushlib/fifo.c brushlib/helpers.c brushlib/libmypaint.c brushlib/mapping.c brushlib/mypaint-brush-settings.c brushlib/mypaint-brush.c brushlib/mypaint-fixed-tiled-surface.c brushlib/mypaint-rectangle.c brushlib/mypaint-surface.c brushlib/mypaint-tiled-surface.c brushlib/mypaint.c brushlib/operationqueue.c brushlib/rng-double.c brushlib/tilemap.c brushlib/utils.c brushlib/mypaint-brush-settings-gen.h brushlib/mypaint-brush-settings.h brushlib/mypaint-brush.h brushlib/mypaint-config.h brushlib/mypaint-fixed-tiled-surface.h brushlib/mypaint-glib-compat.h brushlib/mypaint-rectangle.h brushlib/mypaint-surface.h brushlib/mypaint-tiled-surface.h brushlib/glib/mypaint-brush.c brushlib/glib/mypaint-brush.h
+
+g-ir-compiler -o $IPATH/lib/girepository-1.0/MyPaint-1.1.typelib brushlib/MyPaint-1.1.gir 
+cp brushlib/MyPaint-1.1.gir $IPATH/share/gir-1.0
+rm brushlib/libmypaint.a
+cp libmypaint.dll $IPATH/bin
+XXXX
+
+# empty shared-library
+sed --in-place -e "s;shared-library=\"\";shared-library=\"libgobject-2.0-0.dll\";" $IPATH/share/gir-1.0/GObject-2.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/GObject-2.0.typelib $IPATH/share/gir-1.0/GObject-2.0.gir
+sed --in-place -e "s;shared-library=\"\";shared-library=\"libgio-2.0-0.dll\";" $IPATH/share/gir-1.0/Gio-2.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Gio-2.0.typelib $IPATH/share/gir-1.0/Gio-2.0.gir
+sed --in-place -e "s;shared-library=\"\";shared-library=\"libgmodule-2.0-0.dll\";" $IPATH/share/gir-1.0/GModule-2.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/GModule-2.0.typelib $IPATH/share/gir-1.0/GModule-2.0.gir
+sed --in-place -e "s;shared-library=\"\";shared-library=\"libglib-2.0-0.dll,libgobject-2.0-0.dll\";" $IPATH/share/gir-1.0/GLib-2.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/GLib-2.0.typelib $IPATH/share/gir-1.0/GLib-2.0.gir
+
+# cmake case
+sed --in-place -e "s;shared-library=\"\";shared-library=\"libmirage.dll\";" $IPATH/share/gir-1.0/Mirage-3.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Mirage-3.0.typelib $IPATH/share/gir-1.0/Mirage-3.0.gir
+sed --in-place -e "s;shared-library=\"\";shared-library=\"libgplugin.dll\";" $IPATH/share/gir-1.0/GPlugin-0.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/GPlugin-0.0.typelib $IPATH/share/gir-1.0/GPlugin-0.0.gir
+
+# gir generated using private lib, before actual lib generated = empty shared-library
+sed --in-place -e "s;shared-library=\"\";shared-library=\"libnice-10.dll\";" $IPATH/share/gir-1.0/Nice-0.1.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Nice-0.1.typelib $IPATH/share/gir-1.0/Nice-0.1.gir
+
+# modded library poppler
+sed --in-place -e "s;shared-library=\"libpoppler-glib-8.dll,libpoppler-...dll\";shared-library=\"libpoppler-glib-8.dll\";" $IPATH/share/gir-1.0/Poppler-0.18.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Poppler-0.18.typelib $IPATH/share/gir-1.0/Poppler-0.18.gir
+
+# wrong typelib
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Libproxy-1.0.typelib $IPATH/share/gir-1.0/Libproxy-1.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/SQLHeavy-0.2.typelib $IPATH/share/gir-1.0/SQLHeavy-0.2.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Iris-1.0.typelib $IPATH/share/gir-1.0/Iris-1.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/JavaScriptCore-3.0.typelib $IPATH/share/gir-1.0/JavaScriptCore-3.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/WebKit-3.0.typelib $IPATH/share/gir-1.0/WebKit-3.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/WebKit2-3.0.typelib $IPATH/share/gir-1.0/WebKit2-3.0.gir
+
+# vala case, shared-library not supported
+sed --in-place -e "s;namespace name=\"Cereal\" version=\"1.0\";namespace name=\"Cereal\" version=\"1.0\" shared-library=\"libcereal-1.dll\";" $IPATH/share/gir-1.0/Cereal-1.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Cereal-1.0.typelib $IPATH/share/gir-1.0/Cereal-1.0.gir
+sed --in-place -e "s;namespace name=\"Gee\" version=\"0.8\";namespace name=\"Gee\" version=\"0.8\" shared-library=\"libgee-0.8-2.dll\";" $IPATH/share/gir-1.0/Gee-0.8.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Gee-0.8.typelib $IPATH/share/gir-1.0/Gee-0.8.gir
+sed --in-place -e "s;namespace name=\"Aerial\" version=\"1.0\";namespace name=\"Aerial\" version=\"1.0\" shared-library=\"libaerial-0.dll\";" $IPATH/share/gir-1.0/Aerial-1.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Aerial-1.0.typelib $IPATH/share/gir-1.0/Aerial-1.0.gir
+sed --in-place -e "s;namespace name=\"GXml\" version=\"0.4\";namespace name=\"GXml\" version=\"0.4\" shared-library=\"libgxml-0.4-4.dll\";" $IPATH/share/gir-1.0/GXml-0.4.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/GXml-0.4.typelib $IPATH/share/gir-1.0/GXml-0.4.gir
+sed --in-place -e "s;namespace name=\"Folks\" version=\"0.6\";namespace name=\"Folks\" version=\"0.6\" shared-library=\"libfolks-25.dll\";" $IPATH/share/gir-1.0/Folks-0.6.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Folks-0.6.typelib $IPATH/share/gir-1.0/Folks-0.6.gir
+sed --in-place -e "s;namespace name=\"FolksDummy\" version=\"0.6\";namespace name=\"FolksDummy\" version=\"0.6\" shared-library=\"libfolks-dummy-25.dll\";" $IPATH/share/gir-1.0/FolksDummy-0.6.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/FolksDummy-0.6.typelib $IPATH/share/gir-1.0/FolksDummy-0.6.gir
+sed --in-place -e "s;namespace name=\"FolksTelepathy\" version=\"0.6\";namespace name=\"FolksTelepathy\" version=\"0.6\" shared-library=\"libfolks-telepathy-25.dll\";" $IPATH/share/gir-1.0/FolksTelepathy-0.6.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/FolksTelepathy-0.6.typelib $IPATH/share/gir-1.0/FolksTelepathy-0.6.gir
+sed --in-place -e "s;namespace name=\"libisocodes\" version=\"1.0\";namespace name=\"libisocodes\" version=\"1.0\" shared-library=\"libisocodes-0.dll\";" $IPATH/share/gir-1.0/libisocodes-1.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/libisocodes-1.0.typelib $IPATH/share/gir-1.0/libisocodes-1.0.gir
+sed --in-place -e "s;namespace name=\"Skk\" version=\"1.0\";namespace name=\"Skk\" version=\"1.0\" shared-library=\"libskk-0.dll\";" $IPATH/share/gir-1.0/Skk-1.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Skk-1.0.typelib $IPATH/share/gir-1.0/Skk-1.0.gir
+sed --in-place -e "s;namespace name=\"FreeSmartphone\" version=\"1.0\";namespace name=\"FreeSmartphone\" version=\"1.0\" shared-library=\"libfso-glib-2.dll\";" $IPATH/share/gir-1.0/FreeSmartphone-1.0.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/FreeSmartphone-1.0.typelib $IPATH/share/gir-1.0/FreeSmartphone-1.0.gir
+
+# wrong namespace version, it's broken but still not a valid version
+sed --in-place -e "s;version=\"3.broken\";version=\"3\";" $IPATH/share/gir-1.0/Gcr-3.gir
+$IPATH/bin/g-ir-compiler -o $IPATH/lib/girepository-1.0/Gcr-3.typelib $IPATH/share/gir-1.0/Gcr-3.gir
+XXX
+exit
+:<<"XXXX"
+
+# fixme
+cd $SPATH/gnome-builder-3.18.1
+#configure
+#make clean
+make $PJOBS
+rm $IPATH/lib/*.la
+
+# fixme
+cd $SPATH/zenity-3.18.0
+configure --enable-libnotify --enable-webkitgtk LIBS="-lmsvcr$2 -lntdll"
+make clean
+make 
+make install
+XXXX
+
+if [ "$2" == "90" ]; then
+cd $SPATH/gtk+-2.24.28
+configure --with-included-immodules --disable-introspection WINDRES="windres $RCFLAGS"
+make clean
+cd gtk
+set +e
+rm gtk-update-icon-cache_manifest.o
+rm gtk.def
+rm gtkbuiltincache.h 
+rm stock-icons/icon-theme.cache
+set -e
+make gtk-update-icon-cache.exe
+manifest
+cd ..
+make $PJOBS
+manifest
+make install
+rm $IPATH/lib/*.la
+fi
+
+if [ "$2" == "90" ]; then
+cd $SPATH/gtk-engines-2.20.2
+configure --disable-static
+make clean
+make $PJOBS install
+
+cd $SPATH/murrine-0.98.2
+configure --disable-static
+make clean
+make $PJOBS install
+cd $SPATH/rezlooks-0.6
+configure --disable-static
+make clean
+make $PJOBS install
+cd $SPATH/candido-engine-0.9.1
+configure --disable-static
+make clean
+make $PJOBS install
+cd $SPATH/aurora-1.5
+configure --disable-static
+make clean
+make $PJOBS install
+cd $SPATH/equinox-1.50
+configure --disable-static
+make clean
+make $PJOBS install
+
+#cd $SPATH/libglade-2.6.4
+#configure --disable-static
+#make clean
+#make $PJOBS install
+#rm $IPATH/lib/*.la
+#cd $SPATH/glade3-3.8.5
+#configure --disable-scrollkeeper --disable-static PYTHON=python27 CPPFLAGS="$CPPFLAGS -I/c/python27/include" LIBS=-lpython2.7 
+#make clean
+#make $PJOBS
+#manifest
+#make install
+#rm $IPATH/lib/*.la
+#cd $SPATH/pygobject-2.28.6
+#configure --disable-introspection PYTHON=python27$MULTILIB CPPFLAGS="$CPPFLAGS -I/c/python27/include" LIBS=-lpython2.7 PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py27/lib/pkgconfig" --prefix=$IPATH/py27
+#make clean
+#make $PJOBS
+#make install
+#cd $SPATH/pygtk-2.24.0
+#configure PYTHON=/usr/bin/python27$MULTILIB CPPFLAGS="$CPPFLAGS -I/c/python27/include -I/c/python27/Lib/site-packages/numpy/core/include" LIBS=-lpython2.7 PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$IPATH/py27/lib/pkgconfig" --prefix=$IPATH/py27
+#make clean
+#make $PJOBS install
+fi
+
+# for libmypaint
+
+exit
+
+#href="http://docs.python.org/2.7/ -> href="../../python2.7/
+#href="http://cairographics.org/documentation/pycairo/2/ -> href="../../Pycairo/
+#*.html|-hierarchy.html|-mapping.html|-functions.html|-flags.html|-enums.html|-constants.html|-callbacks.html
+#href="http://docs.python.org/2.7/ -> href="../python2.7/
+#href="http://cairographics.org/documentation/pycairo/2/ -> href="../Pycairo/
+#*.html
+#\.png" .webp"
+
+#href="C:/Moluccas/local/share/gtk-doc/html/ -> href="../
+#*.html
 
 :<<"XXX"
-# rebuild manifest for gtk
+# rebuild manifest for gtk 3.14
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
