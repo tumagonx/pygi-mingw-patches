@@ -1,16 +1,5 @@
---- librsvg.pc.in	Wed Dec 04 03:19:50 2013
-+++ librsvg.pc.in	Wed Apr 01 14:18:41 2015
-@@ -9,7 +9,7 @@
- Name: librsvg
- Description: library that renders svg files
- Version: @VERSION@
--Requires: glib-2.0 gio-2.0 gdk-pixbuf-2.0 cairo
-+Requires: pangocairo libcroco-0.6 glib-2.0 gio-2.0 gdk-pixbuf-2.0
- Requires.private:
- Libs: -L${libdir} -lrsvg-@RSVG_API_MAJOR_VERSION@ -lm
- Cflags: -I${includedir}/librsvg-@RSVG_API_VERSION@
---- rsvg-convert.c	Thu Feb 12 23:31:51 2015
-+++ rsvg-convert.c	Sat Aug 15 07:10:26 2015
+--- rsvg-convert.c	Wed Dec 02 07:58:53 2015
++++ rsvg-convert.c	Sun Dec 27 18:05:45 2015
 @@ -43,6 +43,7 @@
  
  #ifdef G_OS_WIN32
@@ -19,15 +8,60 @@
  #include <windows.h>
  
  #include <gio/gwin32inputstream.h>
-@@ -128,6 +130,7 @@
+@@ -143,6 +144,12 @@
  
  #ifdef G_OS_WIN32
      HANDLE handle;
 +    setmode (fileno (stdout), O_BINARY);
++#endif
++#ifdef CAIRO_HAS_WIN32_SURFACE
++    HDC dc;
++    XFORM xform;
++    gunichar2 *output_utf16;
  #endif
  
      GOptionEntry options_table[] = {
-@@ -253,12 +256,18 @@
+@@ -161,7 +168,7 @@
+         {"height", 'h', 0, G_OPTION_ARG_INT, &height,
+          N_("height [optional; defaults to the SVG's height]"), N_("<int>")},
+         {"format", 'f', 0, G_OPTION_ARG_STRING, &format,
+-         N_("save format [optional; defaults to 'png']"), N_("[png, pdf, ps, eps, svg, xml, recording]")},
++         N_("save format [optional; defaults to 'png']"), N_("[png, pdf, ps, eps, svg, emf, xml, recording]")},
+         {"output", 'o', 0, G_OPTION_ARG_STRING, &output,
+          N_("output filename [optional; defaults to stdout]"), NULL},
+         {"export-id", 'i', 0, G_OPTION_ARG_STRING, &export_id,
+@@ -200,16 +207,28 @@
+     }
+ 
+     if (output != NULL) {
++#ifdef CAIRO_HAS_WIN32_SURFACE
++        if (format && !strcmp (format, "emf"))
++        output_utf16 = g_utf8_to_utf16 (output, -1, NULL, NULL, NULL);
++        else {
++#endif
+         output_file = fopen (output, "wb");
+         if (!output_file) {
+             g_printerr (_("Error saving to file: %s\n"), output);
+             g_free (output);
+             exit (1);
+         }
+-
+-        g_free (output);
++#ifdef CAIRO_HAS_WIN32_SURFACE
+     }
++#endif
++        g_free (output);
+ 
++    }
++#ifdef CAIRO_HAS_WIN32_SURFACE
++    else
++      if (format && !strcmp (format, "emf"))
++        output_utf16 = g_utf8_to_utf16 ("converted_svg.emf", -1, NULL, NULL, NULL);
++#endif
+     if (args)
+         while (args[n_args] != NULL)
+             n_args++;
+@@ -270,12 +289,18 @@
                                                  NULL,
                                                  NULL))) {
                  const char *content_type;
@@ -47,8 +81,73 @@
                  g_object_unref (file_info);
              }
  
---- rsvg-size-callback.c	Wed Dec 04 03:19:50 2013
-+++ rsvg-size-callback.c	Tue Mar 31 21:37:49 2015
+@@ -371,6 +396,23 @@
+                 surface = cairo_svg_surface_create_for_stream (rsvg_cairo_write_func, output_file,
+                                                                dimensions.width, dimensions.height);
+ #endif
++#ifdef CAIRO_HAS_WIN32_SURFACE
++            else if (!strcmp (format, "emf")) {
++                dc = CreateEnhMetaFileW (NULL, output_utf16, NULL, NULL);
++                StartPage(dc);
++                /* hq mode as suggested by Adrian Johnson
++                SetGraphicsMode (dc, GM_ADVANCED);
++                xform.eM11 = 1.0/16;
++                xform.eM12 = 0;
++                xform.eM21 = 0;
++                xform.eM22 = 1.0/16;
++                xform.eDx = 0;
++                xform.eDy = 0;
++                SetWorldTransform (dc, &xform);
++                */
++                surface = cairo_win32_printing_surface_create (dc);
++            }
++#endif
+ #ifdef CAIRO_HAS_XML_SURFACE
+             else if (!strcmp (format, "xml")) {
+                 cairo_device_t *device = cairo_xml_create_for_stream (rsvg_cairo_write_func, output_file);
+@@ -389,6 +431,12 @@
+             }
+ 
+             cr = cairo_create (surface);
++#ifdef CAIRO_HAS_WIN32_SURFACE
++            /* hq mode
++            if (format && !strcmp (format, "emf"))
++                cairo_scale (cr, 16, 16);
++                */
++#endif
+         }
+ 
+         // Set background color
+@@ -431,6 +479,14 @@
+ #endif
+         else if (!strcmp (format, "xml"))
+           ;
++#ifdef CAIRO_HAS_WIN32_SURFACE
++        else if (format && !strcmp (format, "emf")) {
++            cairo_surface_show_page (surface);
++            EndPage(dc);
++            cairo_surface_finish (surface);
++            EndDoc(dc);
++        }
++#endif
+         else if (!strcmp (format, "svg") || !strcmp (format, "pdf") || !strcmp (format, "ps") || !strcmp (format, "eps"))
+             cairo_show_page (cr);
+         else
+@@ -442,7 +498,11 @@
+     cairo_destroy (cr);
+ 
+     cairo_surface_destroy (surface);
+-
++#ifdef CAIRO_HAS_WIN32_SURFACE
++    if (format && !strcmp (format, "emf"))
++        CloseEnhMetaFile (dc);
++    else
++#endif
+     fclose (output_file);
+ 
+     g_strfreev (args);
+--- rsvg-size-callback.c	Thu Apr 16 07:24:40 2015
++++ rsvg-size-callback.c	Tue Dec 15 11:39:24 2015
 @@ -94,10 +94,18 @@
      if (real_data->keep_aspect_ratio) {
          int out_min = MIN (*width, *height);
