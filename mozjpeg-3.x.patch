@@ -1,0 +1,252 @@
+--- jchuff.h	Mon May 18 21:29:10 2015
++++ jchuff.h	Sat Sep 03 02:16:12 2016
+@@ -34,6 +34,12 @@
+   /* If no code has been allocated for a symbol S, ehufsi[S] contains 0 */
+ } c_derived_tbl;
+ 
++#ifdef NEED_12_BIT_NAMES
++#define jpeg_make_c_derived_tbl	jpeg_make_c_derived_tbl_12
++#define jpeg_gen_optimal_table	jpeg_gen_optimal_table_12
++#define quantize_trellis	quantize_trellis_12
++#endif
++
+ /* Expand a Huffman table definition into the derived format */
+ EXTERN(void) jpeg_make_c_derived_tbl
+         (j_compress_ptr cinfo, boolean isDC, int tblno,
+--- jconfig.h.in	Mon May 18 21:29:10 2015
++++ jconfig.h.in	Sat Sep 03 02:10:28 2016
+@@ -41,6 +41,14 @@
+ /* Compiler does not support pointers to undefined structures. */
+ #undef INCOMPLETE_TYPES_BROKEN
+ 
++/* Define "boolean" as unsigned char, not int, on Windows systems. */
++#ifdef _WIN32
++#ifndef __RPCNDR_H__		/* don't conflict if rpcndr.h already read */
++typedef unsigned char boolean;
++#endif
++#define HAVE_BOOLEAN		/* prevent jmorecfg.h from redefining it */
++#endif
++
+ /* Support in-memory source/destination managers */
+ #undef MEM_SRCDST_SUPPORTED
+ 
+--- jdct.h	Mon May 18 21:29:10 2015
++++ jdct.h	Sat Sep 03 02:07:26 2016
+@@ -86,6 +86,29 @@
+ 
+ #define RANGE_MASK  (MAXJSAMPLE * 4 + 3) /* 2 bits wider than legal samples */
+ 
++#ifdef NEED_12_BIT_NAMES
++#define jpeg_fdct_islow		jpeg_fdct_islow_12
++#define jpeg_fdct_ifast		jpeg_fdct_ifast_12
++#define jpeg_fdct_float		jpeg_fdct_float_12
++#define jpeg_idct_islow		jpeg_idct_islow_12
++#define jpeg_idct_ifast		jpeg_idct_ifast_12
++#define jpeg_idct_float		jpeg_idct_float_12
++#define jpeg_idct_16x16		jpeg_idct_16x16_12
++#define jpeg_idct_15x15		jpeg_idct_15x15_12
++#define jpeg_idct_14x14		jpeg_idct_14x14_12
++#define jpeg_idct_13x13		jpeg_idct_13x13_12
++#define jpeg_idct_12x12		jpeg_idct_12x12_12
++#define jpeg_idct_11x11		jpeg_idct_11x11_12
++#define jpeg_idct_10x10		jpeg_idct_10x10_12
++#define jpeg_idct_9x9		jpeg_idct_9x9_12
++#define jpeg_idct_7x7		jpeg_idct_7x7_12
++#define jpeg_idct_6x6		jpeg_idct_6x6_12
++#define jpeg_idct_5x5		jpeg_idct_5x5_12
++#define jpeg_idct_3x3		jpeg_idct_3x3_12
++#define jpeg_idct_4x4		jpeg_idct_4x4_12
++#define jpeg_idct_2x2		jpeg_idct_2x2_12
++#define jpeg_idct_1x1		jpeg_idct_1x1_12
++#endif /* NEED_SHORT_EXTERNAL_NAMES */
+ 
+ /* Extern declarations for the forward and inverse DCT routines. */
+ 
+--- jdhuff.h	Mon May 18 21:29:10 2015
++++ jdhuff.h	Sat Sep 03 02:07:16 2016
+@@ -12,6 +12,11 @@
+  * progressive decoder (jdphuff.c).  No other modules need to see these.
+  */
+ 
++#ifdef NEED_12_BIT_NAMES
++#define jpeg_make_d_derived_tbl	jpeg_make_d_derived_tbl_12	
++#define jpeg_fill_bit_buffer	jpeg_fill_bit_buffer_12	
++#define jpeg_huff_decode	jpeg_huff_decode_12	
++#endif /* NEED_SHORT_EXTERNAL_NAMES */
+ 
+ /* Derived data constructed for each Huffman table */
+ 
+--- jerror.c	Mon May 18 21:29:10 2015
++++ jerror.c	Sat Sep 03 02:16:58 2016
+@@ -43,6 +43,10 @@
+  * want to refer to it directly.
+  */
+ 
++#ifdef NEED_12_BIT_NAMES
++#define jpeg_std_message_table	jpeg_std_message_table_12
++#endif
++
+ #define JMESSAGE(code,string)   string ,
+ 
+ const char * const jpeg_std_message_table[] = {
+--- jerror.h	Mon May 18 21:29:10 2015
++++ jerror.h	Fri Sep 23 05:03:37 2016
+@@ -42,7 +42,7 @@
+ JMESSAGE(JMSG_NOMESSAGE, "Bogus message code %d") /* Must be first entry! */
+ 
+ /* For maintenance convenience, list is alphabetical by message code name */
+-#if JPEG_LIB_VERSION < 70
++#if JPEG_LIB_VERSION < 70 || BITS_IN_JSAMPLE == 12
+ JMESSAGE(JERR_ARITH_NOTIMPL,
+          "Sorry, arithmetic coding is not implemented")
+ #endif
+--- jmemsys.h	Mon May 18 21:29:10 2015
++++ jmemsys.h	Sat Sep 03 02:06:53 2016
+@@ -19,6 +19,16 @@
+  * symbol supplied in jconfig.h.
+  */
+ 
++#ifdef NEED_12_BIT_NAMES
++#define jpeg_get_small		jpeg_get_small_12
++#define jpeg_free_small		jpeg_free_small_12
++#define jpeg_get_large		jpeg_get_large_12
++#define jpeg_free_large		jpeg_free_large_12
++#define jpeg_mem_available	jpeg_mem_available_12
++#define jpeg_open_backing_store	jpeg_open_backing_store_12
++#define jpeg_mem_init		jpeg_mem_init_12
++#define jpeg_mem_term		jpeg_mem_term_12
++#endif /* NEED_SHORT_EXTERNAL_NAMES */
+ 
+ /*
+  * These two functions are used to allocate and release small chunks of
+--- jmorecfg.h	Mon May 18 21:29:10 2015
++++ jmorecfg.h	Sat Sep 03 02:19:44 2016
+@@ -70,6 +70,7 @@
+ /* JSAMPLE should be the smallest type that will hold the values 0..4095.
+  * On nearly all machines "short" will do nicely.
+  */
++#define NEED_12_BIT_NAMES
+ 
+ typedef short JSAMPLE;
+ #define GETJSAMPLE(value)  ((int) (value))
+@@ -147,8 +148,14 @@
+ 
+ /* INT32 must hold at least signed 32-bit values. */
+ 
+-#ifndef XMD_H                   /* X11/xmd.h correctly defines INT32 */
++#ifndef XMD_H			/* X11/xmd.h correctly defines INT32 */
++#ifndef _BASETSD_H_		/* Microsoft defines it in basetsd.h */
++#ifndef _BASETSD_H		/* MinGW is slightly different */
++#ifndef QGLOBAL_H		/* Qt defines it in qglobal.h */
+ typedef long INT32;
++#endif
++#endif
++#endif
+ #endif
+ 
+ /* Datatype used for image dimensions.  The JPEG standard only supports
+--- jpegint.h	Mon May 18 21:29:10 2015
++++ jpegint.h	Sat Sep 03 02:18:22 2016
+@@ -342,6 +342,42 @@
+ #endif
+ 
+ 
++#ifdef NEED_12_BIT_NAMES
++#define jinit_compress_master	jinit_compress_master_12	
++#define jinit_c_master_control	jinit_c_master_control_12	
++#define jinit_c_main_controller	jinit_c_main_controller_12	
++#define jinit_c_prep_controller	jinit_c_prep_controller_12	
++#define jinit_c_coef_controller	jinit_c_coef_controller_12	
++#define jinit_color_converter	jinit_color_converter_12	
++#define jinit_downsampler	jinit_downsampler_12	
++#define jinit_forward_dct	jinit_forward_dct_12	
++#define jinit_huff_encoder	jinit_huff_encoder_12	
++#define jinit_phuff_encoder	jinit_phuff_encoder_12	
++#define jinit_marker_writer	jinit_marker_writer_12	
++#define jinit_master_decompress	jinit_master_decompress_12	
++#define jinit_d_main_controller	jinit_d_main_controller_12	
++#define jinit_d_coef_controller	jinit_d_coef_controller_12	
++#define jinit_d_post_controller	jinit_d_post_controller_12	
++#define jinit_input_controller	jinit_input_controller_12	
++#define jinit_marker_reader	jinit_marker_reader_12	
++#define jinit_huff_decoder	jinit_huff_decoder_12	
++#define jinit_phuff_decoder	jinit_phuff_decoder_12	
++#define jinit_inverse_dct	jinit_inverse_dct_12	
++#define jinit_upsampler		jinit_upsampler_12		
++#define jinit_color_deconverter	jinit_color_deconverter_12	
++#define jinit_1pass_quantizer	jinit_1pass_quantizer_12	
++#define jinit_2pass_quantizer	jinit_2pass_quantizer_12	
++#define jinit_merged_upsampler	jinit_merged_upsampler_12	
++#define jinit_memory_mgr	jinit_memory_mgr_12	
++#define jdiv_round_up		jdiv_round_up_12		
++#define jround_up		jround_up_12		
++#define jcopy_sample_rows	jcopy_sample_rows_12	
++#define jcopy_block_row		jcopy_block_row_12		
++#define jzero_far		jzero_far_12		
++#define jpeg_zigzag_order	jpeg_zigzag_order_12	
++#define jpeg_natural_order	jpeg_natural_order_12	
++#endif
++
+ /* Compression module initialization routines */
+ EXTERN(void) jinit_compress_master (j_compress_ptr cinfo);
+ EXTERN(void) jinit_c_master_control (j_compress_ptr cinfo,
+--- jpeglib.h	Mon May 18 21:29:10 2015
++++ jpeglib.h	Thu Sep 29 16:16:19 2016
+@@ -922,6 +922,57 @@
+  */
+ typedef boolean (*jpeg_marker_parser_method) (j_decompress_ptr cinfo);
+ 
++#ifdef NEED_12_BIT_NAMES
++#define jpeg_std_error		jpeg_std_error_12
++#define jpeg_CreateCompress	jpeg_CreateCompress_12
++#define jpeg_CreateDecompress	jpeg_CreateDecompress_12
++#define jpeg_destroy_compress	jpeg_destroy_compress_12
++#define jpeg_destroy_decompress	jpeg_destroy_decompress_12
++#define jpeg_stdio_dest		jpeg_stdio_dest_12
++#define jpeg_stdio_src		jpeg_stdio_src_12
++#define jpeg_set_defaults	jpeg_set_defaults_12
++#define jpeg_set_colorspace	jpeg_set_colorspace_12
++#define jpeg_default_colorspace	jpeg_default_colorspace_12
++#define jpeg_set_quality	jpeg_set_quality_12
++#define jpeg_set_linear_quality	jpeg_set_linear_quality_12
++#define jpeg_add_quant_table	jpeg_add_quant_table_12
++#define jpeg_quality_scaling	jpeg_quality_scaling_12
++#define jpeg_simple_progression	jpeg_simple_progression_12
++#define jpeg_suppress_tables	jpeg_suppress_tables_12
++#define jpeg_alloc_quant_table	jpeg_alloc_quant_table_12
++#define jpeg_alloc_huff_table	jpeg_alloc_huff_table_12
++#define jpeg_start_compress	jpeg_start_compress_12
++#define jpeg_write_scanlines	jpeg_write_scanlines_12
++#define jpeg_finish_compress	jpeg_finish_compress_12
++#define jpeg_write_raw_data	jpeg_write_raw_data_12
++#define jpeg_write_marker	jpeg_write_marker_12
++#define jpeg_write_m_header	jpeg_write_m_header_12
++#define jpeg_write_m_byte	jpeg_write_m_byte_12
++#define jpeg_write_tables	jpeg_write_tables_12
++#define jpeg_read_header	jpeg_read_header_12
++#define jpeg_start_decompress	jpeg_start_decompress_12
++#define jpeg_read_scanlines	jpeg_read_scanlines_12
++#define jpeg_finish_decompress	jpeg_finish_decompress_12
++#define jpeg_read_raw_data	jpeg_read_raw_data_12
++#define jpeg_has_multiple_scans	jpeg_has_multiple_scans_12
++#define jpeg_start_output	jpeg_start_output_12
++#define jpeg_finish_output	jpeg_finish_output_12
++#define jpeg_input_complete	jpeg_input_complete_12
++#define jpeg_new_colormap	jpeg_new_colormap_12
++#define jpeg_consume_input	jpeg_consume_input_12
++#define jpeg_calc_output_dimensions	jpeg_calc_output_dimensions_12
++#define jpeg_save_markers	jpeg_save_markers_12
++#define jpeg_set_marker_processor	jpeg_set_marker_processor_12
++#define jpeg_read_coefficients	jpeg_read_coefficients_12
++#define jpeg_write_coefficients	jpeg_write_coefficients_12
++#define jpeg_copy_critical_parameters	jpeg_copy_critical_parameters_12
++#define jpeg_abort_compress	jpeg_abort_compress_12
++#define jpeg_abort_decompress	jpeg_abort_decompress_12
++#define jpeg_abort		jpeg_abort_12
++#define jpeg_destroy		jpeg_destroy_12
++#define jpeg_resync_to_restart	jpeg_resync_to_restart_12
++#define jpeg_float_quality_scaling	jpeg_float_quality_scaling_12
++#endif
+ 
+ /* Originally, this macro was used as a way of defining function prototypes
+  * for both modern compilers as well as older compilers that did not support
