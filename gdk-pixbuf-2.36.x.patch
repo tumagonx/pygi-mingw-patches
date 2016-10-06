@@ -1,0 +1,4108 @@
+--- gdk-pixbuf/gdk-pixbuf-core.h	Wed Aug 03 01:49:36 2016
++++ gdk-pixbuf/gdk-pixbuf-core.h	Sun Sep 25 14:31:35 2016
+@@ -284,16 +284,6 @@
+ 
+ /* Simple loading */
+ 
+-#ifndef __GTK_DOC_IGNORE__
+-#ifdef G_OS_WIN32
+-/* DLL ABI stability hack. */
+-#define gdk_pixbuf_new_from_file gdk_pixbuf_new_from_file_utf8
+-#define gdk_pixbuf_new_from_file_at_size gdk_pixbuf_new_from_file_at_size_utf8
+-#define gdk_pixbuf_new_from_file_at_scale gdk_pixbuf_new_from_file_at_scale_utf8
+-#endif
+-#endif
+-
+-GDK_PIXBUF_AVAILABLE_IN_ALL
+ GdkPixbuf *gdk_pixbuf_new_from_file (const char *filename,
+                                      GError    **error);
+ GDK_PIXBUF_AVAILABLE_IN_2_4
+@@ -346,35 +336,77 @@
+ 					 GError      **error);
+ #endif
+ 
++#ifndef __GTK_DOC_IGNORE__
++#ifdef G_OS_WIN32
++/* DLL ABI stability hack. */
++#define gdk_pixbuf_new_from_file gdk_pixbuf_new_from_file_utf8
++#define gdk_pixbuf_new_from_file_at_size gdk_pixbuf_new_from_file_at_size_utf8
++#define gdk_pixbuf_new_from_file_at_scale gdk_pixbuf_new_from_file_at_scale_utf8
++
++GDK_PIXBUF_AVAILABLE_IN_ALL
++GdkPixbuf *gdk_pixbuf_new_from_file_utf8 (const char *filename,
++                                     GError    **error);
++
++GDK_PIXBUF_AVAILABLE_IN_ALL
++GdkPixbuf *gdk_pixbuf_new_from_file_at_size_utf8 (const char *filename,
++					     int         width, 
++					     int         height,
++					     GError    **error);
++
++GDK_PIXBUF_AVAILABLE_IN_ALL
++GdkPixbuf *gdk_pixbuf_new_from_file_at_scale_utf8 (const char *filename,
++					      int         width, 
++					      int         height,
++					      gboolean    preserve_aspect_ratio,
++					      GError    **error);
++
++#endif
++#endif
+ /* Mutations */
++
+ GDK_PIXBUF_AVAILABLE_IN_ALL
+ void       gdk_pixbuf_fill              (GdkPixbuf    *pixbuf,
+                                          guint32       pixel);
+ 
+ /* Saving */
+ 
++GDK_PIXBUF_AVAILABLE_IN_ALL
++gboolean gdk_pixbuf_save           (GdkPixbuf  *pixbuf, 
++                                    const char *filename, 
++                                    const char *type, 
++                                    GError    **error,
++                                    ...) G_GNUC_NULL_TERMINATED;
++
++GDK_PIXBUF_AVAILABLE_IN_ALL
++gboolean gdk_pixbuf_savev          (GdkPixbuf  *pixbuf, 
++                                    const char *filename, 
++                                    const char *type,
++                                    char      **option_keys,
++                                    char      **option_values,
++                                    GError    **error);
++
+ #ifndef __GTK_DOC_IGNORE__
+ #ifdef G_OS_WIN32
+-/* DLL ABI stability hack. */
+ #define gdk_pixbuf_save gdk_pixbuf_save_utf8
+ #define gdk_pixbuf_savev gdk_pixbuf_savev_utf8
+-#endif
+-#endif
+ 
+ GDK_PIXBUF_AVAILABLE_IN_ALL
+-gboolean gdk_pixbuf_save           (GdkPixbuf  *pixbuf, 
++gboolean gdk_pixbuf_save_utf8           (GdkPixbuf  *pixbuf, 
+                                     const char *filename, 
+                                     const char *type, 
+                                     GError    **error,
+                                     ...) G_GNUC_NULL_TERMINATED;
+ 
+ GDK_PIXBUF_AVAILABLE_IN_ALL
+-gboolean gdk_pixbuf_savev          (GdkPixbuf  *pixbuf, 
++gboolean gdk_pixbuf_savev_utf8          (GdkPixbuf  *pixbuf, 
+                                     const char *filename, 
+                                     const char *type,
+                                     char      **option_keys,
+                                     char      **option_values,
+                                     GError    **error);
++
++#endif
++#endif
+ 
+ /* Saving to a callback function */
+ 
+--- gdk-pixbuf/gdk-pixbuf-io.c	Wed Aug 03 02:19:21 2016
++++ gdk-pixbuf/gdk-pixbuf-io.c	Sun Sep 25 14:34:41 2016
+@@ -247,8 +247,47 @@
+   return toplevel;
+ }
+ 
+-#endif  /* GDK_PIXBUF_RELOCATABLE */
++static char *
++get_libdir (void)
++{
++  static char *libdir = NULL;
++
++  if (libdir == NULL)
++          libdir = g_build_filename (gdk_pixbuf_get_toplevel (), "lib", NULL);
++
++  return libdir;
++}
++
++#undef GDK_PIXBUF_LIBDIR
++#define GDK_PIXBUF_LIBDIR get_libdir()
++
++static void
++correct_prefix (gchar **path)
++{
++  if (strncmp (*path, GDK_PIXBUF_PREFIX "/", strlen (GDK_PIXBUF_PREFIX "/")) == 0 ||
++      strncmp (*path, GDK_PIXBUF_PREFIX "\\", strlen (GDK_PIXBUF_PREFIX "\\")) == 0)
++    {
++          gchar *tem = NULL;
++      if (g_str_has_suffix (*path, ".libs"))
++        {
++          /* We are being run from inside the build tree, and shouldn't mess about. */
++          return;
++        }
++
++      /* This is an entry put there by gdk-pixbuf-query-loaders on the
++       * packager's system. On Windows a prebuilt gdk-pixbuf package can be
++       * installed in a random location. The loaders.cache file
++       * distributed in such a package contains paths from the package
++       * builder's machine. Replace the build-time prefix with the
++       * installation prefix on this machine.
++       */
++      tem = *path;
++      *path = g_strconcat (gdk_pixbuf_get_toplevel (), tem + strlen (GDK_PIXBUF_PREFIX), NULL);
++      g_free (tem);
++    }
++}
+ 
++#endif  /* GDK_PIXBUF_RELOCATABLE */
+ 
+ #ifdef USE_GMODULE 
+ 
+@@ -331,50 +370,6 @@
+         return !(*p == '\0');
+ }
+ 
+-#ifdef GDK_PIXBUF_RELOCATABLE
+-
+-static char *
+-get_libdir (void)
+-{
+-  static char *libdir = NULL;
+-
+-  if (libdir == NULL)
+-          libdir = g_build_filename (gdk_pixbuf_get_toplevel (), "lib", NULL);
+-
+-  return libdir;
+-}
+-
+-#undef GDK_PIXBUF_LIBDIR
+-#define GDK_PIXBUF_LIBDIR get_libdir()
+-
+-static void
+-correct_prefix (gchar **path)
+-{
+-  if (strncmp (*path, GDK_PIXBUF_PREFIX "/", strlen (GDK_PIXBUF_PREFIX "/")) == 0 ||
+-      strncmp (*path, GDK_PIXBUF_PREFIX "\\", strlen (GDK_PIXBUF_PREFIX "\\")) == 0)
+-    {
+-          gchar *tem = NULL;
+-      if (g_str_has_suffix (*path, ".libs"))
+-        {
+-          /* We are being run from inside the build tree, and shouldn't mess about. */
+-          return;
+-        }
+-
+-      /* This is an entry put there by gdk-pixbuf-query-loaders on the
+-       * packager's system. On Windows a prebuilt gdk-pixbuf package can be
+-       * installed in a random location. The loaders.cache file
+-       * distributed in such a package contains paths from the package
+-       * builder's machine. Replace the build-time prefix with the
+-       * installation prefix on this machine.
+-       */
+-      tem = *path;
+-      *path = g_strconcat (gdk_pixbuf_get_toplevel (), tem + strlen (GDK_PIXBUF_PREFIX), NULL);
+-      g_free (tem);
+-    }
+-}
+-
+-#endif  /* GDK_PIXBUF_RELOCATABLE */
+-
+ static gchar *
+ gdk_pixbuf_get_module_file (void)
+ {
+@@ -436,6 +431,9 @@
+ #ifdef INCLUDE_bmp
+         load_one_builtin_module (bmp);
+ #endif
++#ifdef INCLUDE_wbmp
++        load_one_builtin_module (wbmp);
++#endif
+ #ifdef INCLUDE_gif
+         load_one_builtin_module (gif);
+ #endif
+@@ -448,6 +446,9 @@
+ #ifdef INCLUDE_pnm
+         load_one_builtin_module (pnm);
+ #endif
++#ifdef INCLUDE_ras
++        load_one_builtin_module (ras);
++#endif
+ #ifdef INCLUDE_tiff
+         load_one_builtin_module (tiff);
+ #endif
+@@ -460,12 +461,27 @@
+ #ifdef INCLUDE_tga
+         load_one_builtin_module (tga);
+ #endif
++#ifdef INCLUDE_pcx
++        load_one_builtin_module (pcx);
++#endif
+ #ifdef INCLUDE_icns
+         load_one_builtin_module (icns);
+ #endif
+ #ifdef INCLUDE_jasper
+         load_one_builtin_module (jasper);
+ #endif
++#ifdef INCLUDE_svg
++        load_one_builtin_module (svg);
++#endif
++#ifdef INCLUDE_webp
++        load_one_builtin_module (webp);
++#endif
++#ifdef INCLUDE_psd
++        load_one_builtin_module (psd);
++#endif
++#ifdef INCLUDE_openraw
++        load_one_builtin_module (openraw);
++#endif
+ #ifdef INCLUDE_qtif
+         load_one_builtin_module (qtif);
+ #endif
+@@ -478,9 +494,13 @@
+         load_one_builtin_module (emf);
+         load_one_builtin_module (bmp);
+         load_one_builtin_module (gif);
++#ifndef INCLUDE_jpeg
+         load_one_builtin_module (jpeg);
++#endif
++#ifndef INCLUDE_tiff
+         load_one_builtin_module (tiff);
+ #endif
++#endif
+ #ifdef INCLUDE_gdip_png
+         /* Except the gdip-png loader which normally isn't built at all even */
+         load_one_builtin_module (png);
+@@ -656,14 +676,21 @@
+ module (gif);
+ module (ico);
+ module (ani);
++module (ras);
+ module (xpm);
+ module (tiff);
+ module (pnm);
+ module (bmp);
++module (wbmp);
+ module (xbm);
+ module (tga);
++module (pcx);
+ module (icns);
+ module (jasper);
++module (svg);
++module (webp);
++module (psd);
++module (openraw);
+ module (qtif);
+ module (gdip_ico);
+ module (gdip_wmf);
+@@ -704,9 +731,13 @@
+         try_module (emf,gdip_emf);
+         try_module (bmp,gdip_bmp);
+         try_module (gif,gdip_gif);
++#ifndef INCLUDE_jpeg
+         try_module (jpeg,gdip_jpeg);
++#endif
++#ifndef INCLUDE_tiff
+         try_module (tiff,gdip_tiff);
+ #endif
++#endif
+ #ifdef INCLUDE_gdip_png
+         try_module (png,gdip_png);
+ #endif
+@@ -716,6 +747,9 @@
+ #ifdef INCLUDE_bmp
+         try_module (bmp,bmp);
+ #endif
++#ifdef INCLUDE_wbmp
++        try_module (wbmp,wbmp);
++#endif
+ #ifdef INCLUDE_gif
+         try_module (gif,gif);
+ #endif
+@@ -731,6 +765,9 @@
+ #ifdef INCLUDE_pnm
+         try_module (pnm,pnm);
+ #endif
++#ifdef INCLUDE_ras
++        try_module (ras,ras);
++#endif
+ #ifdef INCLUDE_tiff
+         try_module (tiff,tiff);
+ #endif
+@@ -743,11 +780,26 @@
+ #ifdef INCLUDE_tga
+         try_module (tga,tga);
+ #endif
++#ifdef INCLUDE_pcx
++        try_module (pcx,pcx);
++#endif
+ #ifdef INCLUDE_icns
+         try_module (icns,icns);
+ #endif
+ #ifdef INCLUDE_jasper
+         try_module (jasper,jasper);
++#endif
++#ifdef INCLUDE_svg
++        try_module (svg,svg);
++#endif
++#ifdef INCLUDE_webp
++        try_module (webp,webp);
++#endif
++#ifdef INCLUDE_psd
++        try_module (psd,psd);
++#endif
++#ifdef INCLUDE_openraw
++        try_module (openraw,openraw);
+ #endif
+ #ifdef INCLUDE_qtif
+         try_module (qtif,qtif);
+--- gdk-pixbuf/io-gdip-jpeg.c	Wed Aug 03 02:19:21 2016
++++ gdk-pixbuf/io-gdip-jpeg.c	Sun Sep 25 14:36:12 2016
+@@ -132,6 +132,8 @@
+ 
+   static const gchar *mime_types[] = {
+     "image/jpeg",
++    "image/pjpeg",
++    "image/jpg",
+     NULL
+   };
+ 
+--- gdk-pixbuf/io-jpeg.c	Wed Aug 03 02:19:21 2016
++++ gdk-pixbuf/io-jpeg.c	Sun Sep 25 14:35:40 2016
+@@ -1572,6 +1572,8 @@
+ 	};
+ 	static const gchar *mime_types[] = {
+ 		"image/jpeg",
++		"image/pjpeg",
++		"image/jpg",
+ 		NULL
+ 	};
+ 	static const gchar *extensions[] = {
+--- gdk-pixbuf/io-pcx.c	Thu Oct 06 18:17:20 2016
++++ gdk-pixbuf/io-pcx.c	Sat Nov 08 00:25:32 2014
+@@ -0,0 +1,758 @@
++/*
++ * GdkPixbuf library - PCX image loader
++ *
++ * Copyright (C) 2003 Josh A. Beam
++ *
++ * Authors: Josh A. Beam <josh@joshbeam.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Library General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Library General Public License for more details.
++ *
++ * You should have received a copy of the GNU Library General Public
++ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include "config.h"
++#include <stdio.h>
++#include <string.h>
++#include "gdk-pixbuf-private.h"
++
++#undef PCX_DEBUG
++
++#define PCX_TASK_DONE 0
++#define PCX_TASK_LOAD_HEADER 1
++#define PCX_TASK_LOAD_DATA 2
++#define PCX_TASK_LOAD_PALETTE 3
++
++struct pcx_header {
++	guint8 manufacturer;
++	guint8 version;
++	guint8 encoding;
++	guint8 bitsperpixel;
++	gint16 xmin;
++	gint16 ymin;
++	gint16 xmax;
++	gint16 ymax;
++	guint16 horizdpi;
++	guint16 vertdpi;
++	guint8 palette[48];
++	guint8 reserved;
++	guint8 colorplanes;
++	guint16 bytesperline;
++	guint16 palettetype;
++	guint16 hscrsize;
++	guint16 vscrsize;
++	guint8 filler[54];
++};
++
++struct pcx_context {
++	GdkPixbuf *pixbuf;
++	gint rowstride;
++
++	GdkPixbufModuleSizeFunc size_func;
++	GdkPixbufModuleUpdatedFunc updated_func;
++	GdkPixbufModulePreparedFunc prepared_func;
++	gpointer user_data;
++
++	guchar current_task;
++
++	gboolean header_loaded;
++	struct pcx_header *header;
++	guint bpp;
++	gint width, height;
++	guint num_planes;
++	guint bytesperline;
++
++	guchar *buf;
++	guint buf_size;
++	guint buf_pos;
++	guchar *data;
++	guchar *line;
++	guint current_line;
++	guchar *p_data;
++};
++
++/*
++ * set context's image information based on the header
++ */
++static void
++fill_pcx_context(struct pcx_context *context)
++{
++	struct pcx_header *header = context->header;
++
++	context->bpp = header->bitsperpixel;
++	context->width = header->xmax - header->xmin + 1;
++	context->height = header->ymax - header->ymin + 1;
++	context->num_planes = header->colorplanes;
++	context->bytesperline = header->bytesperline;
++
++	if(header->version == 5 && context->bpp == 8 && context->num_planes == 3)
++		context->bpp = 24;
++}
++
++static void
++free_pcx_context(struct pcx_context *context, gboolean unref_pixbuf)
++{
++	g_free(context->header);
++	g_free(context->buf);
++	if(unref_pixbuf && context->pixbuf)
++		g_object_unref(context->pixbuf);
++	g_free(context->line);
++	g_free(context->p_data);
++
++	g_free(context);
++}
++
++/*
++ * read each plane of a single scanline. store_planes is
++ * the number of planes that can be stored in the planes array.
++ * data is the pointer to the block of memory to read
++ * from, size is the length of that data, and line_bytes
++ * is where the number of bytes read will be stored.
++ */
++static gboolean
++read_scanline_data(guchar *data, guint size, guchar *planes[],
++                   guint store_planes, guint num_planes, guint bytesperline,
++                   guint *line_bytes)
++{
++	guint i, j;
++	guint p, count;
++	guint d = 0;
++	guint8 byte;
++
++	for(p = 0; p < num_planes; p++) {
++		for(i = 0; i < bytesperline;) { /* i incremented when line byte set */
++			if(d >= size)
++				return FALSE;
++			byte = data[d++];
++
++			if(byte >> 6 == 0x3) {
++				count = byte & ~(0x3 << 6);
++				if(count == 0)
++					return FALSE;
++				if(d >= size)
++					return FALSE;
++				byte = data[d++];
++			} else {
++				count = 1;
++			}
++
++			for(j = 0; j < count; j++) {
++				if(p < store_planes)
++					planes[p][i++] = byte;
++				else
++					i++;
++
++				if(i >= bytesperline) {
++					p++;
++					if(p >= num_planes) {
++						*line_bytes = d;
++						return TRUE;
++					}
++					i = 0;
++				}
++			}
++		}
++	}
++
++	*line_bytes = d; /* number of bytes read for scanline */
++	return TRUE;
++}
++
++static gpointer
++gdk_pixbuf__pcx_begin_load(GdkPixbufModuleSizeFunc size_func,
++                           GdkPixbufModulePreparedFunc prepared_func,
++                           GdkPixbufModuleUpdatedFunc updated_func,
++                           gpointer user_data, GError **error)
++{
++	struct pcx_context *context;
++
++	context = g_new0(struct pcx_context, 1);
++	if(!context)
++		return NULL;
++
++	context->header = g_try_malloc(sizeof(struct pcx_header));
++	if(!context->header) {
++		g_free(context);
++		g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY, _("Couldn't allocate memory for header"));
++		return NULL;
++	}
++
++	context->size_func = size_func;
++	context->updated_func = updated_func;
++	context->prepared_func = prepared_func;
++	context->user_data = user_data;
++
++	context->current_task = PCX_TASK_LOAD_HEADER;
++
++	context->buf = g_try_malloc(sizeof(guchar) * 512);
++	if(!context->buf) {
++		g_free(context->header);
++		g_free(context);
++		g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY, _("Couldn't allocate memory for context buffer"));
++		return NULL;
++	}
++	context->buf_size = 512;
++
++	context->header_loaded = FALSE;
++
++	return context;
++}
++
++static gboolean
++pcx_resize_context_buf(struct pcx_context *context, guint size)
++{
++	guchar *new_buf;
++
++	new_buf = g_try_realloc(context->buf, size);
++	if(!new_buf)
++		return FALSE;
++
++	context->buf = new_buf;
++	context->buf_size = size;
++	return TRUE;
++}
++
++/*
++ * remove a number of bytes (specified by size) from the
++ * beginning of a context's buf
++ */
++static gboolean
++pcx_chop_context_buf(struct pcx_context *context, guint size)
++{
++	guint i, j;
++
++	if (size > context->buf_pos)
++		return FALSE;
++	else if (size == 0)
++		return TRUE;
++
++	for (i = 0, j = size; j < context->buf_pos; i++, j++)
++		context->buf[i] = context->buf[j];
++
++	context->buf_pos -= size;
++
++	return TRUE;
++}
++
++static guchar
++read_pixel_1(guchar *data, guint offset)
++{
++	guchar retval;
++	guint bit_offset;
++
++	if(!(offset % 8)) {
++		offset /= 8;
++		retval = data[offset] >> 7;
++	} else {
++		bit_offset = offset % 8;
++		offset -= bit_offset;
++		offset /= 8;
++		retval = (data[offset] >> (7 - bit_offset)) & 0x1;
++	}
++
++	return retval;
++}
++
++static guchar
++read_pixel_4(guchar *data, guint offset)
++{
++	guchar retval;
++
++	if(!(offset % 2)) {
++		offset /= 2;
++		retval = data[offset] >> 4;
++	} else {
++		offset--;
++		offset /= 2;
++		retval = data[offset] & 0xf;
++	}
++
++	return retval;
++}
++
++static gboolean
++pcx_increment_load_data_1(struct pcx_context *context)
++{
++	guint i;
++	guchar *planes[4];
++	guint line_bytes;
++	guint store_planes;
++
++	if(context->num_planes == 4) {
++		planes[0] = context->line;
++		planes[1] = planes[0] + context->bytesperline;
++		planes[2] = planes[1] + context->bytesperline;
++		planes[3] = planes[2] + context->bytesperline;
++		store_planes = 4;
++	} else if(context->num_planes == 3) {
++		planes[0] = context->line;
++		planes[1] = planes[0] + context->bytesperline;
++		planes[2] = planes[1] + context->bytesperline;
++		store_planes = 3;
++	} else if(context->num_planes == 2) {
++		planes[0] = context->line;
++		planes[1] = planes[0] + context->bytesperline;
++		store_planes = 2;
++	} else if(context->num_planes == 1) {
++		planes[0] = context->line;
++		store_planes = 1;
++	} else {
++		return FALSE;
++	}
++
++	while(read_scanline_data(context->buf, context->buf_pos, planes, store_planes, context->num_planes, context->bytesperline, &line_bytes)) {
++		pcx_chop_context_buf(context, line_bytes);
++
++		for(i = 0; i < context->width; i++) {
++			guchar p;
++
++			if(context->num_planes == 4) {
++				p = read_pixel_1(planes[3], i);
++				p <<= 1;
++				p |= read_pixel_1(planes[2], i);
++				p <<= 1;
++				p |= read_pixel_1(planes[1], i);
++				p <<= 1;
++				p |= read_pixel_1(planes[0], i);
++			} else if(context->num_planes == 3) {
++				p = read_pixel_1(planes[2], i);
++				p <<= 1;
++				p |= read_pixel_1(planes[1], i);
++				p <<= 1;
++				p |= read_pixel_1(planes[0], i);
++			} else if(context->num_planes == 2) {
++				p = read_pixel_1(planes[1], i);
++				p <<= 1;
++				p |= read_pixel_1(planes[0], i);
++			} else if(context->num_planes == 1) {
++				p = read_pixel_1(planes[0], i);
++			} else {
++				return FALSE;
++			}
++			p &= 0xf;
++			context->data[context->current_line * context->rowstride + i * 3 + 0] = context->header->palette[p * 3 + 0];
++			context->data[context->current_line * context->rowstride + i * 3 + 1] = context->header->palette[p * 3 + 1];
++			context->data[context->current_line * context->rowstride + i * 3 + 2] = context->header->palette[p * 3 + 2];
++		}
++
++		if(context->updated_func)
++			context->updated_func(context->pixbuf, 0, context->current_line, context->width, 1, context->user_data);
++
++		context->current_line++;
++
++		if(context->current_line == context->height) {
++			context->current_task = PCX_TASK_DONE;
++			return TRUE;
++		}
++	}
++
++	return TRUE;
++}
++
++static gboolean
++pcx_increment_load_data_2(struct pcx_context *context)
++{
++	guint i;
++	guchar *planes[1];
++	guint line_bytes;
++	guint shift, h;
++
++	planes[0] = context->line;
++
++	while(read_scanline_data(context->buf, context->buf_pos, planes, 1, context->num_planes, context->bytesperline, &line_bytes)) {
++		pcx_chop_context_buf(context, line_bytes);
++
++		for(i = 0; i < context->width; i++) {
++			shift = 6 - 2 * (i % 4);
++			h = (planes[0][i / 4] >> shift) & 0x3;
++			context->data[context->current_line * context->rowstride + i * 3 + 0] = context->header->palette[h * 3 + 0];
++			context->data[context->current_line * context->rowstride + i * 3 + 1] = context->header->palette[h * 3 + 1];
++			context->data[context->current_line * context->rowstride + i * 3 + 2] = context->header->palette[h * 3 + 2];
++		}
++
++		if(context->updated_func)
++			context->updated_func(context->pixbuf, 0, context->current_line, context->width, 1, context->user_data);
++
++		context->current_line++;
++
++		if(context->current_line == context->height) {
++			context->current_task = PCX_TASK_DONE;
++			return TRUE;
++		}
++	}
++
++	return TRUE;
++}
++
++static gboolean
++pcx_increment_load_data_4(struct pcx_context *context)
++{
++	guint i;
++	guchar *planes[1];
++	guint line_bytes;
++
++	planes[0] = context->line;
++
++	while(read_scanline_data(context->buf, context->buf_pos, planes, 1, context->num_planes, context->bytesperline, &line_bytes)) {
++		pcx_chop_context_buf(context, line_bytes);
++
++		for(i = 0; i < context->width; i++) {
++			guchar p;
++
++			p = read_pixel_4(planes[0], i) & 0xf;
++			context->data[context->current_line * context->rowstride + i * 3 + 0] = context->header->palette[p * 3 + 0];
++			context->data[context->current_line * context->rowstride + i * 3 + 1] = context->header->palette[p * 3 + 1];
++			context->data[context->current_line * context->rowstride + i * 3 + 2] = context->header->palette[p * 3 + 2];
++		}
++
++		if(context->updated_func)
++			context->updated_func(context->pixbuf, 0, context->current_line, context->width, 1, context->user_data);
++
++		context->current_line++;
++
++		if(context->current_line == context->height) {
++			context->current_task = PCX_TASK_DONE;
++			return TRUE;
++		}
++	}
++
++	return TRUE;
++}
++
++/*
++ * for loading 8-bit pcx images, we keep a buffer containing
++ * each pixel's palette number; once we've loaded each scanline,
++ * we wait for loading to stop and call pcx_load_palette_8,
++ * which finds the palette at the end of the pcx data and sets the
++ * RGB data.
++ */
++static gboolean
++pcx_increment_load_data_8(struct pcx_context *context)
++{
++	guint i;
++	guchar *planes[1];
++	guint line_bytes;
++
++	planes[0] = context->line;
++
++	while(read_scanline_data(context->buf, context->buf_pos, planes, 1, context->num_planes, context->bytesperline, &line_bytes)) {
++		pcx_chop_context_buf(context, line_bytes);
++
++		for(i = 0; i < context->width; i++)
++			context->p_data[context->current_line * context->width + i + 0] = planes[0][i];
++
++		context->current_line++;
++
++		if(context->current_line == context->height) {
++			context->current_task = PCX_TASK_LOAD_PALETTE;
++			return TRUE;
++		}
++	}
++
++	return TRUE;
++}
++
++/*
++ * read the palette and set the RGB data
++ */
++static gboolean
++pcx_load_palette_8(struct pcx_context *context)
++{
++	guint i, j;
++
++	if(context->current_line < context->height)
++		return FALSE;
++
++	if(context->buf_pos >= 769) {
++		guchar *palette = context->buf + (context->buf_pos - 769);
++
++		if(palette[0] == 12) {
++			palette++;
++			for(i = 0; i < context->height; i++) {
++				for(j = 0; j < context->width; j++) {
++					context->data[i * context->rowstride + j * 3 + 0] = palette[(context->p_data[i * context->width + j]) * 3 + 0];
++					context->data[i * context->rowstride + j * 3 + 1] = palette[(context->p_data[i * context->width + j]) * 3 + 1];
++					context->data[i * context->rowstride + j * 3 + 2] = palette[(context->p_data[i * context->width + j]) * 3 + 2];
++				}
++
++				if(context->updated_func)
++					context->updated_func(context->pixbuf, 0, i, context->width, 1, context->user_data);
++			}
++
++#ifdef PCX_DEBUG
++			g_print("read palette\n");
++#endif
++
++			context->current_task = PCX_TASK_DONE;
++			return TRUE;
++		} else {
++#ifdef PCX_DEBUG
++			g_print("this ain't a palette\n");
++#endif
++			return FALSE;
++		}
++	}
++
++	return FALSE;
++}
++
++/*
++ * in 24-bit images, each scanline has three color planes
++ * for red, green, and blue, respectively.
++ */
++static gboolean
++pcx_increment_load_data_24(struct pcx_context *context)
++{
++	guint i;
++	guchar *planes[3];
++	guint line_bytes;
++
++	planes[0] = context->line;
++	planes[1] = planes[0] + context->bytesperline;
++	planes[2] = planes[1] + context->bytesperline;
++
++	while(read_scanline_data(context->buf, context->buf_pos, planes, 3, context->num_planes, context->bytesperline, &line_bytes)) {
++		pcx_chop_context_buf(context, line_bytes);
++
++		for(i = 0; i < context->width; i++) {
++			context->data[context->current_line * context->rowstride + i * 3 + 0] = planes[0][i];
++			context->data[context->current_line * context->rowstride + i * 3 + 1] = planes[1][i];
++			context->data[context->current_line * context->rowstride + i * 3 + 2] = planes[2][i];
++		}
++
++		if(context->updated_func)
++			context->updated_func(context->pixbuf, 0, context->current_line, context->width, 1, context->user_data);
++
++		context->current_line++;
++
++		if(context->current_line == context->height) {
++			context->current_task = PCX_TASK_DONE;
++			return TRUE;
++		}
++	}
++
++	return TRUE;
++}
++
++static gboolean
++gdk_pixbuf__pcx_load_increment(gpointer data, const guchar *buf, guint size,
++                               GError **error)
++{
++	struct pcx_context *context = (struct pcx_context *)data;
++	struct pcx_header *header;
++	guint i;
++	gboolean retval = TRUE;
++
++	/* if context's buf isn't large enough to hold its current data plus the passed buf, increase its size */
++	if(context->buf_pos + size > context->buf_size) {
++		if(!pcx_resize_context_buf(context, sizeof(guchar) * (context->buf_pos + size))) {
++			g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY, _("Couldn't allocate memory for context buffer"));
++			return FALSE;
++		}
++	}
++
++	for(i = 0; i < size; i++)
++		context->buf[context->buf_pos++] = buf[i];
++
++	if(context->current_task == PCX_TASK_LOAD_HEADER) {
++		if(!context->header_loaded && context->buf_pos > sizeof(struct pcx_header)) { /* set header */
++			gint width, height;
++
++			memcpy(context->header, context->buf, sizeof(struct pcx_header));
++			pcx_chop_context_buf(context, sizeof(struct pcx_header));
++			header = context->header;
++
++			/* convert the multi-byte header variables that will be used */
++			header->xmin = GINT16_FROM_LE(header->xmin);
++			header->ymin = GINT16_FROM_LE(header->ymin);
++			header->xmax = GINT16_FROM_LE(header->xmax);
++			header->ymax = GINT16_FROM_LE(header->ymax);
++			header->bytesperline = GUINT16_FROM_LE(header->bytesperline);
++
++#ifdef PCX_DEBUG
++			g_print ("Manufacturer %d\n"
++			         "Version %d\n"
++			         "Encoding %d\n"
++				 "Bits/Pixel %d\n"
++				 "Planes %d\n"
++				 "Palette %d\n", 
++				 header->manufacturer, header->version, 
++				 header->encoding, header->bitsperpixel,
++				 header->colorplanes, header->palettetype);
++#endif
++
++			context->header_loaded = TRUE;
++			fill_pcx_context(context);
++
++			width = context->width;
++			height = context->height;
++			if(width <= 0 || height <= 0) {
++				g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_CORRUPT_IMAGE, _("Image has invalid width and/or height"));
++				return FALSE;
++			}
++			if (context->size_func)
++			  {
++			    (*context->size_func) (&width, &height, context->user_data);
++			    if (width == 0 || height == 0)
++			      return TRUE;
++			  }
++
++			switch(context->bpp) {
++				default:
++					g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_UNKNOWN_TYPE, _("Image has unsupported bpp"));
++					return FALSE;
++					break;
++				case 1:
++					if(context->num_planes < 1 || context->num_planes > 4) {
++						g_set_error(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_UNKNOWN_TYPE, _("Image has unsupported number of %d-bit planes"), 1);
++						return FALSE;
++					}
++					break;
++				case 2:
++				case 4:
++				case 8:
++					if(context->num_planes != 1) {
++					  g_set_error(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_UNKNOWN_TYPE, _("Image has unsupported number of %d-bit planes"), (gint)context->bpp);
++						return FALSE;
++					}
++					break;
++				case 24:
++					break; /* context's bpp is set to 24 if there are three 8-bit planes */
++			}
++
++#ifdef PCX_DEBUG
++			g_print("io-pcx: header loaded\n");
++			g_print("bpp: %u\n", context->bpp);
++			g_print("dimensions: %ux%u\n", context->width, context->height);
++#endif
++
++			context->pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, context->width, context->height);
++			if(!context->pixbuf) {
++				g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY, _("Couldn't create new pixbuf"));
++				return FALSE;
++			}
++			context->data = gdk_pixbuf_get_pixels(context->pixbuf);
++			context->rowstride = gdk_pixbuf_get_rowstride(context->pixbuf);
++
++			context->line = g_try_malloc(sizeof(guchar) * context->bytesperline * context->num_planes);
++			if(!context->line) {
++				g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY, _("Couldn't allocate memory for line data"));
++				return FALSE;
++			}
++
++			if(context->bpp == 8) {
++				context->p_data = g_try_malloc(sizeof(guchar) * context->width * context->height);
++				if(!context->p_data) {
++					g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY, _("Couldn't allocate memory for PCX image"));
++					return FALSE;
++				}
++			}
++
++			if(context->prepared_func)
++			        context->prepared_func(context->pixbuf, NULL, context->user_data);
++
++			context->current_task = PCX_TASK_LOAD_DATA;
++		}
++
++		retval = TRUE;
++	}
++
++	if(context->current_task == PCX_TASK_LOAD_DATA) {
++		switch(context->bpp) {
++			default:
++				g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_UNKNOWN_TYPE, _("Image has unsupported bpp"));
++				retval = FALSE;
++				break;
++			case 1:
++				retval = pcx_increment_load_data_1(context);
++				break;
++			case 2:
++				retval = pcx_increment_load_data_2(context);
++				break;
++			case 4:
++				retval = pcx_increment_load_data_4(context);
++				break;
++			case 8:
++				retval = pcx_increment_load_data_8(context);
++				break;
++			case 24:
++				retval = pcx_increment_load_data_24(context);
++				break;
++		}
++	}
++
++	return retval;
++}
++
++static gboolean
++gdk_pixbuf__pcx_stop_load(gpointer data, GError **error)
++{
++	struct pcx_context *context = (struct pcx_context *)data;
++
++	if(context->current_line != context->height) {
++		g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_FAILED, _("Didn't get all lines of PCX image"));
++		free_pcx_context(context, FALSE);
++		return FALSE;
++	}
++
++	if(context->current_task == PCX_TASK_LOAD_PALETTE) {
++		if(!pcx_load_palette_8(context)) {
++			g_set_error_literal(error, GDK_PIXBUF_ERROR, GDK_PIXBUF_ERROR_FAILED, _("No palette found at end of PCX data"));
++			free_pcx_context(context, FALSE);
++			return FALSE;
++		}
++	}
++
++	free_pcx_context(context, FALSE);
++
++	return TRUE;
++}
++
++#ifndef INCLUDE_pcx
++#define MODULE_ENTRY(function) G_MODULE_EXPORT void function
++#else
++#define MODULE_ENTRY(function) void _gdk_pixbuf__pcx_ ## function
++#endif
++
++MODULE_ENTRY (fill_vtable) (GdkPixbufModule *module)
++{
++	module->begin_load = gdk_pixbuf__pcx_begin_load;
++	module->stop_load = gdk_pixbuf__pcx_stop_load;
++	module->load_increment = gdk_pixbuf__pcx_load_increment;
++}
++
++MODULE_ENTRY (fill_info) (GdkPixbufFormat *info)
++{
++	static const GdkPixbufModulePattern signature[] = {
++		{ "\x0a \x01", NULL, 100 },
++		{ "\x0a\x02\x01", NULL, 100 },
++		{ "\x0a\x03\x01", NULL, 100 },
++		{ "\x0a\x04\x01", NULL, 100 },
++		{ "\x0a\x05\x01", NULL, 100 },
++		{ NULL, NULL, 0 }
++	};
++	static const gchar *mime_types[] = {
++		"image/x-pcx",
++		NULL,
++	};
++	static const gchar *extensions[] = {
++		"pcx",
++		NULL,
++	};
++
++	info->name = "pcx";
++	info->signature = (GdkPixbufModulePattern *) signature;
++	info->description = NC_("image format", "PCX");
++	info->mime_types = (gchar **) mime_types;
++	info->extensions = (gchar **) extensions;
++	info->flags = GDK_PIXBUF_FORMAT_THREADSAFE;
++	info->license = "LGPL";
++}
+--- gdk-pixbuf/io-png.c	Wed Aug 03 02:19:21 2016
++++ gdk-pixbuf/io-png.c	Sun Sep 25 14:35:53 2016
+@@ -1209,6 +1209,7 @@
+         };
+ 	static const gchar *mime_types[] = {
+ 		"image/png",
++		"image/x-png",
+ 		NULL
+ 	};
+ 	static const gchar *extensions[] = {
+--- gdk-pixbuf/io-psd.c	Thu Oct 06 18:17:20 2016
++++ gdk-pixbuf/io-psd.c	Tue Sep 22 17:42:50 2015
+@@ -0,0 +1,597 @@
++/* -*- mode: C; c-file-style: "linux" -*- */
++/* GdkPixbuf library - PSD image loader
++ *
++ * Copyright (C) 2008 Jan Dudek
++ *
++ * Authors: Jan Dudek <jd@jandudek.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++/*
++ * TODO
++ * - use http://library.gnome.org/devel/glib/unstable/glib-Byte-Order-Macros.html
++ * - report errors from parse_psd_header
++ * - other color modes (CMYK at least)
++ * - i18n
++ */
++
++#include <stdlib.h>
++#include <stdio.h>
++#include <string.h>
++#include <gmodule.h>
++#include <gdk-pixbuf/gdk-pixbuf.h>
++
++
++typedef struct
++{
++	guchar  signature[4];  /* file ID, always "8BPS" */
++	guint16 version;       /* version number, always 1 */
++	guchar  resetved[6];
++	guint16 channels;      /* number of color channels (1-24) */
++	guint32 rows;          /* height of image in pixels (1-30000) */
++	guint32 columns;       /* width of image in pixels (1-30000) */
++	guint16 depth;         /* number of bits per channel (1, 8, 16 or 32) */
++	guint16 color_mode;    /* color mode as defined below */
++} PsdHeader;
++
++#define PSD_HEADER_SIZE 26
++
++typedef enum
++{
++	PSD_MODE_MONO = 0,
++	PSD_MODE_GRAYSCALE = 1,
++	PSD_MODE_INDEXED = 2,
++	PSD_MODE_RGB = 3,
++	PSD_MODE_CMYK = 4,
++	PSD_MODE_MULTICHANNEL = 7,
++	PSD_MODE_DUOTONE = 8,
++	PSD_MODE_LAB = 9,
++} PsdColorMode;
++
++typedef enum
++{
++	PSD_COMPRESSION_NONE = 0,
++	PSD_COMPRESSION_RLE = 1
++} PsdCompressionType;
++
++typedef enum
++{
++	PSD_STATE_HEADER,
++	PSD_STATE_COLOR_MODE_BLOCK,
++	PSD_STATE_RESOURCES_BLOCK,
++	PSD_STATE_LAYERS_BLOCK,
++	PSD_STATE_COMPRESSION,
++	PSD_STATE_LINES_LENGTHS,
++	PSD_STATE_CHANNEL_DATA,
++	PSD_STATE_DONE
++} PsdReadState;
++
++typedef struct
++{
++	PsdReadState       state;
++	
++	GdkPixbuf*                  pixbuf;
++
++	GdkPixbufModuleSizeFunc     size_func;
++	GdkPixbufModuleUpdatedFunc  updated_func;
++	GdkPixbufModulePreparedFunc prepared_func; 
++	gpointer                    user_data;
++
++	guchar*            buffer;
++	guint              bytes_read;
++	guint32            bytes_to_skip;
++	gboolean           bytes_to_skip_known;
++
++	guint32            width;
++	guint32            height;
++	guint16            channels;
++	guint16            depth;
++	guint16            depth_bytes;
++	PsdColorMode       color_mode;
++	PsdCompressionType compression;
++
++	guchar**           ch_bufs;       /* channels buffers */
++	guint              curr_ch;       /* current channel */
++	guint              curr_row;
++	guint              pos;
++	guint16*           lines_lengths;
++	gboolean           finalized;
++} PsdContext;
++
++
++static guint16
++read_uint16 (guchar* buf)
++{
++	return (buf[0] << 8) | buf[1];
++}
++
++static guint32
++read_uint32 (guchar* buf)
++{
++	return (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
++}
++
++
++/*
++ * Parse Psdheader from buffer
++ *
++ * str is expected to be at least PSD_HEADER_SIZE long
++ */
++static PsdHeader
++psd_parse_header (guchar* str)
++{
++	PsdHeader hd;
++	
++	memcpy(hd.signature, str, 4);
++	hd.version = read_uint16(str + 4);
++	hd.channels = read_uint16(str + 12);
++	hd.rows = read_uint32(str + 14);
++	hd.columns = read_uint32(str + 18);
++	hd.depth = read_uint16(str + 22);
++	hd.color_mode = read_uint16(str + 24);
++
++	return hd;
++}
++
++/*
++ * Attempts to read bytes_needed bytes from data and stores them in buffer.
++ *
++ * Returns true if there were enough bytes and false otherwise
++ * (which means we need to call feed_buffer again)
++ */
++static gboolean
++feed_buffer (guchar*        buffer,
++             guint*         bytes_read,
++             const guchar** data,
++             guint*         size,
++             guint          bytes_needed)
++{
++	gint how_many = bytes_needed - *bytes_read;
++	if (how_many > *size) {
++		how_many = *size;
++	}
++	memcpy(buffer + *bytes_read, *data, how_many);
++	*bytes_read += how_many;
++	*data += how_many;
++	*size -= how_many;
++	return (*bytes_read == bytes_needed);
++}
++
++/*
++ * Attempts to read size of the block and then skip this block.
++ *
++ * Returns true when finishes consuming block data, otherwise false
++ * (false means we need to call skip_block again)
++ */
++static gboolean
++skip_block (PsdContext* context, const guchar** data, guint* size)
++{
++	static guint counter;
++
++	if (!context->bytes_to_skip_known) {
++		context->bytes_read = 0;
++		if (feed_buffer(context->buffer, &context->bytes_read, data, size, 4)) {
++			context->bytes_to_skip = read_uint32(context->buffer);
++			context->bytes_to_skip_known = TRUE;
++			counter = 0;
++		} else {
++			return FALSE;
++		}
++	}
++	if (*size < context->bytes_to_skip) {
++		*data += *size;
++		context->bytes_to_skip -= *size;
++		counter += *size;
++		*size = 0;
++		return FALSE;
++	} else {
++		counter += context->bytes_to_skip;
++		*size -= context->bytes_to_skip;
++		*data += context->bytes_to_skip;
++		return TRUE;
++	}
++}
++
++/*
++ * Decodes RLE-compressed data
++ */
++static void
++decompress_line(const guchar* src, guint line_length, guchar* dest)
++{
++	guint16 bytes_read = 0;
++	int k;
++	while (bytes_read < line_length) {
++		gchar byte = src[bytes_read];
++		++bytes_read;
++	
++		if (byte == -128) {
++			continue;
++		} else if (byte > -1) {
++			gint count = byte + 1;
++		
++			/* copy next count bytes */
++			for (k = 0; k < count; ++k) {
++				*dest = src[bytes_read];
++				++dest;
++				++bytes_read;
++			}
++		} else {
++			gint count = -byte + 1;
++		
++			/* copy next byte count times */
++			guchar next_byte = src[bytes_read];
++			++bytes_read; 
++			for (k = 0; k < count; ++k) {
++				*dest = next_byte;
++				++dest;
++			}
++		}
++	}
++}
++
++static void
++reset_context_buffer(PsdContext* ctx)
++{
++	ctx->bytes_read = 0;
++	ctx->bytes_to_skip = 0;
++	ctx->bytes_to_skip_known = FALSE;
++}
++
++static gpointer
++gdk_pixbuf__psd_image_begin_load (GdkPixbufModuleSizeFunc size_func,
++                                  GdkPixbufModulePreparedFunc prepared_func,
++                                  GdkPixbufModuleUpdatedFunc updated_func,
++                                  gpointer user_data,
++                                  GError **error)
++{
++	PsdContext* context = g_malloc(sizeof(PsdContext));
++	if (context == NULL) {
++		g_set_error_literal (
++			error,
++			GDK_PIXBUF_ERROR,
++			GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
++			("Not enough memory"));
++		return NULL;
++	}
++	context->size_func = size_func;
++	context->prepared_func = prepared_func;
++	context->updated_func = updated_func;
++	context->user_data = user_data;
++	
++	context->state = PSD_STATE_HEADER;
++
++	/* we'll allocate larger buffer once we know image size */
++	context->buffer = g_malloc(PSD_HEADER_SIZE);
++	reset_context_buffer(context);
++
++	context->ch_bufs = NULL;
++	context->curr_ch = 0;
++	context->curr_row = 0;
++	context->pos = 0;
++	context->lines_lengths = NULL;
++	context->finalized = FALSE;
++
++	return (gpointer) context;
++}
++
++static gboolean
++gdk_pixbuf__psd_image_stop_load (gpointer context_ptr, GError **error)
++{
++	PsdContext *ctx = (PsdContext *) context_ptr;
++	gboolean retval = TRUE;
++
++	if (ctx->state != PSD_STATE_DONE) {
++		g_set_error_literal (
++			error,
++			GDK_PIXBUF_ERROR,
++			GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
++			("PSD file was corrupted or incomplete."));
++		retval = FALSE;
++	}
++	
++	g_free(ctx->buffer);
++	g_free(ctx->lines_lengths);
++	if (ctx->ch_bufs) {
++		int i;
++		for (i = 0; i < ctx->channels; i++) {
++			g_free(ctx->ch_bufs[i]);
++		}
++	}
++	g_free(ctx);
++	
++	return retval;
++}
++
++
++static gboolean
++gdk_pixbuf__psd_image_load_increment (gpointer      context_ptr,
++                                      const guchar *data,
++                                      guint         size,
++                                      GError      **error)
++{
++	PsdContext* ctx = (PsdContext*) context_ptr;
++	int i, j;
++	
++	while (size > 0) {
++		switch (ctx->state) {
++			case PSD_STATE_HEADER:
++				if (feed_buffer(
++						ctx->buffer, &ctx->bytes_read,
++						&data, &size, PSD_HEADER_SIZE))
++				{
++					PsdHeader hd = psd_parse_header(ctx->buffer);
++
++					ctx->width = hd.columns;
++					ctx->height = hd.rows;
++					ctx->channels = hd.channels;
++					ctx->depth = hd.depth;
++					ctx->depth_bytes = (ctx->depth/8 > 0 ? ctx->depth/8 : 1);
++					ctx->color_mode = hd.color_mode;
++					
++					if (ctx->color_mode != PSD_MODE_RGB
++					    && ctx->color_mode != PSD_MODE_GRAYSCALE
++					    && ctx->color_mode != PSD_MODE_CMYK
++					    && ctx->color_mode != PSD_MODE_DUOTONE
++					) {
++						g_set_error_literal (error, GDK_PIXBUF_ERROR,
++							GDK_PIXBUF_ERROR_UNKNOWN_TYPE,
++							("Unsupported color mode"));
++						return FALSE;
++					}
++					
++					if (ctx->depth != 8 && ctx->depth != 16) {
++						g_set_error_literal (error, GDK_PIXBUF_ERROR,
++							GDK_PIXBUF_ERROR_UNKNOWN_TYPE,
++							("Unsupported color depth"));
++						return FALSE;
++					}
++					
++					if (ctx->size_func) {
++						gint w = ctx->width;
++						gint h = ctx->height;
++						ctx->size_func(&w, &h, ctx->user_data);
++						if (w == 0 || h == 0) {
++							return FALSE;
++						}
++					}
++					
++					/* we need buffer that can contain one channel data for one
++					   row in RLE compressed format. 2*width should be enough */
++					g_free(ctx->buffer);
++					ctx->buffer = g_malloc(ctx->width * 2 * ctx->depth_bytes);
++					
++					/* this will be needed for RLE decompression */
++					ctx->lines_lengths =
++						g_malloc(2 * ctx->channels * ctx->height);
++					
++					ctx->pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB,
++						FALSE, 8, ctx->width, ctx->height);
++
++					if (ctx->lines_lengths == NULL || ctx->buffer == NULL ||
++						ctx->pixbuf == NULL)
++					{
++						g_set_error_literal (error, GDK_PIXBUF_ERROR,
++							GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
++							("Insufficient memory to load PSD image file"));
++						return FALSE;
++					}
++					
++					/* create separate buffers for each channel */
++					ctx->ch_bufs = g_malloc(sizeof(guchar*) * ctx->channels);
++					for (i = 0; i < ctx->channels; i++) {
++						ctx->ch_bufs[i] =
++							g_malloc(ctx->width*ctx->height*ctx->depth_bytes);
++
++						if (ctx->ch_bufs[i] == NULL) {
++							g_set_error_literal (error, GDK_PIXBUF_ERROR,
++								GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
++								("Insufficient memory to load PSD image file"));
++							return FALSE;
++						}	
++					}
++					
++					ctx->prepared_func(ctx->pixbuf, NULL, ctx->user_data);
++					
++					ctx->state = PSD_STATE_COLOR_MODE_BLOCK;
++					reset_context_buffer(ctx);
++				}
++				break;
++			case PSD_STATE_COLOR_MODE_BLOCK:
++				if (skip_block(ctx, &data, &size)) {
++					ctx->state = PSD_STATE_RESOURCES_BLOCK;
++					reset_context_buffer(ctx);
++				}
++				break;
++			case PSD_STATE_RESOURCES_BLOCK:
++				if (skip_block(ctx, &data, &size)) {
++					ctx->state = PSD_STATE_LAYERS_BLOCK;
++					reset_context_buffer(ctx);
++				}
++				break;
++			case PSD_STATE_LAYERS_BLOCK:
++				if (skip_block(ctx, &data, &size)) {
++					ctx->state = PSD_STATE_COMPRESSION;
++					reset_context_buffer(ctx);
++				}
++				break;
++			case PSD_STATE_COMPRESSION:
++				if (feed_buffer(ctx->buffer, &ctx->bytes_read, &data, &size, 2))
++				{
++					ctx->compression = read_uint16(ctx->buffer);
++
++					if (ctx->compression == PSD_COMPRESSION_RLE) {
++						ctx->state = PSD_STATE_LINES_LENGTHS;
++						reset_context_buffer(ctx);
++					} else if (ctx->compression == PSD_COMPRESSION_NONE) {
++						ctx->state = PSD_STATE_CHANNEL_DATA;
++						reset_context_buffer(ctx);
++					} else {
++						g_set_error_literal (error, GDK_PIXBUF_ERROR,
++							GDK_PIXBUF_ERROR_UNKNOWN_TYPE,
++							("Unsupported compression type"));
++						return FALSE;
++					}
++				}
++				break;
++			case PSD_STATE_LINES_LENGTHS:
++				if (feed_buffer(
++						(guchar*) ctx->lines_lengths, &ctx->bytes_read, &data,
++						 &size,	2 * ctx->height * ctx->channels))
++				{
++					/* convert from different endianness */
++					for (i = 0; i < ctx->height * ctx->channels; i++) {
++						ctx->lines_lengths[i] = read_uint16(
++							(guchar*) &ctx->lines_lengths[i]);
++					}
++					ctx->state = PSD_STATE_CHANNEL_DATA;
++					reset_context_buffer(ctx);
++				}
++				break;
++			case PSD_STATE_CHANNEL_DATA:
++				{
++					guint line_length = ctx->width * ctx->depth_bytes;
++					if (ctx->compression == PSD_COMPRESSION_RLE) {
++						line_length = ctx->lines_lengths[
++							ctx->curr_ch * ctx->height + ctx->curr_row];
++					}
++					
++					if (feed_buffer(ctx->buffer, &ctx->bytes_read, &data, &size,
++							line_length))
++					{
++						if (ctx->compression == PSD_COMPRESSION_RLE) {
++							decompress_line(ctx->buffer, line_length,
++								ctx->ch_bufs[ctx->curr_ch] + ctx->pos
++							);
++						} else {
++							memcpy(ctx->ch_bufs[ctx->curr_ch] + ctx->pos,
++								ctx->buffer, line_length);
++						}
++						
++						ctx->pos += ctx->width * ctx->depth_bytes;
++						++ctx->curr_row;
++					
++						if (ctx->curr_row >= ctx->height) {
++							++ctx->curr_ch;
++							ctx->curr_row = 0;
++							ctx->pos = 0;
++							if (ctx->curr_ch >= ctx->channels) {
++								ctx->state = PSD_STATE_DONE;
++							}
++						}
++						
++						reset_context_buffer(ctx);
++					}
++				}
++				break;
++			case PSD_STATE_DONE:
++			default:
++				size = 0;
++				break;
++		}
++	}
++	
++	if (ctx->state == PSD_STATE_DONE && !ctx->finalized) {
++		/* convert or copy channel buffers to our GdkPixbuf */
++		guchar* pixels = gdk_pixbuf_get_pixels(ctx->pixbuf);
++		guint b = ctx->depth_bytes;
++
++		if (ctx->color_mode == PSD_MODE_RGB) {
++			for (i = 0; i < ctx->height; i++) {
++				for (j = 0; j < ctx->width; j++) {
++					pixels[3*j+0] = ctx->ch_bufs[0][ctx->width*i*b + j*b];
++					pixels[3*j+1] = ctx->ch_bufs[1][ctx->width*i*b + j*b];
++					pixels[3*j+2] = ctx->ch_bufs[2][ctx->width*i*b + j*b];
++				}
++				pixels += gdk_pixbuf_get_rowstride(ctx->pixbuf);
++			}
++		} else if (ctx->color_mode == PSD_MODE_GRAYSCALE ||
++		           ctx->color_mode == PSD_MODE_DUOTONE)
++		{
++			for (i = 0; i < ctx->height; i++) {
++				for (j = 0; j < ctx->width; j++) {
++					pixels[3*j+0] = pixels[3*j+1] = pixels[3*j+2] =
++						ctx->ch_bufs[0][ctx->width*i*b + j*b];
++				}
++				pixels += gdk_pixbuf_get_rowstride(ctx->pixbuf);
++			}
++		} else if (ctx->color_mode == PSD_MODE_CMYK) {
++			/* unfortunately, this doesn't work 100% correctly...
++			   CMYK-RGB conversion distorts colors significantly  */
++		
++			guchar* pixels = gdk_pixbuf_get_pixels(ctx->pixbuf);
++			for (i = 0; i < ctx->height; i++) {
++				for (j = 0; j < ctx->width; j++) {
++					double c = 1.0 -
++						(double) ctx->ch_bufs[0][ctx->width*i + j] / 255.0;
++					double m = 1.0 -
++						(double) ctx->ch_bufs[1][ctx->width*i + j] / 255.0;
++					double y = 1.0 -
++						(double) ctx->ch_bufs[2][ctx->width*i + j] / 255.0;
++					double k = 1.0 -
++						(double) ctx->ch_bufs[3][ctx->width*i + j] / 255.0;
++					
++					pixels[3*j+0] = (1.0 - (c * (1.0 - k) + k)) * 255.0;
++					pixels[3*j+1] = (1.0 - (m * (1.0 - k) + k)) * 255.0;
++					pixels[3*j+2] = (1.0 - (y * (1.0 - k) + k)) * 255.0;
++				}
++				pixels += gdk_pixbuf_get_rowstride(ctx->pixbuf);
++			}
++		}
++		ctx->finalized = TRUE;
++	}
++	
++	return TRUE;
++}
++
++#ifndef INCLUDE_psd
++#define MODULE_ENTRY(function) G_MODULE_EXPORT void function
++#else
++#define MODULE_ENTRY(function) void _gdk_pixbuf__psd_ ## function
++#endif
++
++MODULE_ENTRY (fill_vtable) (GdkPixbufModule* module)
++{
++	module->begin_load = gdk_pixbuf__psd_image_begin_load;
++	module->stop_load = gdk_pixbuf__psd_image_stop_load;
++	module->load_increment = gdk_pixbuf__psd_image_load_increment;
++}
++
++MODULE_ENTRY (fill_info) (GdkPixbufFormat *info)
++{
++	static GdkPixbufModulePattern signature[] = {
++		{ "8BPS", NULL, 100 },
++		{ NULL, NULL, 0 }
++	};
++	static gchar * mime_types[] = {
++		"image/x-psd",
++		NULL
++	};
++	static gchar * extensions[] = {
++		"psd",
++		NULL
++	};
++
++	info->name = "psd";
++	info->signature = signature;
++	//info->description = N_("Adobe Photoshop format");
++	info->description = "Adobe Photoshop format";
++	info->mime_types = mime_types;
++	info->extensions = extensions;
++	info->flags = GDK_PIXBUF_FORMAT_THREADSAFE;
++	info->flags = 0;
++	info->license = "LGPL";
++}
++
+--- gdk-pixbuf/io-ras.c	Thu Oct 06 18:17:20 2016
++++ gdk-pixbuf/io-ras.c	Sat Nov 08 00:25:32 2014
+@@ -0,0 +1,548 @@
++/* -*- mode: C; c-file-style: "linux" -*- */
++/* GdkPixbuf library - SUNRAS image loader
++ *
++ * Copyright (C) 1999 The Free Software Foundation
++ *
++ * Authors: Arjan van de Ven <arjan@fenrus.demon.nl>
++ *          Federico Mena-Quintero <federico@gimp.org>
++ *
++ * Based on io-gif.c, io-tiff.c and io-png.c
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
++ */
++
++/*
++
++Known bugs:
++	* Compressed rasterfiles don't work yet
++
++*/
++
++#include "config.h"
++#include <stdio.h>
++#ifdef HAVE_UNISTD_H
++#include <unistd.h>
++#endif
++#include <string.h>
++#include "gdk-pixbuf-private.h"
++
++
++
++/* 
++   Header structure for sunras files.
++   All values are in big-endian order on disk
++   
++   Note: Every scanline is padded to be a multiple of 16 bits
++ */
++
++struct rasterfile {
++	guint magic;
++	guint width;
++	guint height;
++	guint depth;
++	guint length;
++	guint type;
++	guint maptype;
++	guint maplength;
++};
++
++/* 
++	This does a byte-order swap. Does glib have something like
++	be32_to_cpu() ??
++*/
++
++/* Progressive loading */
++
++struct ras_progressive_state {
++	GdkPixbufModuleSizeFunc size_func;
++	GdkPixbufModulePreparedFunc prepared_func;
++	GdkPixbufModuleUpdatedFunc updated_func;
++	gpointer user_data;
++
++	gint HeaderSize;	/* The size of the header-part (incl colormap) */
++	guchar *HeaderBuf;	/* The buffer for the header (incl colormap) */
++	gint HeaderDone;	/* The nr of bytes actually in HeaderBuf */
++
++	gint LineWidth;		/* The width of a line in bytes */
++	guchar *LineBuf;	/* Buffer for 1 line */
++	gint LineDone;		/* # of bytes in LineBuf */
++	gint Lines;		/* # of finished lines */
++
++	gint RasType;		/*  32 = BGRA
++				   24 = BGR
++				   8 = 8 bit colormapped
++				   1  = 1 bit bitonal 
++				 */
++	gint DecoderState;        
++
++	struct rasterfile Header;	/* Decoded (BE->CPU) header */
++
++
++	GdkPixbuf *pixbuf;	/* Our "target" */
++};
++
++static gpointer
++gdk_pixbuf__ras_image_begin_load(GdkPixbufModuleSizeFunc size_func,
++                                 GdkPixbufModulePreparedFunc prepared_func,
++				 GdkPixbufModuleUpdatedFunc updated_func,
++				 gpointer user_data,
++                                 GError **error);
++static gboolean gdk_pixbuf__ras_image_stop_load(gpointer data, GError **error);
++static gboolean gdk_pixbuf__ras_image_load_increment(gpointer data,
++                                                     const guchar * buf, guint size,
++                                                     GError **error);
++
++static gboolean RAS2State(struct rasterfile *RAS,
++			  struct ras_progressive_state *State,
++			  GError **error)
++{
++	State->Header.width = GUINT32_FROM_BE(RAS->width);
++	State->Header.height = GUINT32_FROM_BE(RAS->height);
++	State->Header.depth = GUINT32_FROM_BE(RAS->depth);
++	State->Header.type = GUINT32_FROM_BE(RAS->type);
++	State->Header.maptype = GUINT32_FROM_BE(RAS->maptype);
++	State->Header.maplength = GUINT32_FROM_BE(RAS->maplength);
++
++	if ((gint)State->Header.width <= 0 ||
++	    (gint)State->Header.height <= 0 || 
++	    State->Header.maplength > 768) {
++		g_set_error_literal (error,
++                                     GDK_PIXBUF_ERROR,
++                                     GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
++                                     _("RAS image has bogus header data"));
++		return FALSE;
++	}
++
++	State->RasType = State->Header.depth;	/* This may be less trivial someday */
++	State->HeaderSize = 32 + State->Header.maplength;
++
++	if (State->RasType == 32)
++		State->LineWidth = State->Header.width * 4;
++	else if (State->RasType == 24)
++		State->LineWidth = State->Header.width * 3;
++	else if (State->RasType == 8)
++		State->LineWidth = State->Header.width * 1;
++	else if (State->RasType == 1) {
++		State->LineWidth = State->Header.width / 8;
++		if ((State->Header.width & 7) != 0)
++			State->LineWidth++;
++	}
++	else {
++		g_set_error_literal (error,
++                                     GDK_PIXBUF_ERROR,
++                                     GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
++                                     _("RAS image has unknown type"));
++		return FALSE;
++	}
++
++	if (State->Header.type > 2 || State->Header.maptype > 1) {
++		g_set_error_literal (error,
++                                     GDK_PIXBUF_ERROR,
++                                     GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
++                                     _("unsupported RAS image variation"));
++		return FALSE;
++	}
++
++	/* Now pad the line to be a multiple of 16 bits */
++	if ((State->LineWidth & 1) != 0)
++		State->LineWidth++;
++
++	if (!State->LineBuf) {
++		State->LineBuf = g_try_malloc (State->LineWidth);
++
++		if (!State->LineBuf) {
++			g_set_error_literal (error,
++                                             GDK_PIXBUF_ERROR,
++                                             GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
++                                             _("Not enough memory to load RAS image"));
++			return FALSE;
++		}
++	}
++
++
++	if (!State->pixbuf) {
++		if (State->size_func) {
++			gint width = State->Header.width;
++			gint height = State->Header.height;
++			
++			(*State->size_func) (&width, &height, State->user_data);
++			if (width == 0 || height == 0)
++				return FALSE;
++		}
++
++		if (State->RasType == 32)
++			State->pixbuf = gdk_pixbuf_new (GDK_COLORSPACE_RGB, TRUE, 8,
++							(gint) State->Header.width,
++							(gint) State->Header.height);
++		else
++			State->pixbuf = gdk_pixbuf_new (GDK_COLORSPACE_RGB, FALSE, 8,
++							(gint) State->Header.width,
++							(gint) State->Header.height);
++		
++                if (!State->pixbuf) {
++                        g_set_error_literal (error,
++                                             GDK_PIXBUF_ERROR,
++                                             GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
++                                             _("Not enough memory to load RAS image"));
++                        return FALSE;
++                }
++
++		if (State->prepared_func != NULL)
++			/* Notify the client that we are ready to go */
++			(*State->prepared_func) (State->pixbuf,
++                                                 NULL,
++						 State->user_data);
++
++	}
++	
++	if ((State->Header.maplength == 0) && (State->RasType == 1)) {
++		State->HeaderBuf[32] = 255;
++		State->HeaderBuf[33] = 0;
++		State->HeaderBuf[34] = 255;
++		State->HeaderBuf[35] = 0;
++		State->HeaderBuf[36] = 255;
++		State->HeaderBuf[37] = 0;
++	}
++
++	return TRUE;
++}
++
++/* 
++ * func - called when we have pixmap created (but no image data)
++ * user_data - passed as arg 1 to func
++ * return context (opaque to user)
++ */
++
++static gpointer
++gdk_pixbuf__ras_image_begin_load(GdkPixbufModuleSizeFunc size_func, 
++                                 GdkPixbufModulePreparedFunc prepared_func,
++				 GdkPixbufModuleUpdatedFunc updated_func,
++				 gpointer user_data,
++                                 GError **error)
++{
++	struct ras_progressive_state *context;
++
++	context = g_new0(struct ras_progressive_state, 1);
++	context->size_func = size_func;
++	context->prepared_func = prepared_func;
++	context->updated_func = updated_func;
++	context->user_data = user_data;
++
++	context->HeaderSize = 32;
++	context->HeaderBuf = g_malloc(32 + 768);	/* 32 for rasheader,
++							   768 for the colormap */
++	context->HeaderDone = 0;
++
++	context->LineWidth = 0;
++	context->LineBuf = NULL;
++	context->LineDone = 0;
++	context->Lines = 0;
++
++	context->RasType = 0;
++	context->DecoderState = 0;
++	
++	memset(&context->Header, 0, sizeof(struct rasterfile));
++
++
++	context->pixbuf = NULL;
++
++
++	return (gpointer) context;
++}
++
++/*
++ * context - returned from image_begin_load
++ *
++ * free context, unref gdk_pixbuf
++ */
++static gboolean
++gdk_pixbuf__ras_image_stop_load(gpointer data, GError **error)
++{
++	struct ras_progressive_state *context =
++	    (struct ras_progressive_state *) data;
++
++        /* FIXME this thing needs to report errors if
++         * we have unused image data
++         */
++
++	g_return_val_if_fail(context != NULL, TRUE);
++
++	g_free(context->LineBuf);
++	g_free(context->HeaderBuf);
++
++	if (context->pixbuf)
++		g_object_unref(context->pixbuf);
++
++	g_free(context);
++
++        return TRUE;
++}
++
++/* 
++ OneLine is called when enough data is received to process 1 line 
++ of pixels 
++ */
++
++static void OneLine32(struct ras_progressive_state *context)
++{
++	gint X;
++	guchar *Pixels;
++
++	X = 0;
++	Pixels = context->pixbuf->pixels + context->pixbuf->rowstride * context->Lines;
++	while (X < context->Header.width) {
++		/* The joys of having a BGR byteorder */
++		Pixels[X * 4 + 0] = context->LineBuf[X * 4 + 2];
++		Pixels[X * 4 + 1] = context->LineBuf[X * 4 + 1];
++		Pixels[X * 4 + 2] = context->LineBuf[X * 4 + 0];
++		Pixels[X * 4 + 3] = context->LineBuf[X * 4 + 3];
++		X++;
++	}
++}
++
++static void OneLine24(struct ras_progressive_state *context)
++{
++	gint X;
++	guchar *Pixels;
++
++	X = 0;
++	Pixels = context->pixbuf->pixels + context->pixbuf->rowstride * context->Lines;
++	while (X < context->Header.width) {
++		/* The joys of having a BGR byteorder */
++		Pixels[X * 3 + 0] = context->LineBuf[X * 3 + 2];
++		Pixels[X * 3 + 1] = context->LineBuf[X * 3 + 1];
++		Pixels[X * 3 + 2] = context->LineBuf[X * 3 + 0];
++		X++;
++	}
++
++}
++
++static void OneLine8(struct ras_progressive_state *context)
++{
++	gint X;
++	guchar *Pixels;
++	int offset = context->Header.maplength / 3;
++
++	X = 0;
++	Pixels = context->pixbuf->pixels + context->pixbuf->rowstride * context->Lines;
++	while (X < context->Header.width) {
++		/* The joys of having a BGR byteorder */
++		Pixels[X * 3 + 0] =
++		    context->HeaderBuf[context->LineBuf[X] + 32];
++		Pixels[X * 3 + 1] =
++		    context->HeaderBuf[context->LineBuf[X] + offset + 32];
++		Pixels[X * 3 + 2] =
++		    context->HeaderBuf[context->LineBuf[X] + 2*offset + 32];
++		X++;
++	}
++}
++
++static void OneLine1(struct ras_progressive_state *context)
++{
++	gint X;
++	guchar *Pixels;
++
++	X = 0;
++	Pixels = context->pixbuf->pixels + context->pixbuf->rowstride * context->Lines;
++	while (X < context->Header.width) {
++		int Bit;
++		
++		Bit = (context->LineBuf[X/8])>>(7-(X&7));
++		Bit = Bit & 1;
++		/* The joys of having a BGR byteorder */
++		Pixels[X * 3 + 0] =
++		    context->HeaderBuf[Bit + 32];
++		Pixels[X * 3 + 1] =
++		    context->HeaderBuf[Bit + 2 + 32];
++		Pixels[X * 3 + 2] =
++		    context->HeaderBuf[Bit + 4 + 32];
++		X++;
++	}
++}
++
++
++static void OneLine(struct ras_progressive_state *context)
++{
++	context->LineDone = 0;
++	if (context->Lines >= context->Header.height)
++		return;
++	if (context->RasType == 32)
++		OneLine32(context);
++	if (context->RasType == 24)
++		OneLine24(context);
++	if (context->RasType == 8)
++		OneLine8(context);
++	if (context->RasType == 1)
++		OneLine1(context);
++
++	context->LineDone = 0;
++	context->Lines++;
++
++	if (context->updated_func != NULL) {
++		(*context->updated_func) (context->pixbuf,
++					  0,
++					  context->Lines,
++					  context->Header.width,
++					  1,
++					  context->user_data);
++
++	}
++}
++
++static gboolean
++DoCompressed (struct ras_progressive_state *context,
++	      const guchar * buf, guint size,
++	      GError **error)
++{
++	int i;
++
++	for (i = 0; i < size; i++) {
++		switch (context->DecoderState) {
++		    case 0:
++			    if (buf[i] == 0x80)
++				    context->DecoderState = 1;
++			    else
++				    context->LineBuf[context->LineDone++] = buf[i];
++			    break;
++		    case 1:
++			    if (buf[i] == 0) {
++				    context->LineBuf[context->LineDone++] = 0x80;
++				    context->DecoderState = 0;
++			    }
++			    else
++				    context->DecoderState = buf[i] + 1;
++			    break;
++		    default:
++			    for (; context->DecoderState; context->DecoderState--) {
++				    context->LineBuf[context->LineDone++] = buf[i];
++				    if ((context->LineDone >= context->LineWidth) && (context->LineWidth > 0))
++					    OneLine(context);
++			    }
++		}
++		if ((context->LineDone >= context->LineWidth) && (context->LineWidth > 0))
++			OneLine(context);
++	}
++	return TRUE;
++}
++
++/*
++ * context - from image_begin_load
++ * buf - new image data
++ * size - length of new image data
++ *
++ * append image data onto incrementally built output image
++ */
++static gboolean
++gdk_pixbuf__ras_image_load_increment(gpointer data,
++                                     const guchar * buf, guint size,
++                                     GError **error)
++{
++	struct ras_progressive_state *context =
++	    (struct ras_progressive_state *) data;
++
++	gint BytesToCopy;
++
++	while (size > 0) {
++		if (context->HeaderDone < context->HeaderSize) {	/* We still 
++									   have headerbytes to do */
++			BytesToCopy =
++			    context->HeaderSize - context->HeaderDone;
++			if (BytesToCopy > size)
++				BytesToCopy = size;
++
++			memmove(context->HeaderBuf + context->HeaderDone,
++			       buf, BytesToCopy);
++
++			size -= BytesToCopy;
++			buf += BytesToCopy;
++			context->HeaderDone += BytesToCopy;
++
++		} else if (context->Header.type == 2) {
++			if (!DoCompressed (context, buf, size, error)) {
++				return FALSE;
++			}
++			size = 0;
++		}
++		else {
++			BytesToCopy =
++			    context->LineWidth - context->LineDone;
++			if (BytesToCopy > size)
++				BytesToCopy = size;
++
++			if (BytesToCopy > 0) {
++				memmove(context->LineBuf +
++				       context->LineDone, buf,
++				       BytesToCopy);
++
++				size -= BytesToCopy;
++				buf += BytesToCopy;
++				context->LineDone += BytesToCopy;
++			}
++			if ((context->LineDone >= context->LineWidth) &&
++			    (context->LineWidth > 0))
++				OneLine(context);
++
++
++		}
++
++		if (context->HeaderDone >= 32)
++			if (!RAS2State((struct rasterfile *) context->HeaderBuf,
++				       context, error)) {
++				return FALSE;
++			}
++
++
++	}
++
++	return TRUE;
++}
++
++#ifndef INCLUDE_ras
++#define MODULE_ENTRY(function) G_MODULE_EXPORT void function
++#else
++#define MODULE_ENTRY(function) void _gdk_pixbuf__ras_ ## function
++#endif
++
++MODULE_ENTRY (fill_vtable) (GdkPixbufModule *module)
++{
++	module->begin_load = gdk_pixbuf__ras_image_begin_load;
++	module->stop_load = gdk_pixbuf__ras_image_stop_load;
++	module->load_increment = gdk_pixbuf__ras_image_load_increment;
++}
++
++MODULE_ENTRY (fill_info) (GdkPixbufFormat *info)
++{
++	static const GdkPixbufModulePattern signature[] = {
++		{ "\x59\xa6\x6a\x95", NULL, 100 },
++		{ NULL, NULL, 0 }
++	};
++	static const gchar *mime_types[] = {
++		"image/x-cmu-raster",
++		"image/x-sun-raster",
++		NULL
++	};
++	static const gchar *extensions[] = {
++		"ras",
++		NULL
++	};
++
++	info->name = "ras";
++	info->signature = (GdkPixbufModulePattern *) signature;
++	info->description = NC_("image format", "Sun raster");
++	info->mime_types = (gchar **) mime_types;
++	info->extensions = (gchar **) extensions;
++	info->flags = GDK_PIXBUF_FORMAT_THREADSAFE;
++	info->license = "LGPL";
++}
++
+--- gdk-pixbuf/io-svg.c	Thu Oct 06 18:17:20 2016
++++ gdk-pixbuf/io-svg.c	Tue Sep 22 17:42:50 2015
+@@ -0,0 +1,222 @@
++/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
++/* GdkPixbuf library - SVG image loader
++ *
++ * Copyright (C) 2002 Matthias Clasen
++ * Copyright (C) 2002-2004 Dom Lachowicz
++ *
++ * Authors: Matthias Clasen <maclas@gmx.de>
++ *          Dom Lachowicz <cinamod@hotmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more  * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++#include "config.h"
++
++#include <stdlib.h>
++
++#include <rsvg.h>
++#include <gdk-pixbuf/gdk-pixbuf.h>
++
++#include "librsvg-features.h"
++
++#define N_(string) (string)
++#define _(string) (string)
++
++typedef struct {
++        RsvgHandle                 *handle;
++
++        GdkPixbufModuleUpdatedFunc  updated_func;
++        GdkPixbufModulePreparedFunc prepared_func;
++        GdkPixbufModuleSizeFunc     size_func;
++
++        gboolean                    first_write;
++
++        gpointer                    user_data;
++} SvgContext;
++
++G_MODULE_EXPORT void fill_vtable (GdkPixbufModule *module);
++G_MODULE_EXPORT void fill_info (GdkPixbufFormat *info);
++
++enum {
++        ERROR_WRITING = 1,
++        ERROR_DISPLAYING_IMAGE
++} RsvgLoaderErrorReasons;
++
++static void
++rsvg_propegate_error (GError ** err,
++                      const char * reason,
++                      gint code)
++{
++        if (err) {
++                *err = NULL;
++                g_set_error (err, rsvg_error_quark (), code, "%s", reason);
++        }
++}
++
++static gpointer
++gdk_pixbuf__svg_image_begin_load (GdkPixbufModuleSizeFunc size_func,
++                                  GdkPixbufModulePreparedFunc prepared_func,
++                                  GdkPixbufModuleUpdatedFunc  updated_func,
++                                  gpointer user_data,
++                                  GError **error)
++{
++        SvgContext *context    = g_new0 (SvgContext, 1);
++
++        if (error)
++                *error = NULL;
++
++        context->first_write   = TRUE;
++        context->size_func     = size_func;
++
++        context->prepared_func = prepared_func;
++        context->updated_func  = updated_func;
++        context->user_data     = user_data;
++
++        return context;
++}
++
++static void
++emit_updated (SvgContext *context, GdkPixbuf *pixbuf)
++{
++        if (context->updated_func != NULL)
++                (* context->updated_func) (pixbuf,
++                                           0, 0,
++                                           gdk_pixbuf_get_width (pixbuf),
++                                           gdk_pixbuf_get_height (pixbuf),
++                                           context->user_data);
++}
++
++static void
++emit_prepared (SvgContext *context, GdkPixbuf *pixbuf)
++{
++        if (context->prepared_func != NULL)
++                (* context->prepared_func) (pixbuf, NULL, context->user_data);
++}
++
++static gboolean
++gdk_pixbuf__svg_image_load_increment (gpointer data,
++				      const guchar *buf, guint size,
++				      GError **error)
++{
++        SvgContext *context = (SvgContext *)data;
++
++        if (error)
++                *error = NULL;
++
++        if (context->first_write == TRUE) {
++                context->first_write = FALSE;
++
++                context->handle = rsvg_handle_new ();
++
++                if (!context->handle) {
++                        rsvg_propegate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
++                        return FALSE;
++                }
++
++                rsvg_handle_set_size_callback (context->handle, context->size_func, context->user_data, NULL);
++        }
++
++        if (!context->handle) {
++                rsvg_propegate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
++                return FALSE;
++        }
++
++        if (!rsvg_handle_write (context->handle, buf, size, error)) {
++                rsvg_propegate_error (error, _("Error writing"), ERROR_WRITING);
++                return FALSE;
++        }
++
++        return TRUE;
++}
++
++static gboolean
++gdk_pixbuf__svg_image_stop_load (gpointer data, GError **error)
++{
++        SvgContext *context = (SvgContext *)data;
++        GdkPixbuf *pixbuf;
++        gboolean result = TRUE;
++
++        if (error)
++                *error = NULL;
++
++        if (!context->handle) {
++                rsvg_propegate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
++                return FALSE;
++        }
++
++        rsvg_handle_close (context->handle, error);
++
++        pixbuf = rsvg_handle_get_pixbuf (context->handle);
++
++        if (pixbuf != NULL) {
++                emit_prepared (context, pixbuf);
++                emit_updated (context, pixbuf);
++                g_object_unref (pixbuf);
++        }
++        else {
++                rsvg_propegate_error (error, _("Error displaying image"), ERROR_DISPLAYING_IMAGE);
++                result = FALSE;
++        }
++
++        g_object_unref (context->handle);
++        g_free (context);
++
++        return result;
++}
++
++#ifndef INCLUDE_svg
++#define MODULE_ENTRY(function) G_MODULE_EXPORT void function
++#else
++#define MODULE_ENTRY(function) void _gdk_pixbuf__svg_ ## function
++#endif
++
++MODULE_ENTRY (fill_vtable) (GdkPixbufModule *module)
++{
++        module->begin_load     = gdk_pixbuf__svg_image_begin_load;
++        module->stop_load      = gdk_pixbuf__svg_image_stop_load;
++        module->load_increment = gdk_pixbuf__svg_image_load_increment;
++}
++
++MODULE_ENTRY (fill_info) (GdkPixbufFormat *info)
++{
++        static GdkPixbufModulePattern signature[] = {
++                {  " <svg",  "*    ", 100 },
++                {  " <!DOCTYPE svg",  "*             ", 100 },
++                { NULL, NULL, 0 }
++        };
++
++        static gchar *mime_types[] = { /* yes folks, i actually have run into all of these in the wild... */
++                "image/svg+xml",
++                "image/svg",
++                "image/svg-xml",
++                "image/vnd.adobe.svg+xml",
++                "text/xml-svg",
++                "image/svg+xml-compressed",
++                NULL
++        };
++        static gchar *extensions[] = {
++                "svg",
++                "svgz",
++                "svg.gz",
++                NULL
++        };
++
++        info->name        = "svg";
++        info->signature   = signature;
++        info->description = _("Scalable Vector Graphics");
++        info->mime_types  = mime_types;
++        info->extensions  = extensions;
++        info->flags       = GDK_PIXBUF_FORMAT_SCALABLE | GDK_PIXBUF_FORMAT_THREADSAFE;
++        info->license     = "LGPL";
++}
+--- gdk-pixbuf/io-wbmp.c	Thu Oct 06 18:17:20 2016
++++ gdk-pixbuf/io-wbmp.c	Sat Nov 08 00:25:32 2014
+@@ -0,0 +1,377 @@
++/* -*- mode: C; c-file-style: "linux" -*- */
++/* GdkPixbuf library - Wireless Bitmap image loader
++ *
++ * Copyright (C) 2000 Red Hat, Inc.
++ *
++ * Authors: Elliot Lee <sopwith@redhat.com
++ *
++ * Based on io-bmp.c
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, see <http://www.gnu.org/licenses/>.
++ */
++
++/*
++
++Known bugs:
++        * Since this is based off the libgd implementation, no extended headers implemented (not required for a WAP client)
++*/
++
++#include "config.h"
++#include <stdio.h>
++#ifdef HAVE_UNISTD_H
++#include <unistd.h>
++#endif
++#include <string.h>
++#include "gdk-pixbuf-private.h"
++
++
++
++/* Progressive loading */
++
++struct wbmp_progressive_state {
++  GdkPixbufModulePreparedFunc prepared_func;
++  GdkPixbufModuleUpdatedFunc updated_func;
++  gpointer user_data;
++
++  guint need_type : 1;
++  guint need_header : 1;
++  guint need_width : 1;
++  guint need_height : 1;
++  guint needmore : 1;
++  guint call_progressive_updates : 1;
++
++  guchar last_buf[16]; /* Just needs to be big enough to hold the largest datum requestable via 'getin' */
++  guint last_len;
++
++  int type;
++  int width, height, curx, cury;
++
++  GdkPixbuf *pixbuf;	/* Our "target" */
++};
++
++static gpointer
++gdk_pixbuf__wbmp_image_begin_load(GdkPixbufModuleSizeFunc size_func, 
++                                  GdkPixbufModulePreparedFunc prepared_func,
++				  GdkPixbufModuleUpdatedFunc updated_func,
++                                  gpointer user_data,
++                                  GError **error);
++
++static gboolean gdk_pixbuf__wbmp_image_stop_load(gpointer data, GError **error);
++static gboolean gdk_pixbuf__wbmp_image_load_increment(gpointer data,
++                                                      const guchar * buf,
++                                                      guint size,
++                                                      GError **error);
++
++/* 
++ * func - called when we have pixmap created (but no image data)
++ * user_data - passed as arg 1 to func
++ * return context (opaque to user)
++ */
++
++static gpointer
++gdk_pixbuf__wbmp_image_begin_load(GdkPixbufModuleSizeFunc size_func, 
++                                  GdkPixbufModulePreparedFunc prepared_func,
++                                  GdkPixbufModuleUpdatedFunc updated_func,
++                                  gpointer user_data,
++                                  GError **error)
++{
++	struct wbmp_progressive_state *context;
++
++	context = g_new0(struct wbmp_progressive_state, 1);
++	context->prepared_func = prepared_func;
++	context->updated_func = updated_func;
++	context->user_data = user_data;
++
++	context->needmore = context->need_type = context->need_header = context->need_width = context->need_height = TRUE;
++	context->call_progressive_updates = TRUE;
++	context->pixbuf = NULL;
++
++	return (gpointer) context;
++}
++
++/*
++ * context - returned from image_begin_load
++ *
++ * free context, unref gdk_pixbuf
++ */
++static gboolean gdk_pixbuf__wbmp_image_stop_load(gpointer data,
++                                                 GError **error)
++{
++	struct wbmp_progressive_state *context =
++	    (struct wbmp_progressive_state *) data;
++
++        /* FIXME this thing needs to report errors if
++         * we have unused image data
++         */
++        
++	g_return_val_if_fail(context != NULL, TRUE);
++	if (context->pixbuf)
++	  g_object_unref(context->pixbuf);
++
++	g_free(context);
++
++        return TRUE;
++}
++
++static gboolean
++getin(struct wbmp_progressive_state *context, const guchar **buf, guint *buf_size, guchar *ptr, int datum_size)
++{
++  int last_num, buf_num;
++
++  if((context->last_len + *buf_size) < datum_size)
++    return FALSE;
++
++  /* We know we can pull it out of there */
++  last_num = MIN(datum_size, context->last_len);
++  buf_num = MIN(datum_size-last_num, *buf_size);
++  memcpy(ptr, context->last_buf, last_num);
++  memcpy(ptr+last_num, *buf, buf_num);
++	 
++  context->last_len -= last_num;
++  if(context->last_len)
++    memmove(context->last_buf, context->last_buf+last_num, context->last_len);
++  *buf_size -= buf_num;
++  *buf += buf_num;
++
++  return TRUE;
++}
++
++static gboolean
++save_rest(struct wbmp_progressive_state *context, const guchar *buf, guint buf_size)
++{
++  if(buf_size > (sizeof(context->last_buf) - context->last_len))
++    return FALSE;
++
++  memcpy(context->last_buf+context->last_len, buf, buf_size);
++  context->last_len += buf_size;
++
++  return TRUE;
++}
++
++static gboolean
++get_mbi(struct wbmp_progressive_state *context, const guchar **buf, guint *buf_size, int *val)
++{
++  guchar intbuf[16];
++  int n;
++  gboolean rv;
++
++  *val = 0;
++  n = 0;
++  do {
++    rv = getin(context, buf, buf_size, intbuf+n, 1);
++    if(!rv)
++      goto out;
++    *val <<= 7;
++    *val |= intbuf[n] & 0x7F;
++    n++;
++  } while(n < sizeof(intbuf) && (intbuf[n-1] & 0x80));
++
++ out:
++  if(!rv || (intbuf[n-1] & 0x80))
++    {
++      rv = save_rest(context, intbuf, n);
++
++      if(!rv)
++	g_error("Couldn't save_rest of intbuf");
++      return FALSE;
++    }
++
++  return TRUE;
++}
++
++/*
++ * context - from image_begin_load
++ * buf - new image data
++ * size - length of new image data
++ *
++ * append image data onto inrecrementally built output image
++ */
++static gboolean gdk_pixbuf__wbmp_image_load_increment(gpointer data,
++                                                      const guchar * buf,
++                                                      guint size, GError **error)
++{
++	struct wbmp_progressive_state *context =
++	    (struct wbmp_progressive_state *) data;
++	gboolean bv = FALSE;
++
++	do
++	  {
++	    if(context->need_type)
++	      {
++		guchar val;
++
++		bv = getin(context, &buf, &size, &val, 1);
++		if(bv)
++		  {
++		    context->type = val;
++		    context->need_type = FALSE;
++		  }
++	      }
++	    else if(context->need_header)
++	      {
++		guchar val;
++
++		bv = getin(context, &buf, &size, &val, 1);
++		if(bv)
++		  {
++		    /* We skip over the extended header - val is unused */
++		    if(!(val & 0x80))
++		      context->need_header = FALSE;
++		  }
++	      }
++	    else if(context->need_width)
++	      {
++		bv = get_mbi(context, &buf, &size, &context->width);
++		if(bv) {
++		  context->need_width = FALSE;
++
++                  if (context->width <= 0) {
++		    g_set_error_literal (error,
++                                         GDK_PIXBUF_ERROR,
++                                         GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
++                                         _("Image has zero width"));
++
++		    return FALSE;
++		  }
++                }
++		
++	      }
++	    else if(context->need_height)
++	      {
++		bv = get_mbi(context, &buf, &size, &context->height);
++		if(bv)
++		  {
++		    context->need_height = FALSE;
++
++		    if (context->height <= 0) {
++		      g_set_error_literal (error,
++                                           GDK_PIXBUF_ERROR,
++                                           GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
++                                           _("Image has zero height"));
++		      
++		      return FALSE;
++		    }
++
++		    context->pixbuf = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, context->width, context->height);
++		    
++		    if (!context->pixbuf) {
++		      g_set_error_literal (error,
++                                           GDK_PIXBUF_ERROR,
++                                           GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
++                                           _("Not enough memory to load image"));
++		      return FALSE;
++		    }
++
++
++		    if(context->prepared_func)
++		      context->prepared_func(context->pixbuf, NULL, context->user_data);
++		  }
++	      }
++	    else if(context->needmore)
++	      {
++		int first_row;
++		first_row = context->cury;
++		for( ; context->cury < context->height; context->cury++, context->curx = 0)
++		  {
++		    for( ; context->curx < context->width; context->curx += 8)
++		      {
++			guchar byte;
++			guchar *ptr;
++			int xoff;
++			bv = getin(context, &buf, &size, &byte, 1);
++			if(!bv)
++			  goto out;
++
++			ptr = context->pixbuf->pixels + context->pixbuf->rowstride * context->cury + context->curx * 3;
++			for(xoff = 7; xoff >= 0; xoff--, ptr += 3)
++			  {
++			    guchar pixval;
++
++			    if (context->curx + (7 - xoff) == context->width)
++			      break;
++
++			    if(byte & (1<<xoff))
++			      pixval = 0xFF;
++			    else
++			      pixval = 0x0;
++
++			    ptr[0] = ptr[1] = ptr[2] = pixval;
++			  }
++		      }
++		  }
++		context->needmore = FALSE;
++
++	      out:
++		if(context->updated_func)
++		  context->updated_func(context->pixbuf, 0, first_row, context->width, context->cury - first_row + 1,
++					context->user_data);
++	      }
++	    else
++	      bv = FALSE; /* Nothing left to do, stop feeding me data! */
++
++	  } while(bv);
++
++	if(size) {
++	  bv = save_rest(context, buf, size);
++	  if (!bv) {
++	      g_set_error_literal (error,
++                                   GDK_PIXBUF_ERROR,
++                                   GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
++                                   _("Couldn't save the rest"));
++
++	      return FALSE;
++	  }
++	}
++	return TRUE;
++}
++
++#ifndef INCLUDE_wbmp
++#define MODULE_ENTRY(function) G_MODULE_EXPORT void function
++#else
++#define MODULE_ENTRY(function) void _gdk_pixbuf__wbmp_ ## function
++#endif
++
++MODULE_ENTRY (fill_vtable) (GdkPixbufModule *module)
++{
++	module->begin_load = gdk_pixbuf__wbmp_image_begin_load;
++	module->stop_load = gdk_pixbuf__wbmp_image_stop_load;
++	module->load_increment = gdk_pixbuf__wbmp_image_load_increment;
++}
++
++MODULE_ENTRY (fill_info) (GdkPixbufFormat *info)
++{
++	static const GdkPixbufModulePattern signature[] = {
++		{ "  ",    "zz", 1 }, 
++		{ " \140", "z ", 1 },
++		{ " \100", "z ", 1 },
++		{ " \040", "z ", 1 },
++		{ NULL, NULL, 0 }
++	};
++	static const gchar *mime_types[] = {
++		"image/vnd.wap.wbmp",
++		NULL
++	};
++	static const gchar *extensions[] = {
++		"wbmp",
++		NULL
++	};
++
++	info->name = "wbmp";
++	info->signature = (GdkPixbufModulePattern *) signature;
++	info->description = NC_("image format", "WBMP");
++	info->mime_types = (gchar **) mime_types;
++	info->extensions = (gchar **) extensions;
++	info->flags = GDK_PIXBUF_FORMAT_THREADSAFE;
++	info->license = "LGPL";
++}
+--- gdk-pixbuf/io-webp.c	Thu Oct 06 18:17:20 2016
++++ gdk-pixbuf/io-webp.c	Tue Sep 22 17:42:50 2015
+@@ -0,0 +1,509 @@
++/* GdkPixbuf library - WebP Image Loader
++ *
++ * Copyright (C) 2011 Alberto Ruiz
++ * Copyright (C) 2011 David Mazary
++ * Copyright (C) 2014 Premysl Janouch
++ *
++ * Authors: Alberto Ruiz <aruiz@gnome.org>
++ *          David Mazary <dmaz@vt.edu>
++ *          Premysl Janouch <p.janouch@gmail.com>
++ *
++ * This library is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU Lesser General Public
++ * License as published by the Free Software Foundation; either
++ * version 2 of the License, or (at your option) any later version.
++ *
++ * This library is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * Lesser General Public License for more details.
++ *
++ * You should have received a copy of the GNU Lesser General Public
++ * License along with this library; if not, write to the
++ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
++ * Boston, MA 02111-1307, USA.
++ */
++
++#include <webp/decode.h>
++#include <webp/encode.h>
++#include <string.h>
++
++#define GDK_PIXBUF_ENABLE_BACKEND
++#include <gdk-pixbuf/gdk-pixbuf.h>
++#undef  GDK_PIXBUF_ENABLE_BACKEND
++
++/* Progressive loader context */
++typedef struct {
++        GdkPixbufModuleSizeFunc size_func;
++        GdkPixbufModuleUpdatedFunc update_func;
++        GdkPixbufModulePreparedFunc prepare_func;
++        WebPDecoderConfig config;
++        gpointer user_data;
++        GdkPixbuf *pixbuf;
++        gboolean got_header;
++        WebPIDecoder *idec;
++        guchar *decbuf;
++        gint last_y;
++        GError **error;
++} WebPContext;
++
++static void
++destroy_data (guchar *pixels, gpointer data)
++{
++        g_free (pixels);
++}
++
++/* Shared library entry point */
++static GdkPixbuf *
++gdk_pixbuf__webp_image_load (FILE *f, GError **error)
++{
++        GdkPixbuf * volatile pixbuf = NULL;
++        guint32 data_size;
++        guint8 *out;
++        gint w, h, ok;
++        gpointer data;
++        WebPBitstreamFeatures features;
++        gboolean use_alpha = TRUE;
++
++        /* Get data size */
++        fseek (f, 0, SEEK_END);
++        data_size = ftell(f);
++        fseek (f, 0, SEEK_SET);
++
++        /* Get data */
++        data = g_malloc (data_size);
++        ok = (fread (data, data_size, 1, f) == 1);
++        if (!ok) {
++                g_set_error (error,
++                             GDK_PIXBUF_ERROR,
++                             GDK_PIXBUF_ERROR_FAILED,
++                             "Failed to read file");
++                return FALSE;
++        }
++
++        /* Take the safe route and only disable the alpha channel when
++           we're sure that there is not any. */
++        if (WebPGetFeatures (data, data_size, &features) == VP8_STATUS_OK
++            && features.has_alpha == FALSE) {
++                use_alpha = FALSE;
++        }
++
++        if (use_alpha) {
++                out = WebPDecodeRGBA (data, data_size, &w, &h);
++        } else {
++                out = WebPDecodeRGB (data, data_size, &w, &h);
++        }
++        g_free (data);
++
++        if (!out) {
++                g_set_error (error,
++                             GDK_PIXBUF_ERROR,
++                             GDK_PIXBUF_ERROR_FAILED,
++                             "Cannot create WebP decoder.");
++                return FALSE;
++        }
++
++        pixbuf = gdk_pixbuf_new_from_data ((const guchar *)out,
++                                           GDK_COLORSPACE_RGB,
++                                           use_alpha,
++                                           8,
++                                           w, h,
++                                           w * (use_alpha ? 4 : 3),
++                                           destroy_data,
++                                           NULL);
++
++        if (!pixbuf) {
++                g_set_error (error,
++                             GDK_PIXBUF_ERROR,
++                             GDK_PIXBUF_ERROR_FAILED,
++                             "Failed to decode image");
++                return FALSE;
++        }
++        return pixbuf;
++}
++
++static gpointer
++gdk_pixbuf__webp_image_begin_load (GdkPixbufModuleSizeFunc size_func,
++                                   GdkPixbufModulePreparedFunc prepare_func,
++                                   GdkPixbufModuleUpdatedFunc update_func,
++                                   gpointer user_data,
++                                   GError **error)
++{
++        WebPContext *context = g_new0 (WebPContext, 1);
++        context->size_func = size_func;
++        context->prepare_func = prepare_func;
++        context->update_func  = update_func;
++        context->user_data = user_data;
++        return context;
++}
++
++static gboolean
++gdk_pixbuf__webp_image_stop_load (gpointer context, GError **error)
++{
++        WebPContext *data = (WebPContext *) context;
++        g_return_val_if_fail(data != NULL, TRUE);
++        if (data->pixbuf) {
++                g_object_unref (data->pixbuf);
++        }
++        if (data->idec) {
++                WebPIDelete (data->idec);
++        }
++        if (data->decbuf) {
++                g_free (data->decbuf);
++        }
++        return TRUE;
++}
++
++// Modified WebPINewRGB() that takes a WebPDecoderConfig argument, which we
++// currently need for scaling options.
++static WebPIDecoder *
++new_rgb_decoder (WEBP_CSP_MODE mode, uint8_t* output_buffer,
++                 size_t output_buffer_size, int output_stride,
++                 WebPDecoderConfig *config)
++{
++        const int is_external_memory = (output_buffer != NULL);
++
++        if (mode >= MODE_YUV) return NULL;
++        if (!is_external_memory) {
++                // Overwrite parameters to sane values.
++                output_buffer_size = 0;
++                output_stride = 0;
++        } else {
++                // A buffer was passed. Validate the other params.
++                if (output_stride == 0 || output_buffer_size == 0) {
++                        return NULL;
++                }
++        }
++
++        config->output.colorspace = mode;
++        config->output.is_external_memory = is_external_memory;
++        config->output.u.RGBA.rgba = output_buffer;
++        config->output.u.RGBA.stride = output_stride;
++        config->output.u.RGBA.size = output_buffer_size;
++        return WebPIDecode (NULL, 0, config);
++}
++
++static gboolean
++gdk_pixbuf__webp_image_load_increment (gpointer context,
++                                       const guchar *buf, guint size,
++                                       GError **error)
++{
++        gint w, h, stride, scaled_w, scaled_h;
++        WebPContext *data = (WebPContext *) context;
++        g_return_val_if_fail(data != NULL, FALSE);
++
++        if (!data->got_header) {
++                gint rc;
++                WebPBitstreamFeatures features;
++                gboolean use_alpha = TRUE;
++
++                rc = WebPGetInfo (buf, size, &w, &h);
++                if (rc == 0) {
++                        g_set_error (error,
++                                     GDK_PIXBUF_ERROR,
++                                     GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
++                                     "Cannot read WebP image header.");
++                        return FALSE;
++                }
++                data->got_header = TRUE;
++
++                scaled_w = w;
++                scaled_h = h;
++                memset (&data->config, 0, sizeof data->config);
++                if (data->size_func) {
++                        (* data->size_func) (&scaled_w, &scaled_h,
++                                             data->user_data);
++                        if (scaled_w != w || scaled_h != h) {
++                            data->config.options.use_scaling = TRUE;
++                            data->config.options.scaled_width = scaled_w;
++                            data->config.options.scaled_height = scaled_h;
++                        }
++                        w = scaled_w;
++                        h = scaled_h;
++                }
++
++                /* Take the safe route and only disable the alpha channel when
++                   we're sure that there is not any. */
++                if (WebPGetFeatures (buf, size, &features) == VP8_STATUS_OK
++                    && features.has_alpha == FALSE) {
++                        use_alpha = FALSE;
++                }
++
++                data->pixbuf = gdk_pixbuf_new (GDK_COLORSPACE_RGB,
++                                               use_alpha,
++                                               8,
++                                               w,
++                                               h);
++                stride = gdk_pixbuf_get_rowstride (data->pixbuf);
++
++                data->decbuf = g_try_malloc (h * stride);
++                if (!data->decbuf) {
++                        g_set_error (error,
++                                     GDK_PIXBUF_ERROR,
++                                     GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
++                                     "Cannot allocate memory for decoded image data.");
++                        return FALSE;
++                }
++
++                data->idec = new_rgb_decoder (use_alpha ? MODE_RGBA : MODE_RGB,
++                                              data->decbuf,
++                                              h * stride,
++                                              stride,
++                                              &data->config);
++                if (!data->idec) {
++                        g_set_error (error,
++                                     GDK_PIXBUF_ERROR,
++                                     GDK_PIXBUF_ERROR_FAILED,
++                                     "Cannot create WebP decoder.");
++                        return FALSE;
++                }
++
++                if (data->prepare_func) {
++                        (* data->prepare_func) (data->pixbuf,
++                                                NULL,
++                                                data->user_data);
++                }
++        }
++
++        /* Append size bytes to decoder's buffer */
++        const VP8StatusCode status = WebPIAppend (data->idec, buf, size);
++        if (status != VP8_STATUS_SUSPENDED && status != VP8_STATUS_OK) {
++                g_set_error (error,
++                             GDK_PIXBUF_ERROR,
++                             GDK_PIXBUF_ERROR_CORRUPT_IMAGE,
++                             "WebP decoder failed with status code %d.",
++                             status);
++                return FALSE;
++        }
++
++        /* Decode decoder's updated buffer */
++        guint8 *dec_output;
++        dec_output = WebPIDecGetRGB (data->idec, &data->last_y, &w, &h, &stride);
++        if (dec_output == NULL && status != VP8_STATUS_SUSPENDED) {
++                g_set_error(error,
++                            GDK_PIXBUF_ERROR,
++                            GDK_PIXBUF_ERROR_FAILED,
++                            "Bad inputs to WebP decoder.");
++                return FALSE;
++        }
++
++        /* Copy decoder output to pixbuf */
++        gint y, row_offset = 0;
++        guchar *dptr;
++        dptr = gdk_pixbuf_get_pixels (data->pixbuf);
++        for (y = 0; y < data->last_y; ++y, row_offset += stride) {
++                g_memmove (dptr + row_offset, dec_output + row_offset, stride);
++        }
++
++        if (data->update_func) {
++                (* data->update_func) (data->pixbuf, 0, 0,
++                                       w,
++                                       data->last_y,
++                                       data->user_data);
++        }
++        return TRUE;
++}
++
++static int
++write_file (const uint8_t* data, size_t data_size, const WebPPicture* const pic)
++{
++        FILE* const out = (FILE *) pic->custom_ptr;
++        return data_size ? (fwrite (data, data_size, 1, out) == 1) : 1;
++}
++
++typedef struct {
++        GdkPixbufSaveFunc func;
++        gpointer          data;
++} save_context;
++
++static int
++save_callback (const uint8_t* data, size_t data_size, const WebPPicture* const pic)
++{
++        save_context *env = (save_context *) pic->custom_ptr;
++        return (* env->func) (env->data, data_size, NULL, (gpointer) data);
++}
++
++static gboolean
++real_save_webp (GdkPixbuf        *pixbuf,
++                gchar           **keys,
++                gchar           **values,
++                GError          **error,
++                gboolean          to_callback,
++                FILE             *f,
++                save_context     *context)
++{
++        WebPPicture picture;
++        WebPConfig config;
++        gint w, h, rowstride, has_alpha, rc;
++        guchar *pixels;
++
++        if (!WebPPictureInit(&picture) || !WebPConfigInit(&config)) {
++                g_set_error(error,
++                            GDK_PIXBUF_ERROR,
++                            GDK_PIXBUF_ERROR_BAD_OPTION,
++                            "WebP encoder version mismatch.");
++                return FALSE;
++        }
++
++        if (keys && *keys) {
++                gchar **kiter = keys;
++                gchar **viter = values;
++
++                while (*kiter) {
++                        if (strncmp (*kiter, "quality", 7) == 0) {
++                                float quality = (float) g_ascii_strtod (*viter, NULL);
++                                if (quality < 0 || quality > 100) {
++                                        g_set_error (error,
++                                                     GDK_PIXBUF_ERROR,
++                                                     GDK_PIXBUF_ERROR_BAD_OPTION,
++                                                     "WebP quality must be a value between 0 and 100.");
++                                        return FALSE;
++                                }
++                                config.quality = quality;
++                        } else if (strncmp (*kiter, "preset", 6) == 0) {
++                                WebPPreset preset;
++                                if (strncmp (*viter, "default", 7) == 0) {
++                                        preset = WEBP_PRESET_DEFAULT;
++                                } else if (strncmp (*viter, "photo", 5) == 0) {
++                                        preset = WEBP_PRESET_PHOTO;
++                                } else if (strncmp (*viter, "picture", 7) == 0) {
++                                        preset = WEBP_PRESET_PICTURE;
++                                } else if (strncmp (*viter, "drawing", 7) == 0) {
++                                        preset = WEBP_PRESET_DRAWING;
++                                } else if (strncmp (*viter, "icon", 4) == 0) {
++                                        preset = WEBP_PRESET_ICON;
++                                } else if (strncmp (*viter, "text", 4) == 0) {
++                                        preset = WEBP_PRESET_TEXT;
++                                } else {
++                                        g_set_error (error,
++                                                     GDK_PIXBUF_ERROR,
++                                                     GDK_PIXBUF_ERROR_BAD_OPTION,
++                                                     "WebP encoder invalid preset.");
++                                        return FALSE;
++                                }
++                                if (WebPConfigPreset (&config, preset, config.quality) == 0) {
++                                         g_set_error (error,
++                                                      GDK_PIXBUF_ERROR,
++                                                      GDK_PIXBUF_ERROR_FAILED,
++                                                      "Could not initialize decoder with preset.");
++                                         return FALSE;
++                                }
++                        }
++                        ++kiter;
++                        ++viter;
++                }
++        }
++
++        if (WebPValidateConfig (&config) != 1) {
++                g_set_error (error,
++                             GDK_PIXBUF_ERROR,
++                             GDK_PIXBUF_ERROR_BAD_OPTION,
++                             "Invalid encoding configuration");
++                return FALSE;
++        }
++
++        w = gdk_pixbuf_get_width (pixbuf);
++        h = gdk_pixbuf_get_height (pixbuf);
++        rowstride = gdk_pixbuf_get_rowstride (pixbuf);
++        has_alpha = gdk_pixbuf_get_has_alpha (pixbuf);
++        pixels = gdk_pixbuf_get_pixels (pixbuf);
++
++        picture.width = w;
++        picture.height = h;
++
++        if (has_alpha) {
++                rc = WebPPictureImportRGBA (&picture, pixels, rowstride);
++        } else {
++                rc = WebPPictureImportRGB (&picture, pixels, rowstride);
++        }
++        if (rc == 0) {
++                g_set_error (error,
++                             GDK_PIXBUF_ERROR,
++                             GDK_PIXBUF_ERROR_INSUFFICIENT_MEMORY,
++                             "Failed to allocate picture");
++                return FALSE;
++        }
++
++        if (to_callback) {
++                picture.writer = save_callback;
++                picture.custom_ptr = (void*) context;
++        } else {
++                picture.writer = write_file;
++                picture.custom_ptr = (void*) f;
++        }
++
++        if (WebPEncode(&config, &picture) == 0) {
++                fprintf(stderr, "Error! Cannot encode picture as WebP\n");
++        }
++
++        return TRUE;
++}
++
++static gboolean
++gdk_pixbuf__webp_image_save (FILE          *f,
++                             GdkPixbuf     *pixbuf,
++                             gchar        **keys,
++                             gchar        **values,
++                             GError       **error)
++{
++        return real_save_webp (pixbuf, keys, values, error,
++                               FALSE, f, NULL);
++}
++
++static gboolean
++gdk_pixbuf__webp_image_save_to_callback (GdkPixbufSaveFunc   save_func,
++                                         gpointer            user_data,
++                                         GdkPixbuf          *pixbuf,
++                                         gchar             **keys,
++                                         gchar             **values,
++                                         GError            **error)
++{
++        save_context *context = g_new0 (save_context, 1);
++        context->func = save_func;
++        context->data = user_data;
++        return real_save_webp (pixbuf, keys, values, error,
++                               TRUE, NULL, context);
++}
++
++#ifndef INCLUDE_webp
++#define MODULE_ENTRY(function) G_MODULE_EXPORT void function
++#else
++#define MODULE_ENTRY(function) void _gdk_pixbuf__webp_ ## function
++#endif
++
++MODULE_ENTRY (fill_vtable) (GdkPixbufModule *module)
++{
++        module->load = gdk_pixbuf__webp_image_load;
++        module->begin_load = gdk_pixbuf__webp_image_begin_load;
++        module->stop_load = gdk_pixbuf__webp_image_stop_load;
++        module->load_increment = gdk_pixbuf__webp_image_load_increment;
++        module->save = gdk_pixbuf__webp_image_save;
++        module->save_to_callback = gdk_pixbuf__webp_image_save_to_callback;
++}
++
++MODULE_ENTRY (fill_info) (GdkPixbufFormat *info)
++{
++        static GdkPixbufModulePattern signature[] = {
++                { "RIFFsizeWEBP", "    xxxx    ", 100 },
++                { NULL, NULL, 0 }
++        };
++
++        static gchar *mime_types[] = {
++                "image/webp",
++                "audio/x-riff", /* FIXME hack around systems missing mime type */
++                NULL
++        };
++
++        static gchar *extensions[] = {
++                "webp",
++                NULL
++        };
++
++        info->name        = "webp";
++        info->signature   = signature;
++        info->description = "The WebP image format";
++        info->mime_types  = mime_types;
++        info->extensions  = extensions;
++        info->flags       = GDK_PIXBUF_FORMAT_WRITABLE | GDK_PIXBUF_FORMAT_THREADSAFE;
++        info->license     = "LGPL";
++}
+\ No newline at end of file
+--- gdk-pixbuf/Makefile.in	Mon Sep 19 23:19:05 2016
++++ gdk-pixbuf/Makefile.in	Sun Sep 25 14:16:54 2016
+@@ -406,6 +406,39 @@
+ 	$(LDFLAGS) -o $@
+ @BUILD_DYNAMIC_MODULES_TRUE@@HAVE_JASPER_TRUE@@INCLUDE_JASPER_FALSE@am_libpixbufloader_jasper_la_rpath = -rpath \
+ @BUILD_DYNAMIC_MODULES_TRUE@@HAVE_JASPER_TRUE@@INCLUDE_JASPER_FALSE@	$(loaderdir)
++libpixbufloader_svg_la_DEPENDENCIES = $(am__DEPENDENCIES_2) \
++	$(am__DEPENDENCIES_3)
++am_libpixbufloader_svg_la_OBJECTS = io-svg.lo
++libpixbufloader_svg_la_OBJECTS =  \
++	$(am_libpixbufloader_svg_la_OBJECTS)
++libpixbufloader_svg_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
++	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
++	$(AM_CFLAGS) $(CFLAGS) $(libpixbufloader_svg_la_LDFLAGS) \
++	$(LDFLAGS) -o $@
++@BUILD_DYNAMIC_MODULES_TRUE@@HAVE_SVG_TRUE@@INCLUDE_SVG_FALSE@am_libpixbufloader_svg_la_rpath = -rpath \
++@BUILD_DYNAMIC_MODULES_TRUE@@HAVE_SVG_TRUE@@INCLUDE_SVG_FALSE@	$(loaderdir)
++libpixbufloader_webp_la_DEPENDENCIES = $(am__DEPENDENCIES_2) \
++	$(am__DEPENDENCIES_3)
++am_libpixbufloader_webp_la_OBJECTS = io-webp.lo
++libpixbufloader_webp_la_OBJECTS =  \
++	$(am_libpixbufloader_webp_la_OBJECTS)
++libpixbufloader_webp_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
++	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
++	$(AM_CFLAGS) $(CFLAGS) $(libpixbufloader_webp_la_LDFLAGS) \
++	$(LDFLAGS) -o $@
++@BUILD_DYNAMIC_MODULES_TRUE@@HAVE_WEBP_TRUE@@INCLUDE_WEBP_FALSE@am_libpixbufloader_webp_la_rpath = -rpath \
++@BUILD_DYNAMIC_MODULES_TRUE@@HAVE_WEBP_TRUE@@INCLUDE_WEBP_FALSE@	$(loaderdir)
++libpixbufloader_psd_la_DEPENDENCIES = $(am__DEPENDENCIES_2) \
++	$(am__DEPENDENCIES_3)
++am_libpixbufloader_psd_la_OBJECTS = io-psd.lo
++libpixbufloader_psd_la_OBJECTS =  \
++	$(am_libpixbufloader_psd_la_OBJECTS)
++libpixbufloader_psd_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
++	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
++	$(AM_CFLAGS) $(CFLAGS) $(libpixbufloader_psd_la_LDFLAGS) \
++	$(LDFLAGS) -o $@
++@BUILD_DYNAMIC_MODULES_TRUE@@HAVE_PSD_TRUE@@INCLUDE_PSD_FALSE@am_libpixbufloader_psd_la_rpath = -rpath \
++@BUILD_DYNAMIC_MODULES_TRUE@@HAVE_PSD_TRUE@@INCLUDE_PSD_FALSE@	$(loaderdir)
+ libpixbufloader_jpeg_la_DEPENDENCIES = $(am__DEPENDENCIES_2) \
+ 	$(am__DEPENDENCIES_3)
+ am_libpixbufloader_jpeg_la_OBJECTS = io-jpeg.lo
+@@ -417,6 +450,16 @@
+ 	$(LDFLAGS) -o $@
+ @BUILD_DYNAMIC_MODULES_TRUE@@BUILD_GDIPLUS_LOADERS_FALSE@@HAVE_JPEG_TRUE@@INCLUDE_JPEG_FALSE@am_libpixbufloader_jpeg_la_rpath = -rpath \
+ @BUILD_DYNAMIC_MODULES_TRUE@@BUILD_GDIPLUS_LOADERS_FALSE@@HAVE_JPEG_TRUE@@INCLUDE_JPEG_FALSE@	$(loaderdir)
++libpixbufloader_pcx_la_DEPENDENCIES = $(am__DEPENDENCIES_3)
++am_libpixbufloader_pcx_la_OBJECTS = io-pcx.lo
++libpixbufloader_pcx_la_OBJECTS = $(am_libpixbufloader_pcx_la_OBJECTS)
++libpixbufloader_pcx_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
++	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
++	$(AM_CFLAGS) $(CFLAGS) $(libpixbufloader_pcx_la_LDFLAGS) \
++	$(LDFLAGS) -o $@
++@BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_PCX_FALSE@am_libpixbufloader_pcx_la_rpath =  \
++@BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_PCX_FALSE@	-rpath \
++@BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_PCX_FALSE@	$(loaderdir)
+ libpixbufloader_png_la_DEPENDENCIES = $(am__DEPENDENCIES_2) \
+ 	$(am__DEPENDENCIES_3)
+ am_libpixbufloader_png_la_OBJECTS = io-png.lo
+@@ -448,6 +491,16 @@
+ @BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_QTIF_FALSE@am_libpixbufloader_qtif_la_rpath =  \
+ @BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_QTIF_FALSE@	-rpath \
+ @BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_QTIF_FALSE@	$(loaderdir)
++libpixbufloader_ras_la_DEPENDENCIES = $(am__DEPENDENCIES_3)
++am_libpixbufloader_ras_la_OBJECTS = io-ras.lo
++libpixbufloader_ras_la_OBJECTS = $(am_libpixbufloader_ras_la_OBJECTS)
++libpixbufloader_ras_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
++	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
++	$(AM_CFLAGS) $(CFLAGS) $(libpixbufloader_ras_la_LDFLAGS) \
++	$(LDFLAGS) -o $@
++@BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_RAS_FALSE@am_libpixbufloader_ras_la_rpath =  \
++@BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_RAS_FALSE@	-rpath \
++@BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_RAS_FALSE@	$(loaderdir)
+ libpixbufloader_tga_la_DEPENDENCIES = $(am__DEPENDENCIES_3)
+ am_libpixbufloader_tga_la_OBJECTS = io-tga.lo \
+ 	gdk-pixbuf-buffer-queue.lo
+@@ -470,6 +523,17 @@
+ 	$(LDFLAGS) -o $@
+ @BUILD_DYNAMIC_MODULES_TRUE@@BUILD_GDIPLUS_LOADERS_FALSE@@HAVE_TIFF_TRUE@@INCLUDE_TIFF_FALSE@am_libpixbufloader_tiff_la_rpath = -rpath \
+ @BUILD_DYNAMIC_MODULES_TRUE@@BUILD_GDIPLUS_LOADERS_FALSE@@HAVE_TIFF_TRUE@@INCLUDE_TIFF_FALSE@	$(loaderdir)
++libpixbufloader_wbmp_la_DEPENDENCIES = $(am__DEPENDENCIES_3)
++am_libpixbufloader_wbmp_la_OBJECTS = io-wbmp.lo
++libpixbufloader_wbmp_la_OBJECTS =  \
++	$(am_libpixbufloader_wbmp_la_OBJECTS)
++libpixbufloader_wbmp_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
++	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
++	$(AM_CFLAGS) $(CFLAGS) $(libpixbufloader_wbmp_la_LDFLAGS) \
++	$(LDFLAGS) -o $@
++@BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_WBMP_FALSE@am_libpixbufloader_wbmp_la_rpath =  \
++@BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_WBMP_FALSE@	-rpath \
++@BUILD_DYNAMIC_MODULES_TRUE@@INCLUDE_WBMP_FALSE@	$(loaderdir)
+ libpixbufloader_xbm_la_DEPENDENCIES = $(am__DEPENDENCIES_3)
+ am_libpixbufloader_xbm_la_OBJECTS = io-xbm.lo
+ libpixbufloader_xbm_la_OBJECTS = $(am_libpixbufloader_xbm_la_OBJECTS)
+@@ -569,11 +633,31 @@
+ libstatic_pixbufloader_jasper_la_OBJECTS =  \
+ 	$(am_libstatic_pixbufloader_jasper_la_OBJECTS)
+ @HAVE_JASPER_TRUE@@INCLUDE_JASPER_TRUE@am_libstatic_pixbufloader_jasper_la_rpath =
++libstatic_pixbufloader_svg_la_LIBADD =
++am_libstatic_pixbufloader_svg_la_OBJECTS = io-svg.lo
++libstatic_pixbufloader_svg_la_OBJECTS =  \
++	$(am_libstatic_pixbufloader_svg_la_OBJECTS)
++@HAVE_SVG_TRUE@@INCLUDE_SVG_TRUE@am_libstatic_pixbufloader_svg_la_rpath =
++libstatic_pixbufloader_webp_la_LIBADD =
++am_libstatic_pixbufloader_webp_la_OBJECTS = io-webp.lo
++libstatic_pixbufloader_webp_la_OBJECTS =  \
++	$(am_libstatic_pixbufloader_webp_la_OBJECTS)
++@HAVE_WEBP_TRUE@@INCLUDE_WEBP_TRUE@am_libstatic_pixbufloader_webp_la_rpath =
++libstatic_pixbufloader_psd_la_LIBADD =
++am_libstatic_pixbufloader_psd_la_OBJECTS = io-psd.lo
++libstatic_pixbufloader_psd_la_OBJECTS =  \
++	$(am_libstatic_pixbufloader_psd_la_OBJECTS)
++@HAVE_PSD_TRUE@@INCLUDE_PSD_TRUE@am_libstatic_pixbufloader_psd_la_rpath =
+ libstatic_pixbufloader_jpeg_la_LIBADD =
+ am_libstatic_pixbufloader_jpeg_la_OBJECTS = io-jpeg.lo
+ libstatic_pixbufloader_jpeg_la_OBJECTS =  \
+ 	$(am_libstatic_pixbufloader_jpeg_la_OBJECTS)
+ @BUILD_GDIPLUS_LOADERS_FALSE@@HAVE_JPEG_TRUE@@INCLUDE_JPEG_TRUE@am_libstatic_pixbufloader_jpeg_la_rpath =
++libstatic_pixbufloader_pcx_la_LIBADD =
++am_libstatic_pixbufloader_pcx_la_OBJECTS = io-pcx.lo
++libstatic_pixbufloader_pcx_la_OBJECTS =  \
++	$(am_libstatic_pixbufloader_pcx_la_OBJECTS)
++@INCLUDE_PCX_TRUE@am_libstatic_pixbufloader_pcx_la_rpath =
+ libstatic_pixbufloader_pixdata_la_LIBADD =
+ am_libstatic_pixbufloader_pixdata_la_OBJECTS = io-pixdata.lo
+ libstatic_pixbufloader_pixdata_la_OBJECTS =  \
+@@ -593,6 +677,11 @@
+ libstatic_pixbufloader_qtif_la_OBJECTS =  \
+ 	$(am_libstatic_pixbufloader_qtif_la_OBJECTS)
+ @INCLUDE_QTIF_TRUE@am_libstatic_pixbufloader_qtif_la_rpath =
++libstatic_pixbufloader_ras_la_LIBADD =
++am_libstatic_pixbufloader_ras_la_OBJECTS = io-ras.lo
++libstatic_pixbufloader_ras_la_OBJECTS =  \
++	$(am_libstatic_pixbufloader_ras_la_OBJECTS)
++@INCLUDE_RAS_TRUE@am_libstatic_pixbufloader_ras_la_rpath =
+ libstatic_pixbufloader_tga_la_LIBADD =
+ am_libstatic_pixbufloader_tga_la_OBJECTS = io-tga.lo \
+ 	gdk-pixbuf-buffer-queue.lo
+@@ -604,6 +693,11 @@
+ libstatic_pixbufloader_tiff_la_OBJECTS =  \
+ 	$(am_libstatic_pixbufloader_tiff_la_OBJECTS)
+ @BUILD_GDIPLUS_LOADERS_FALSE@@HAVE_TIFF_TRUE@@INCLUDE_TIFF_TRUE@am_libstatic_pixbufloader_tiff_la_rpath =
++libstatic_pixbufloader_wbmp_la_LIBADD =
++am_libstatic_pixbufloader_wbmp_la_OBJECTS = io-wbmp.lo
++libstatic_pixbufloader_wbmp_la_OBJECTS =  \
++	$(am_libstatic_pixbufloader_wbmp_la_OBJECTS)
++@INCLUDE_WBMP_TRUE@am_libstatic_pixbufloader_wbmp_la_rpath =
+ libstatic_pixbufloader_xbm_la_LIBADD =
+ am_libstatic_pixbufloader_xbm_la_OBJECTS = io-xbm.lo
+ libstatic_pixbufloader_xbm_la_OBJECTS =  \
+@@ -675,12 +769,18 @@
+ 	$(libpixbufloader_icns_la_SOURCES) \
+ 	$(libpixbufloader_ico_la_SOURCES) \
+ 	$(libpixbufloader_jasper_la_SOURCES) \
++	$(libpixbufloader_svg_la_SOURCES) \
++	$(libpixbufloader_webp_la_SOURCES) \
++	$(libpixbufloader_psd_la_SOURCES) \
+ 	$(libpixbufloader_jpeg_la_SOURCES) \
++	$(libpixbufloader_pcx_la_SOURCES) \
+ 	$(libpixbufloader_png_la_SOURCES) \
+ 	$(libpixbufloader_pnm_la_SOURCES) \
+ 	$(libpixbufloader_qtif_la_SOURCES) \
++	$(libpixbufloader_ras_la_SOURCES) \
+ 	$(libpixbufloader_tga_la_SOURCES) \
+ 	$(libpixbufloader_tiff_la_SOURCES) \
++	$(libpixbufloader_wbmp_la_SOURCES) \
+ 	$(libpixbufloader_xbm_la_SOURCES) \
+ 	$(libpixbufloader_xpm_la_SOURCES) \
+ 	$(libstatic_pixbufloader_ani_la_SOURCES) \
+@@ -696,13 +796,19 @@
+ 	$(libstatic_pixbufloader_icns_la_SOURCES) \
+ 	$(libstatic_pixbufloader_ico_la_SOURCES) \
+ 	$(libstatic_pixbufloader_jasper_la_SOURCES) \
++	$(libstatic_pixbufloader_svg_la_SOURCES) \
++	$(libstatic_pixbufloader_webp_la_SOURCES) \
++	$(libstatic_pixbufloader_psd_la_SOURCES) \
+ 	$(libstatic_pixbufloader_jpeg_la_SOURCES) \
++	$(libstatic_pixbufloader_pcx_la_SOURCES) \
+ 	$(libstatic_pixbufloader_pixdata_la_SOURCES) \
+ 	$(libstatic_pixbufloader_png_la_SOURCES) \
+ 	$(libstatic_pixbufloader_pnm_la_SOURCES) \
+ 	$(libstatic_pixbufloader_qtif_la_SOURCES) \
++	$(libstatic_pixbufloader_ras_la_SOURCES) \
+ 	$(libstatic_pixbufloader_tga_la_SOURCES) \
+ 	$(libstatic_pixbufloader_tiff_la_SOURCES) \
++	$(libstatic_pixbufloader_wbmp_la_SOURCES) \
+ 	$(libstatic_pixbufloader_xbm_la_SOURCES) \
+ 	$(libstatic_pixbufloader_xpm_la_SOURCES) \
+ 	$(gdk_pixbuf_csource_SOURCES) $(gdk_pixbuf_pixdata_SOURCES) \
+@@ -722,11 +828,14 @@
+ 	$(libpixbufloader_ico_la_SOURCES) \
+ 	$(libpixbufloader_jasper_la_SOURCES) \
+ 	$(libpixbufloader_jpeg_la_SOURCES) \
++	$(libpixbufloader_pcx_la_SOURCES) \
+ 	$(libpixbufloader_png_la_SOURCES) \
+ 	$(libpixbufloader_pnm_la_SOURCES) \
+ 	$(libpixbufloader_qtif_la_SOURCES) \
++	$(libpixbufloader_ras_la_SOURCES) \
+ 	$(libpixbufloader_tga_la_SOURCES) \
+ 	$(libpixbufloader_tiff_la_SOURCES) \
++	$(libpixbufloader_wbmp_la_SOURCES) \
+ 	$(libpixbufloader_xbm_la_SOURCES) \
+ 	$(libpixbufloader_xpm_la_SOURCES) \
+ 	$(libstatic_pixbufloader_ani_la_SOURCES) \
+@@ -742,13 +851,19 @@
+ 	$(libstatic_pixbufloader_icns_la_SOURCES) \
+ 	$(libstatic_pixbufloader_ico_la_SOURCES) \
+ 	$(libstatic_pixbufloader_jasper_la_SOURCES) \
++	$(libstatic_pixbufloader_svg_la_SOURCES) \
++	$(libstatic_pixbufloader_webp_la_SOURCES) \
++	$(libstatic_pixbufloader_psd_la_SOURCES) \
+ 	$(libstatic_pixbufloader_jpeg_la_SOURCES) \
++	$(libstatic_pixbufloader_pcx_la_SOURCES) \
+ 	$(libstatic_pixbufloader_pixdata_la_SOURCES) \
+ 	$(libstatic_pixbufloader_png_la_SOURCES) \
+ 	$(libstatic_pixbufloader_pnm_la_SOURCES) \
+ 	$(libstatic_pixbufloader_qtif_la_SOURCES) \
++	$(libstatic_pixbufloader_ras_la_SOURCES) \
+ 	$(libstatic_pixbufloader_tga_la_SOURCES) \
+ 	$(libstatic_pixbufloader_tiff_la_SOURCES) \
++	$(libstatic_pixbufloader_wbmp_la_SOURCES) \
+ 	$(libstatic_pixbufloader_xbm_la_SOURCES) \
+ 	$(libstatic_pixbufloader_xpm_la_SOURCES) \
+ 	$(gdk_pixbuf_csource_SOURCES) $(gdk_pixbuf_pixdata_SOURCES) \
+@@ -1058,6 +1173,14 @@
+ libpixbufloader_bmp_la_LIBADD = $(module_libs)
+ 
+ #
++# The WBMP loader
++#
++libstatic_pixbufloader_wbmp_la_SOURCES = io-wbmp.c
++libpixbufloader_wbmp_la_SOURCES = io-wbmp.c
++libpixbufloader_wbmp_la_LDFLAGS = -avoid-version -module $(no_undefined)
++libpixbufloader_wbmp_la_LIBADD = $(module_libs)
++
++#
+ # The GdkPixdata loader, always built in
+ #
+ libstatic_pixbufloader_pixdata_la_SOURCES = io-pixdata.c
+@@ -1103,6 +1226,14 @@
+ libpixbufloader_pnm_la_LIBADD = $(module_libs)
+ 
+ #
++# The RAS loader
++#
++libstatic_pixbufloader_ras_la_SOURCES = io-ras.c
++libpixbufloader_ras_la_SOURCES = io-ras.c
++libpixbufloader_ras_la_LDFLAGS = -avoid-version -module $(no_undefined)
++libpixbufloader_ras_la_LIBADD = $(module_libs)
++
++#
+ # The TIFF loader
+ #
+ libstatic_pixbufloader_tiff_la_SOURCES = io-tiff.c
+@@ -1143,6 +1274,14 @@
+ libpixbufloader_icns_la_LIBADD = $(module_libs)
+ 
+ #
++# The PCX loader
++#
++libstatic_pixbufloader_pcx_la_SOURCES = io-pcx.c
++libpixbufloader_pcx_la_SOURCES = io-pcx.c
++libpixbufloader_pcx_la_LDFLAGS = -avoid-version -module $(no_undefined)
++libpixbufloader_pcx_la_LIBADD = $(module_libs)
++
++#
+ # The JPEG2000 loader
+ #
+ libstatic_pixbufloader_jasper_la_SOURCES = io-jasper.c
+@@ -1151,6 +1290,30 @@
+ libpixbufloader_jasper_la_LIBADD = $(LIBJASPER) $(module_libs)
+ 
+ #
++# The SVG loader
++#
++libstatic_pixbufloader_svg_la_SOURCES = io-svg.c
++libpixbufloader_svg_la_SOURCES = io-svg.c
++libpixbufloader_svg_la_LDFLAGS = -avoid-version -module $(no_undefined)
++libpixbufloader_svg_la_LIBADD = $(LIBSVG) $(module_libs)
++
++#
++# The WebP loader
++#
++libstatic_pixbufloader_webp_la_SOURCES = io-webp.c
++libpixbufloader_webp_la_SOURCES = io-webp.c
++libpixbufloader_webp_la_LDFLAGS = -avoid-version -module $(no_undefined)
++libpixbufloader_webp_la_LIBADD = $(LIBWEBP) $(module_libs)
++
++#
++# The PSD loader
++#
++libstatic_pixbufloader_psd_la_SOURCES = io-psd.c
++libpixbufloader_psd_la_SOURCES = io-psd.c
++libpixbufloader_psd_la_LDFLAGS = -avoid-version -module $(no_undefined)
++libpixbufloader_psd_la_LIBADD = $(LIBPSD) $(module_libs)
++
++#
+ # The QTIF loader
+ #
+ libstatic_pixbufloader_qtif_la_SOURCES = io-qtif.c
+@@ -1303,18 +1466,30 @@
+ # End of loaders not built if building GDI+ loader
+ @HAVE_PNG_TRUE@@INCLUDE_PNG_TRUE@STATIC_PNG_LIB = libstatic-pixbufloader-png.la
+ @HAVE_PNG_TRUE@@INCLUDE_PNG_FALSE@PNG_LIB = libpixbufloader-png.la
++@INCLUDE_WBMP_TRUE@STATIC_WBMP_LIB = libstatic-pixbufloader-wbmp.la
++@INCLUDE_WBMP_FALSE@WBMP_LIB = libpixbufloader-wbmp.la
+ @INCLUDE_ANI_TRUE@STATIC_ANI_LIB = libstatic-pixbufloader-ani.la
+ @INCLUDE_ANI_FALSE@ANI_LIB = libpixbufloader-ani.la
+ @INCLUDE_PNM_TRUE@STATIC_PNM_LIB = libstatic-pixbufloader-pnm.la
+ @INCLUDE_PNM_FALSE@PNM_LIB = libpixbufloader-pnm.la
++@INCLUDE_RAS_TRUE@STATIC_RAS_LIB = libstatic-pixbufloader-ras.la
++@INCLUDE_RAS_FALSE@RAS_LIB = libpixbufloader-ras.la
+ @INCLUDE_XPM_TRUE@STATIC_XPM_LIB = libstatic-pixbufloader-xpm.la
+ @INCLUDE_XPM_FALSE@XPM_LIB = libpixbufloader-xpm.la
+ @INCLUDE_XBM_TRUE@STATIC_XBM_LIB = libstatic-pixbufloader-xbm.la
+ @INCLUDE_XBM_FALSE@XBM_LIB = libpixbufloader-xbm.la
+ @INCLUDE_TGA_TRUE@STATIC_TGA_LIB = libstatic-pixbufloader-tga.la
+ @INCLUDE_TGA_FALSE@TGA_LIB = libpixbufloader-tga.la
++@INCLUDE_PCX_TRUE@STATIC_PCX_LIB = libstatic-pixbufloader-pcx.la
++@INCLUDE_PCX_FALSE@PCX_LIB = libpixbufloader-pcx.la
+ @INCLUDE_ICNS_TRUE@STATIC_ICNS_LIB = libstatic-pixbufloader-icns.la
+ @INCLUDE_ICNS_FALSE@ICNS_LIB = libpixbufloader-icns.la
++@INCLUDE_SVG_TRUE@STATIC_SVG_LIB = libstatic-pixbufloader-svg.la
++@INCLUDE_SVG_FALSE@SVG_LIB = libpixbufloader-svg.la
++@INCLUDE_WEBP_TRUE@STATIC_webp_LIB = libstatic-pixbufloader-webp.la
++@INCLUDE_WEBP_FALSE@WEBP_LIB = libpixbufloader-webp.la
++@INCLUDE_PSD_TRUE@STATIC_PSD_LIB = libstatic-pixbufloader-psd.la
++@INCLUDE_PSD_FALSE@PSD_LIB = libpixbufloader-psd.la
+ @HAVE_JASPER_TRUE@@INCLUDE_JASPER_TRUE@STATIC_JASPER_LIB = libstatic-pixbufloader-jasper.la
+ @HAVE_JASPER_TRUE@@INCLUDE_JASPER_FALSE@JASPER_LIB = libpixbufloader-jasper.la
+ @INCLUDE_QTIF_TRUE@STATIC_QTIF_LIB = libstatic-pixbufloader-qtif.la
+@@ -1325,17 +1500,23 @@
+ @BUILD_DYNAMIC_MODULES_TRUE@loader_LTLIBRARIES = \
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(PNG_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(BMP_LIB)	\
++@BUILD_DYNAMIC_MODULES_TRUE@	$(WBMP_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(GIF_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(ICO_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(ANI_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(JPEG_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(PNM_LIB)	\
++@BUILD_DYNAMIC_MODULES_TRUE@	$(RAS_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(TIFF_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(XPM_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(XBM_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(TGA_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(ICNS_LIB)	\
++@BUILD_DYNAMIC_MODULES_TRUE@	$(PCX_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(JASPER_LIB)	\
++@BUILD_DYNAMIC_MODULES_TRUE@	$(SVG_LIB)	\
++@BUILD_DYNAMIC_MODULES_TRUE@	$(WEBP_LIB)	\
++@BUILD_DYNAMIC_MODULES_TRUE@	$(PSD_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(QTIF_LIB)	\
+ @BUILD_DYNAMIC_MODULES_TRUE@	$(GDIPLUS_LIBS)
+ 
+@@ -1343,17 +1524,23 @@
+ 	$(STATIC_PIXDATA_LIB)	\
+ 	$(STATIC_PNG_LIB)	\
+ 	$(STATIC_BMP_LIB)	\
++	$(STATIC_WBMP_LIB)	\
+ 	$(STATIC_GIF_LIB)	\
+ 	$(STATIC_ICO_LIB)	\
+ 	$(STATIC_ANI_LIB)	\
+ 	$(STATIC_JPEG_LIB)	\
+ 	$(STATIC_PNM_LIB)	\
++	$(STATIC_RAS_LIB)	\
+ 	$(STATIC_TIFF_LIB)	\
+ 	$(STATIC_XPM_LIB)	\
+ 	$(STATIC_XBM_LIB)	\
+ 	$(STATIC_TGA_LIB)	\
+ 	$(STATIC_ICNS_LIB)	\
++	$(STATIC_PCX_LIB)	\
+ 	$(STATIC_JASPER_LIB)	\
++	$(STATIC_SVG_LIB)	\
++	$(STATIC_WEBP_LIB)	\
++	$(STATIC_PSD_LIB)	\
+ 	$(STATIC_QTIF_LIB)	\
+ 	$(STATIC_GDIPLUS_LIBS)
+ 
+@@ -1471,13 +1658,19 @@
+ 	$(libgdk_pixbuf_2_0_la_SOURCES)		\
+ 	$(libstatic_pixbufloader_ani_la_SOURCES)	\
+ 	$(libstatic_pixbufloader_icns_la_SOURCES)	\
++	$(libstatic_pixbufloader_pcx_la_SOURCES)	\
+ 	$(libstatic_pixbufloader_pixdata_la_SOURCES)	\
+ 	$(libstatic_pixbufloader_pnm_la_SOURCES)	\
+ 	$(libstatic_pixbufloader_png_la_SOURCES)	\
+ 	$(libstatic_pixbufloader_qtif_la_SOURCES)	\
++	$(libstatic_pixbufloader_ras_la_SOURCES)	\
+ 	$(libstatic_pixbufloader_tga_la_SOURCES)	\
+ 	$(libstatic_pixbufloader_xpm_la_SOURCES)	\
+-	$(libstatic_pixbufloader_xbm_la_SOURCES)
++	$(libstatic_pixbufloader_xbm_la_SOURCES)	\
++	$(libstatic_pixbufloader_svg_la_SOURCES)	\
++	$(libstatic_pixbufloader_psd_la_SOURCES)	\
++	$(libstatic_pixbufloader_webp_la_SOURCES)	\
++	$(libstatic_pixbufloader_wbmp_la_SOURCES)
+ 
+ gdk_pixbuf_EXCLUDES = gdkpdummy
+ gdk_pixbuf_HEADERS_DIR = $(libgdk_pixbufincludedir)
+@@ -1726,9 +1919,21 @@
+ libpixbufloader-jasper.la: $(libpixbufloader_jasper_la_OBJECTS) $(libpixbufloader_jasper_la_DEPENDENCIES) $(EXTRA_libpixbufloader_jasper_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(libpixbufloader_jasper_la_LINK) $(am_libpixbufloader_jasper_la_rpath) $(libpixbufloader_jasper_la_OBJECTS) $(libpixbufloader_jasper_la_LIBADD) $(LIBS)
+ 
++libpixbufloader-svg.la: $(libpixbufloader_svg_la_OBJECTS) $(libpixbufloader_svg_la_DEPENDENCIES) $(EXTRA_libpixbufloader_svg_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(libpixbufloader_svg_la_LINK) $(am_libpixbufloader_svg_la_rpath) $(libpixbufloader_svg_la_OBJECTS) $(libpixbufloader_svg_la_LIBADD) $(LIBS)
++
++libpixbufloader-webp.la: $(libpixbufloader_webp_la_OBJECTS) $(libpixbufloader_webp_la_DEPENDENCIES) $(EXTRA_libpixbufloader_webp_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(libpixbufloader_webp_la_LINK) $(am_libpixbufloader_webp_la_rpath) $(libpixbufloader_webp_la_OBJECTS) $(libpixbufloader_webp_la_LIBADD) $(LIBS)
++
++libpixbufloader-psd.la: $(libpixbufloader_psd_la_OBJECTS) $(libpixbufloader_psd_la_DEPENDENCIES) $(EXTRA_libpixbufloader_psd_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(libpixbufloader_psd_la_LINK) $(am_libpixbufloader_psd_la_rpath) $(libpixbufloader_psd_la_OBJECTS) $(libpixbufloader_psd_la_LIBADD) $(LIBS)
++
+ libpixbufloader-jpeg.la: $(libpixbufloader_jpeg_la_OBJECTS) $(libpixbufloader_jpeg_la_DEPENDENCIES) $(EXTRA_libpixbufloader_jpeg_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(libpixbufloader_jpeg_la_LINK) $(am_libpixbufloader_jpeg_la_rpath) $(libpixbufloader_jpeg_la_OBJECTS) $(libpixbufloader_jpeg_la_LIBADD) $(LIBS)
+ 
++libpixbufloader-pcx.la: $(libpixbufloader_pcx_la_OBJECTS) $(libpixbufloader_pcx_la_DEPENDENCIES) $(EXTRA_libpixbufloader_pcx_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(libpixbufloader_pcx_la_LINK) $(am_libpixbufloader_pcx_la_rpath) $(libpixbufloader_pcx_la_OBJECTS) $(libpixbufloader_pcx_la_LIBADD) $(LIBS)
++
+ libpixbufloader-png.la: $(libpixbufloader_png_la_OBJECTS) $(libpixbufloader_png_la_DEPENDENCIES) $(EXTRA_libpixbufloader_png_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(libpixbufloader_png_la_LINK) $(am_libpixbufloader_png_la_rpath) $(libpixbufloader_png_la_OBJECTS) $(libpixbufloader_png_la_LIBADD) $(LIBS)
+ 
+@@ -1738,12 +1943,18 @@
+ libpixbufloader-qtif.la: $(libpixbufloader_qtif_la_OBJECTS) $(libpixbufloader_qtif_la_DEPENDENCIES) $(EXTRA_libpixbufloader_qtif_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(libpixbufloader_qtif_la_LINK) $(am_libpixbufloader_qtif_la_rpath) $(libpixbufloader_qtif_la_OBJECTS) $(libpixbufloader_qtif_la_LIBADD) $(LIBS)
+ 
++libpixbufloader-ras.la: $(libpixbufloader_ras_la_OBJECTS) $(libpixbufloader_ras_la_DEPENDENCIES) $(EXTRA_libpixbufloader_ras_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(libpixbufloader_ras_la_LINK) $(am_libpixbufloader_ras_la_rpath) $(libpixbufloader_ras_la_OBJECTS) $(libpixbufloader_ras_la_LIBADD) $(LIBS)
++
+ libpixbufloader-tga.la: $(libpixbufloader_tga_la_OBJECTS) $(libpixbufloader_tga_la_DEPENDENCIES) $(EXTRA_libpixbufloader_tga_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(libpixbufloader_tga_la_LINK) $(am_libpixbufloader_tga_la_rpath) $(libpixbufloader_tga_la_OBJECTS) $(libpixbufloader_tga_la_LIBADD) $(LIBS)
+ 
+ libpixbufloader-tiff.la: $(libpixbufloader_tiff_la_OBJECTS) $(libpixbufloader_tiff_la_DEPENDENCIES) $(EXTRA_libpixbufloader_tiff_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(libpixbufloader_tiff_la_LINK) $(am_libpixbufloader_tiff_la_rpath) $(libpixbufloader_tiff_la_OBJECTS) $(libpixbufloader_tiff_la_LIBADD) $(LIBS)
+ 
++libpixbufloader-wbmp.la: $(libpixbufloader_wbmp_la_OBJECTS) $(libpixbufloader_wbmp_la_DEPENDENCIES) $(EXTRA_libpixbufloader_wbmp_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(libpixbufloader_wbmp_la_LINK) $(am_libpixbufloader_wbmp_la_rpath) $(libpixbufloader_wbmp_la_OBJECTS) $(libpixbufloader_wbmp_la_LIBADD) $(LIBS)
++
+ libpixbufloader-xbm.la: $(libpixbufloader_xbm_la_OBJECTS) $(libpixbufloader_xbm_la_DEPENDENCIES) $(EXTRA_libpixbufloader_xbm_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(libpixbufloader_xbm_la_LINK) $(am_libpixbufloader_xbm_la_rpath) $(libpixbufloader_xbm_la_OBJECTS) $(libpixbufloader_xbm_la_LIBADD) $(LIBS)
+ 
+@@ -1789,9 +2000,21 @@
+ libstatic-pixbufloader-jasper.la: $(libstatic_pixbufloader_jasper_la_OBJECTS) $(libstatic_pixbufloader_jasper_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_jasper_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_jasper_la_rpath) $(libstatic_pixbufloader_jasper_la_OBJECTS) $(libstatic_pixbufloader_jasper_la_LIBADD) $(LIBS)
+ 
++libstatic-pixbufloader-svg.la: $(libstatic_pixbufloader_svg_la_OBJECTS) $(libstatic_pixbufloader_svg_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_svg_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_svg_la_rpath) $(libstatic_pixbufloader_svg_la_OBJECTS) $(libstatic_pixbufloader_svg_la_LIBADD) $(LIBS)
++
++libstatic-pixbufloader-webp.la: $(libstatic_pixbufloader_webp_la_OBJECTS) $(libstatic_pixbufloader_webp_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_webp_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_webp_la_rpath) $(libstatic_pixbufloader_webp_la_OBJECTS) $(libstatic_pixbufloader_webp_la_LIBADD) $(LIBS)
++
++libstatic-pixbufloader-psd.la: $(libstatic_pixbufloader_psd_la_OBJECTS) $(libstatic_pixbufloader_psd_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_psd_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_psd_la_rpath) $(libstatic_pixbufloader_psd_la_OBJECTS) $(libstatic_pixbufloader_psd_la_LIBADD) $(LIBS)
++
+ libstatic-pixbufloader-jpeg.la: $(libstatic_pixbufloader_jpeg_la_OBJECTS) $(libstatic_pixbufloader_jpeg_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_jpeg_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_jpeg_la_rpath) $(libstatic_pixbufloader_jpeg_la_OBJECTS) $(libstatic_pixbufloader_jpeg_la_LIBADD) $(LIBS)
+ 
++libstatic-pixbufloader-pcx.la: $(libstatic_pixbufloader_pcx_la_OBJECTS) $(libstatic_pixbufloader_pcx_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_pcx_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_pcx_la_rpath) $(libstatic_pixbufloader_pcx_la_OBJECTS) $(libstatic_pixbufloader_pcx_la_LIBADD) $(LIBS)
++
+ libstatic-pixbufloader-pixdata.la: $(libstatic_pixbufloader_pixdata_la_OBJECTS) $(libstatic_pixbufloader_pixdata_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_pixdata_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(LINK)  $(libstatic_pixbufloader_pixdata_la_OBJECTS) $(libstatic_pixbufloader_pixdata_la_LIBADD) $(LIBS)
+ 
+@@ -1804,12 +2027,18 @@
+ libstatic-pixbufloader-qtif.la: $(libstatic_pixbufloader_qtif_la_OBJECTS) $(libstatic_pixbufloader_qtif_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_qtif_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_qtif_la_rpath) $(libstatic_pixbufloader_qtif_la_OBJECTS) $(libstatic_pixbufloader_qtif_la_LIBADD) $(LIBS)
+ 
++libstatic-pixbufloader-ras.la: $(libstatic_pixbufloader_ras_la_OBJECTS) $(libstatic_pixbufloader_ras_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_ras_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_ras_la_rpath) $(libstatic_pixbufloader_ras_la_OBJECTS) $(libstatic_pixbufloader_ras_la_LIBADD) $(LIBS)
++
+ libstatic-pixbufloader-tga.la: $(libstatic_pixbufloader_tga_la_OBJECTS) $(libstatic_pixbufloader_tga_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_tga_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_tga_la_rpath) $(libstatic_pixbufloader_tga_la_OBJECTS) $(libstatic_pixbufloader_tga_la_LIBADD) $(LIBS)
+ 
+ libstatic-pixbufloader-tiff.la: $(libstatic_pixbufloader_tiff_la_OBJECTS) $(libstatic_pixbufloader_tiff_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_tiff_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_tiff_la_rpath) $(libstatic_pixbufloader_tiff_la_OBJECTS) $(libstatic_pixbufloader_tiff_la_LIBADD) $(LIBS)
+ 
++libstatic-pixbufloader-wbmp.la: $(libstatic_pixbufloader_wbmp_la_OBJECTS) $(libstatic_pixbufloader_wbmp_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_wbmp_la_DEPENDENCIES) 
++	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_wbmp_la_rpath) $(libstatic_pixbufloader_wbmp_la_OBJECTS) $(libstatic_pixbufloader_wbmp_la_LIBADD) $(LIBS)
++
+ libstatic-pixbufloader-xbm.la: $(libstatic_pixbufloader_xbm_la_OBJECTS) $(libstatic_pixbufloader_xbm_la_DEPENDENCIES) $(EXTRA_libstatic_pixbufloader_xbm_la_DEPENDENCIES) 
+ 	$(AM_V_CCLD)$(LINK) $(am_libstatic_pixbufloader_xbm_la_rpath) $(libstatic_pixbufloader_xbm_la_OBJECTS) $(libstatic_pixbufloader_xbm_la_LIBADD) $(LIBS)
+ 
+@@ -1916,13 +2145,19 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-icns.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-ico.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-jasper.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-svg.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-webp.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-psd.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-jpeg.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-pcx.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-pixdata.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-png.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-pnm.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-qtif.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-ras.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-tga.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-tiff.Plo@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-wbmp.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-xbm.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/io-xpm.Plo@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libgdk_pixbuf_2_0_la-gdk-pixbuf-animation.Plo@am__quote@
+--- configure	Mon Sep 19 23:19:03 2016
++++ configure	Sun Sep 25 14:34:20 2016
+@@ -720,6 +720,8 @@
+ INCLUDE_JASPER_TRUE
+ INCLUDE_ICNS_FALSE
+ INCLUDE_ICNS_TRUE
++INCLUDE_PCX_FALSE
++INCLUDE_PCX_TRUE
+ INCLUDE_TGA_FALSE
+ INCLUDE_TGA_TRUE
+ INCLUDE_XBM_FALSE
+@@ -728,6 +730,8 @@
+ INCLUDE_XPM_TRUE
+ INCLUDE_TIFF_FALSE
+ INCLUDE_TIFF_TRUE
++INCLUDE_RAS_FALSE
++INCLUDE_RAS_TRUE
+ INCLUDE_PNM_FALSE
+ INCLUDE_PNM_TRUE
+ INCLUDE_JPEG_FALSE
+@@ -738,6 +742,8 @@
+ INCLUDE_ICO_TRUE
+ INCLUDE_GIF_FALSE
+ INCLUDE_GIF_TRUE
++INCLUDE_WBMP_FALSE
++INCLUDE_WBMP_TRUE
+ INCLUDE_BMP_FALSE
+ INCLUDE_BMP_TRUE
+ INCLUDE_PNG_FALSE
+@@ -18605,7 +18611,7 @@
+ fi
+ 
+ 
+-if test x$os_win32 = xno || test x$with_gdiplus = xno; then
++#if test x$os_win32 = xno || test x$with_gdiplus = xno; then
+   if test x$with_libtiff != xno && test -z "$LIBTIFF"; then
+     { $as_echo "$as_me:${as_lineno-$LINENO}: checking for TIFFReadRGBAImageOriented in -ltiff" >&5
+ $as_echo_n "checking for TIFFReadRGBAImageOriented in -ltiff... " >&6; }
+@@ -18764,9 +18770,9 @@
+ *** --without-libtiff to configure but some programs using GTK+ may
+ *** not work properly" "$LINENO" 5
+   fi
+-fi
++#fi
+ 
+-if test x$os_win32 = xno || test x$with_gdiplus = xno; then
++#if test x$os_win32 = xno || test x$with_gdiplus = xno; then
+   if test x$with_libjpeg != xno && test -z "$LIBJPEG"; then
+     { $as_echo "$as_me:${as_lineno-$LINENO}: checking for jpeg_destroy_decompress in -ljpeg" >&5
+ $as_echo_n "checking for jpeg_destroy_decompress in -ljpeg... " >&6; }
+@@ -18891,7 +18897,7 @@
+ *** --without-libjpeg to configure but some programs using GTK+ may
+ *** not work properly" "$LINENO" 5
+   fi
+-fi
++#fi
+ 
+   if test x$with_libpng != xno && test -z "$LIBPNG"; then
+     for l in libpng16 libpng15 libpng14 libpng12 libpng13 libpng10; do
+@@ -19094,10 +19100,16 @@
+ # because some important apps like GIMP need to read and write
+ # arbitrary tEXt chunks which doesn't seem to be possible through GDI+
+ 
+-all_loaders="ani,icns,tga,png,pnm,xbm,xpm,qtif"
++all_loaders="ani,icns,pcx,ras,tga,png,pnm,wbmp,xbm,xpm,qtif,svg,webp,psd"
+ if test x$with_libjasper = xyes; then
+   all_loaders="$all_loaders,jasper"
+ fi
++if test x$with_libtiff = xyes; then
++  all_loaders="$all_loaders,tiff"
++fi
++if test x$with_libjpeg = xyes; then
++  all_loaders="$all_loaders,jpeg"
++fi
+ if test x$os_win32 = xyes && test x$with_gdiplus != xno; then
+   # Skip PNG, see comment above
+   gdip_formats="bmp emf gif ico jpeg tiff wmf"
+@@ -19105,7 +19117,7 @@
+     all_loaders="$all_loaders,gdip-$f"
+   done
+ else
+-  all_loaders="$all_loaders,bmp,gif,ico,jpeg,tiff"
++  all_loaders="$all_loaders,bmp,gif,ico"
+ fi
+ included_loaders=""
+ # If no loaders specified, include all
+@@ -19166,6 +19178,14 @@
+   INCLUDE_BMP_FALSE=
+ fi
+ 
++ if test x"$INCLUDE_wbmp" = xyes; then
++  INCLUDE_WBMP_TRUE=
++  INCLUDE_WBMP_FALSE='#'
++else
++  INCLUDE_WBMP_TRUE='#'
++  INCLUDE_WBMP_FALSE=
++fi
++
+  if test x"$INCLUDE_gif" = xyes; then
+   INCLUDE_GIF_TRUE=
+   INCLUDE_GIF_FALSE='#'
+@@ -19206,6 +19226,14 @@
+   INCLUDE_PNM_FALSE=
+ fi
+ 
++ if test x"$INCLUDE_ras" = xyes; then
++  INCLUDE_RAS_TRUE=
++  INCLUDE_RAS_FALSE='#'
++else
++  INCLUDE_RAS_TRUE='#'
++  INCLUDE_RAS_FALSE=
++fi
++
+  if test x"$INCLUDE_tiff" = xyes; then
+   INCLUDE_TIFF_TRUE=
+   INCLUDE_TIFF_FALSE='#'
+@@ -19238,6 +19266,14 @@
+   INCLUDE_TGA_FALSE=
+ fi
+ 
++ if test x"$INCLUDE_pcx" = xyes; then
++  INCLUDE_PCX_TRUE=
++  INCLUDE_PCX_FALSE='#'
++else
++  INCLUDE_PCX_TRUE='#'
++  INCLUDE_PCX_FALSE=
++fi
++
+  if test x"$INCLUDE_icns" = xyes; then
+   INCLUDE_ICNS_TRUE=
+   INCLUDE_ICNS_FALSE='#'
+@@ -19254,6 +19290,30 @@
+   INCLUDE_JASPER_FALSE=
+ fi
+ 
++ if test x"$INCLUDE_webp" = xyes; then
++  INCLUDE_WEBP_TRUE=
++  INCLUDE_WEBP_FALSE='#'
++else
++  INCLUDE_WEBP_TRUE='#'
++  INCLUDE_WEBP_FALSE=
++fi
++
++ if test x"$INCLUDE_svg" = xyes; then
++  INCLUDE_SVG_TRUE=
++  INCLUDE_SVG_FALSE='#'
++else
++  INCLUDE_SVG_TRUE='#'
++  INCLUDE_SVG_FALSE=
++fi
++
++ if test x"$INCLUDE_psd" = xyes; then
++  INCLUDE_PSD_TRUE=
++  INCLUDE_PSD_FALSE='#'
++else
++  INCLUDE_PSD_TRUE='#'
++  INCLUDE_PSD_FALSE=
++fi
++
+  if test x"$INCLUDE_qtif" = xyes; then
+   INCLUDE_QTIF_TRUE=
+   INCLUDE_QTIF_FALSE='#'
+@@ -20881,6 +20941,10 @@
+   as_fn_error $? "conditional \"INCLUDE_BMP\" was never defined.
+ Usually this means the macro was only invoked conditionally." "$LINENO" 5
+ fi
++if test -z "${INCLUDE_WBMP_TRUE}" && test -z "${INCLUDE_WBMP_FALSE}"; then
++  as_fn_error $? "conditional \"INCLUDE_WBMP\" was never defined.
++Usually this means the macro was only invoked conditionally." "$LINENO" 5
++fi
+ if test -z "${INCLUDE_GIF_TRUE}" && test -z "${INCLUDE_GIF_FALSE}"; then
+   as_fn_error $? "conditional \"INCLUDE_GIF\" was never defined.
+ Usually this means the macro was only invoked conditionally." "$LINENO" 5
+@@ -20901,6 +20965,10 @@
+   as_fn_error $? "conditional \"INCLUDE_PNM\" was never defined.
+ Usually this means the macro was only invoked conditionally." "$LINENO" 5
+ fi
++if test -z "${INCLUDE_RAS_TRUE}" && test -z "${INCLUDE_RAS_FALSE}"; then
++  as_fn_error $? "conditional \"INCLUDE_RAS\" was never defined.
++Usually this means the macro was only invoked conditionally." "$LINENO" 5
++fi
+ if test -z "${INCLUDE_TIFF_TRUE}" && test -z "${INCLUDE_TIFF_FALSE}"; then
+   as_fn_error $? "conditional \"INCLUDE_TIFF\" was never defined.
+ Usually this means the macro was only invoked conditionally." "$LINENO" 5
+@@ -20915,6 +20983,10 @@
+ fi
+ if test -z "${INCLUDE_TGA_TRUE}" && test -z "${INCLUDE_TGA_FALSE}"; then
+   as_fn_error $? "conditional \"INCLUDE_TGA\" was never defined.
++Usually this means the macro was only invoked conditionally." "$LINENO" 5
++fi
++if test -z "${INCLUDE_PCX_TRUE}" && test -z "${INCLUDE_PCX_FALSE}"; then
++  as_fn_error $? "conditional \"INCLUDE_PCX\" was never defined.
+ Usually this means the macro was only invoked conditionally." "$LINENO" 5
+ fi
+ if test -z "${INCLUDE_ICNS_TRUE}" && test -z "${INCLUDE_ICNS_FALSE}"; then
