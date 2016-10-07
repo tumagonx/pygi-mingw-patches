@@ -1,0 +1,410 @@
+--- ext/daala/gstdaaladec.c	Thu Mar 24 18:36:40 2016
++++ ext/daala/gstdaaladec.c	Sat Sep 03 01:35:36 2016
+@@ -122,7 +122,7 @@
+       GST_DEBUG_FUNCPTR (daala_dec_decide_allocation);
+ 
+   GST_DEBUG_CATEGORY_INIT (daaladec_debug, "daaladec", 0, "Daala decoder");
+-  GST_DEBUG_CATEGIRY_GET (CAT_PERFORMANCE, "GST_PERFORMANCE");
++  GST_DEBUG_CATEGORY_GET (CAT_PERFORMANCE, "GST_PERFORMANCE");
+ }
+ 
+ static void
+--- ext/dtls/gstdtlscertificate.c	Thu Mar 24 18:36:40 2016
++++ ext/dtls/gstdtlscertificate.c	Sat Sep 03 01:35:36 2016
+@@ -45,6 +45,11 @@
+ #endif
+ #endif
+ 
++#ifdef G_OS_WIN32
++#include <winsock2.h>
++#include <ws2tcpip.h>
++#endif
++
+ #include <openssl/ssl.h>
+ 
+ GST_DEBUG_CATEGORY_STATIC (gst_dtls_certificate_debug);
+--- ext/ladspa/gstladspa.c	Thu Mar 24 18:36:40 2016
++++ ext/ladspa/gstladspa.c	Sat Sep 03 01:35:36 2016
+@@ -149,6 +149,21 @@
+   "/usr/local/lib/ladspa" G_SEARCHPATH_SEPARATOR_S \
+   LIBDIR "/ladspa"
+ 
++#ifdef G_OS_WIN32
++#include <windows.h>
++HMODULE gstl_dll = NULL;
++BOOL WINAPI
++DllMain (HINSTANCE hinstDLL,
++	 DWORD     fdwReason,
++	 LPVOID    lpvReserved)
++{
++  if (fdwReason == DLL_PROCESS_ATTACH)
++      gstl_dll = hinstDLL;
++
++  return TRUE;
++}
++#endif
++
+ GstStructure *ladspa_meta_all = NULL;
+ 
+ static void
+@@ -342,7 +357,11 @@
+         g_strdup_printf ("%s" G_SEARCHPATH_SEPARATOR_S GST_LADSPA_DEFAULT_PATH,
+         search_path);
+   } else {
++#ifdef G_OS_WIN32
++    ladspa_path = g_build_filename (g_win32_get_package_installation_directory_of_module (gstl_dll),"..","ladspa", NULL);
++#else
+     ladspa_path = g_strdup (GST_LADSPA_DEFAULT_PATH);
++#endif
+   }
+ 
+   paths = g_strsplit (ladspa_path, G_SEARCHPATH_SEPARATOR_S, 0);
+@@ -404,7 +423,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- ext/neon/gstneonhttpsrc.c	Thu Mar 24 18:36:40 2016
++++ ext/neon/gstneonhttpsrc.c	Sat Sep 03 01:35:36 2016
+@@ -1100,6 +1100,23 @@
+ static gboolean
+ plugin_init (GstPlugin * plugin)
+ {
++#ifdef G_OS_WIN32
++	gchar * cafile = NULL;
++	gchar * set_necabundle_env;
++	const gchar * const *dirs = g_get_system_data_dirs();
++	int i;
++
++	for (i = 0; dirs[i]; ++i) {
++		cafile = g_build_filename (dirs[i], "ssl", "curl-ca-bundle.crt", NULL);
++		if (!g_file_test (cafile, G_FILE_TEST_IS_REGULAR))
++			g_free (cafile);
++		else {
++			set_necabundle_env = g_strconcat("NE_SSL_CA_BUNDLE=",cafile,NULL);
++			putenv(set_necabundle_env);
++			g_free(set_necabundle_env);
++		}
++	}
++#endif
+   GST_DEBUG_CATEGORY_INIT (neonhttpsrc_debug, "neonhttpsrc", 0,
+       "NEON HTTP src");
+ 
+--- ext/openal/gstopenal.c	Thu Mar 24 18:36:40 2016
++++ ext/openal/gstopenal.c	Sat Sep 03 01:35:36 2016
+@@ -47,7 +47,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- ext/opencv/gstfaceblur.cpp	Thu Mar 24 18:36:40 2016
++++ ext/opencv/gstfaceblur.cpp	Sat Sep 03 01:35:36 2016
+@@ -70,9 +70,13 @@
+ GST_DEBUG_CATEGORY_STATIC (gst_face_blur_debug);
+ #define GST_CAT_DEFAULT gst_face_blur_debug
+ 
++#ifdef G_OS_WIN32
++static gchar *DEFAULT_PROFILE = NULL;
++#else
+ #define DEFAULT_PROFILE OPENCV_PREFIX G_DIR_SEPARATOR_S "share" \
+     G_DIR_SEPARATOR_S OPENCV_PATH_NAME G_DIR_SEPARATOR_S "haarcascades" \
+     G_DIR_SEPARATOR_S "haarcascade_frontalface_default.xml"
++#endif
+ #define DEFAULT_SCALE_FACTOR 1.25
+ #define DEFAULT_FLAGS CV_HAAR_DO_CANNY_PRUNING
+ #define DEFAULT_MIN_NEIGHBORS 3
+@@ -399,6 +403,16 @@
+ gboolean
+ gst_face_blur_plugin_init (GstPlugin * plugin)
+ {
++#ifdef G_OS_WIN32
++  const gchar * const *dirs = g_get_system_data_dirs();
++  int i;
++  for (i = 0; dirs[i]; ++i) {
++    DEFAULT_PROFILE = g_build_filename (dirs[i], "opencv", "haarcascades", "haarcascade_frontalface_default.xml", NULL);
++    if (!g_file_test (DEFAULT_PROFILE, G_FILE_TEST_IS_REGULAR)) {
++      g_free (DEFAULT_PROFILE);
++    }
++  }
++#endif
+   /* debug category for filtering log messages */
+   GST_DEBUG_CATEGORY_INIT (gst_face_blur_debug, "faceblur",
+       0, "Blurs faces in images and videos");
+--- ext/opencv/gstfacedetect.cpp	Thu Mar 24 18:36:40 2016
++++ ext/opencv/gstfacedetect.cpp	Sat Sep 03 01:35:36 2016
+@@ -87,10 +87,17 @@
+ #define HAAR_CASCADES_DIR OPENCV_PREFIX G_DIR_SEPARATOR_S "share" \
+     G_DIR_SEPARATOR_S OPENCV_PATH_NAME G_DIR_SEPARATOR_S "haarcascades" \
+     G_DIR_SEPARATOR_S
++#ifdef G_OS_WIN32
++static gchar *DEFAULT_FACE_PROFILE = NULL;
++static gchar *DEFAULT_NOSE_PROFILE = NULL;
++static gchar *DEFAULT_MOUTH_PROFILE = NULL;
++static gchar *DEFAULT_EYES_PROFILE = NULL;
++#else
+ #define DEFAULT_FACE_PROFILE HAAR_CASCADES_DIR "haarcascade_frontalface_default.xml"
+ #define DEFAULT_NOSE_PROFILE HAAR_CASCADES_DIR "haarcascade_mcs_nose.xml"
+ #define DEFAULT_MOUTH_PROFILE HAAR_CASCADES_DIR "haarcascade_mcs_mouth.xml"
+ #define DEFAULT_EYES_PROFILE HAAR_CASCADES_DIR "haarcascade_mcs_eyepair_small.xml"
++#endif
+ #define DEFAULT_SCALE_FACTOR 1.25
+ #define DEFAULT_FLAGS CV_HAAR_DO_CANNY_PRUNING
+ #define DEFAULT_MIN_NEIGHBORS 3
+@@ -810,6 +817,28 @@
+ gboolean
+ gst_face_detect_plugin_init (GstPlugin * plugin)
+ {
++#ifdef G_OS_WIN32
++  const gchar * const *dirs = g_get_system_data_dirs();
++  int i;
++  for (i = 0; dirs[i]; ++i) {
++    DEFAULT_FACE_PROFILE = g_build_filename (dirs[i], "opencv", "haarcascades", "haarcascade_frontalface_default.xml", NULL);
++    if (!g_file_test (DEFAULT_FACE_PROFILE, G_FILE_TEST_IS_REGULAR)) {
++      g_free (DEFAULT_FACE_PROFILE);
++    }
++    DEFAULT_NOSE_PROFILE = g_build_filename (dirs[i], "opencv", "haarcascades", "haarcascade_mcs_nose.xml", NULL);
++    if (!g_file_test (DEFAULT_NOSE_PROFILE, G_FILE_TEST_IS_REGULAR)) {
++      g_free (DEFAULT_NOSE_PROFILE);
++    }
++    DEFAULT_MOUTH_PROFILE = g_build_filename (dirs[i], "opencv", "haarcascades", "haarcascade_mcs_mouth.xml", NULL);
++    if (!g_file_test (DEFAULT_MOUTH_PROFILE, G_FILE_TEST_IS_REGULAR)) {
++      g_free (DEFAULT_MOUTH_PROFILE);
++    }
++    DEFAULT_EYES_PROFILE = g_build_filename (dirs[i], "opencv", "haarcascades", "haarcascade_mcs_eyepair_small.xml", NULL);
++    if (!g_file_test (DEFAULT_EYES_PROFILE, G_FILE_TEST_IS_REGULAR)) {
++      g_free (DEFAULT_EYES_PROFILE);
++    }
++  }
++#endif
+   /* debug category for fltering log messages */
+   GST_DEBUG_CATEGORY_INIT (gst_face_detect_debug, "facedetect",
+       0,
+--- ext/opencv/gsthanddetect.cpp	Thu Mar 24 18:36:40 2016
++++ ext/opencv/gsthanddetect.cpp	Sat Sep 03 01:35:36 2016
+@@ -67,9 +67,14 @@
+ GST_DEBUG_CATEGORY_STATIC (gst_handdetect_debug);
+ #define GST_CAT_DEFAULT gst_handdetect_debug
+ 
++#ifdef G_OS_WIN32
++static gchar *HAAR_FILE_FIST = NULL;
++static gchar *HAAR_FILE_PALM = NULL;
++#else
+ /* define HAAR files */
+ #define HAAR_FILE_FIST GST_HAAR_CASCADES_DIR G_DIR_SEPARATOR_S "fist.xml"
+ #define HAAR_FILE_PALM GST_HAAR_CASCADES_DIR G_DIR_SEPARATOR_S "palm.xml"
++#endif
+ 
+ using namespace cv;
+ /* Filter signals and args */
+@@ -632,6 +637,20 @@
+ gboolean
+ gst_handdetect_plugin_init (GstPlugin * plugin)
+ {
++#ifdef G_OS_WIN32
++  const gchar * const *dirs = g_get_system_data_dirs();
++  int i;
++  for (i = 0; dirs[i]; ++i) {
++    HAAR_FILE_FIST = g_build_filename (dirs[i], "opencv", "haarcascades", "fist.xml", NULL);
++    if (!g_file_test (HAAR_FILE_FIST, G_FILE_TEST_IS_REGULAR)) {
++      g_free (HAAR_FILE_FIST);
++    }
++    HAAR_FILE_PALM = g_build_filename (dirs[i], "opencv", "haarcascades", "palm.xml", NULL);
++    if (!g_file_test (HAAR_FILE_PALM, G_FILE_TEST_IS_REGULAR)) {
++      g_free (HAAR_FILE_PALM);
++    }
++  }
++#endif
+   GST_DEBUG_CATEGORY_INIT (gst_handdetect_debug,
+       "handdetect", 0, "opencv hand gesture detection");
+   return gst_element_register (plugin, "handdetect", GST_RANK_NONE,
+--- ext/opencv/gstmotioncells.cpp	Thu Mar 24 18:36:40 2016
++++ ext/opencv/gstmotioncells.cpp	Sat Sep 03 01:35:36 2016
+@@ -850,7 +850,7 @@
+     int thickness, success, motioncellsidxcnt, numberOfCells,
+         motioncellsnumber, cellsOfInterestNumber;
+     int mincellsOfInterestNumber, motiondetect;
+-    uint minimum_motion_frames, postnomotion;
++    guint minimum_motion_frames, postnomotion;
+     char *datafile;
+     bool display, changed_datafile, useAlpha;
+     gint64 starttime;
+--- ext/opencv/Makefile.in	Fri Aug 19 15:20:49 2016
++++ ext/opencv/Makefile.in	Sat Sep 03 01:35:36 2016
+@@ -193,7 +193,7 @@
+ am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
+ am__v_lt_0 = --silent
+ am__v_lt_1 = 
+-libgstopencv_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
++libgstopencv_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+ 	$(libgstopencv_la_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link \
+ 	$(CXXLD) $(libgstopencv_la_CXXFLAGS) $(CXXFLAGS) \
+ 	$(libgstopencv_la_LDFLAGS) $(LDFLAGS) -o $@
+--- ext/resindvd/plugin.c	Thu Mar 24 18:36:40 2016
++++ ext/resindvd/plugin.c	Sat Sep 03 01:35:36 2016
+@@ -41,7 +41,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- ext/sndfile/gstsf.c	Thu Mar 24 18:36:40 2016
++++ ext/sndfile/gstsf.c	Sat Sep 03 01:35:36 2016
+@@ -110,7 +110,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 
+--- ext/soundtouch/Makefile.in	Fri Aug 19 15:20:50 2016
++++ ext/soundtouch/Makefile.in	Sat Sep 03 01:35:36 2016
+@@ -174,7 +174,7 @@
+ am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
+ am__v_lt_0 = --silent
+ am__v_lt_1 = 
+-libgstsoundtouch_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
++libgstsoundtouch_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+ 	$(libgstsoundtouch_la_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
+ 	--mode=link $(CXXLD) $(libgstsoundtouch_la_CXXFLAGS) \
+ 	$(CXXFLAGS) $(libgstsoundtouch_la_LDFLAGS) $(LDFLAGS) -o $@
+--- gst/aiff/aiff.c	Thu Mar 24 18:36:40 2016
++++ gst/aiff/aiff.c	Sat Sep 03 01:35:36 2016
+@@ -47,7 +47,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- gst/frei0r/gstfrei0r.c	Thu Mar 24 18:36:40 2016
++++ gst/frei0r/gstfrei0r.c	Sat Sep 03 01:35:36 2016
+@@ -29,6 +29,21 @@
+ #include <string.h>
+ #include <gmodule.h>
+ 
++#ifdef G_OS_WIN32
++#include <windows.h>
++HMODULE gstf_dll = NULL;
++BOOL WINAPI
++DllMain (HINSTANCE hinstDLL,
++	 DWORD     fdwReason,
++	 LPVOID    lpvReserved)
++{
++  if (fdwReason == DLL_PROCESS_ATTACH)
++      gstf_dll = hinstDLL;
++
++  return TRUE;
++}
++#endif
++
+ GST_DEBUG_CATEGORY (frei0r_debug);
+ #define GST_CAT_DEFAULT frei0r_debug
+ 
+@@ -686,7 +701,11 @@
+ #define register_plugins2(plugin, pn, p) register_plugins(plugin, pn, p, p)
+     homedir = g_get_home_dir ();
+     path = g_build_filename (homedir, ".frei0r-1", "lib", NULL);
++#ifdef G_OS_WIN32
++    libdir_path = g_build_filename (g_win32_get_package_installation_directory_of_module (gstf_dll),"..","frei0r-1", NULL);
++#else
+     libdir_path = g_build_filename (LIBDIR, "frei0r-1", NULL);
++#endif
+     register_plugins2 (plugin, plugin_names, path);
+     g_free (path);
+     register_plugins2 (plugin, plugin_names, libdir_path);
+--- gst/midi/midi.c	Thu Mar 24 18:36:40 2016
++++ gst/midi/midi.c	Sat Sep 03 01:35:36 2016
+@@ -41,7 +41,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- gst/nuvdemux/gstnuvdemux.c	Thu Mar 24 18:36:40 2016
++++ gst/nuvdemux/gstnuvdemux.c	Sat Sep 03 01:35:36 2016
+@@ -928,7 +928,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+ #endif /* ENABLE_NLS */
+ 
+   if (!gst_element_register (plugin, "nuvdemux", GST_RANK_SECONDARY,
+--- gst/videomeasure/gstvideomeasure.c	Thu Mar 24 18:36:40 2016
++++ gst/videomeasure/gstvideomeasure.c	Sat Sep 03 01:35:36 2016
+@@ -52,7 +52,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 

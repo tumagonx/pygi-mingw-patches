@@ -1,0 +1,78 @@
+--- gst/gst.c	Thu Mar 24 18:36:30 2016
++++ gst/gst.c	Thu Jul 28 11:24:45 2016
+@@ -486,7 +486,14 @@
+ #endif
+ 
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 
+--- libs/gst/check/libcheck/strsignal.c	Thu Mar 24 18:36:30 2016
++++ libs/gst/check/libcheck/strsignal.c	Thu Jul 28 11:59:25 2016
+@@ -1,6 +1,6 @@
+ #include "libcompat.h"
+ 
+-const char *
++CK_DLL_EXP char *
+ strsignal (int sig)
+ {
+   static char signame[40];
+--- tools/gst-inspect.c	Thu Mar 24 18:36:30 2016
++++ tools/gst-inspect.c	Thu Jul 28 11:24:45 2016
+@@ -1496,7 +1496,14 @@
+   setlocale (LC_ALL, "");
+ 
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+   textdomain (GETTEXT_PACKAGE);
+ #endif
+--- tools/gst-launch.c	Thu Mar 24 18:36:30 2016
++++ tools/gst-launch.c	Thu Jul 28 11:24:45 2016
+@@ -958,7 +958,14 @@
+   setlocale (LC_ALL, "");
+ 
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+   textdomain (GETTEXT_PACKAGE);
+ #endif
+--- tools/gst-typefind.c	Thu Mar 24 18:36:30 2016
++++ tools/gst-typefind.c	Thu Jul 28 11:24:45 2016
+@@ -150,7 +150,14 @@
+   setlocale (LC_ALL, "");
+ 
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++    gchar *_glib_get_locale_dir (void);
++    gchar *localedir = _glib_get_locale_dir ();
++    bindtextdomain (GETTEXT_PACKAGE, localedir);
++    g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+   textdomain (GETTEXT_PACKAGE);
+ #endif

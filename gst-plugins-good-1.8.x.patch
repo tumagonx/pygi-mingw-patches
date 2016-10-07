@@ -1,0 +1,156 @@
+--- ext/flac/gstflac.c	Thu Mar 24 18:36:37 2016
++++ ext/flac/gstflac.c	Sat Sep 03 01:26:28 2016
+@@ -34,7 +34,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- ext/pulse/plugin.c	Thu Mar 24 18:36:37 2016
++++ ext/pulse/plugin.c	Sat Sep 03 01:26:28 2016
+@@ -37,10 +37,25 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
++#ifdef G_OS_WIN32
++  if (!gst_element_register (plugin, "pulsesink", GST_RANK_PRIMARY,
++          GST_TYPE_PULSESINK))
++    return FALSE;
+ 
++  if (!gst_element_register (plugin, "pulsesrc", GST_RANK_PRIMARY,
++          GST_TYPE_PULSESRC))
++    return FALSE;
++#else
+   if (!gst_element_register (plugin, "pulsesink", GST_RANK_PRIMARY + 10,
+           GST_TYPE_PULSESINK))
+     return FALSE;
+@@ -48,7 +63,7 @@
+   if (!gst_element_register (plugin, "pulsesrc", GST_RANK_PRIMARY + 10,
+           GST_TYPE_PULSESRC))
+     return FALSE;
+-
++#endif
+   if (!gst_device_provider_register (plugin, "pulsedeviceprovider",
+           GST_RANK_PRIMARY, GST_TYPE_PULSE_DEVICE_PROVIDER))
+     return FALSE;
+--- ext/shout2/gstshout2.c	Thu Mar 24 18:36:37 2016
++++ ext/shout2/gstshout2.c	Sat Sep 03 01:26:28 2016
+@@ -814,7 +814,14 @@
+ plugin_init (GstPlugin * plugin)
+ {
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 
+--- ext/soup/gstsoup.c	Thu Mar 24 18:36:37 2016
++++ ext/soup/gstsoup.c	Sat Sep 03 01:26:28 2016
+@@ -30,7 +30,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- ext/wavpack/gstwavpack.c	Thu Mar 24 18:36:37 2016
++++ ext/wavpack/gstwavpack.c	Sat Sep 03 01:26:28 2016
+@@ -39,7 +39,14 @@
+ #ifdef ENABLE_NLS
+   GST_DEBUG ("binding text domain %s to locale dir %s", GETTEXT_PACKAGE,
+       LOCALEDIR);
++#ifdef G_OS_WIN32
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif
+ 
+--- gst/avi/gstavi.c	Thu Mar 24 18:36:37 2016
++++ gst/avi/gstavi.c	Sat Sep 03 01:26:28 2016
+@@ -35,7 +35,14 @@
+   gst_riff_init ();
+ 
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 
+--- gst/isomp4/isomp4-plugin.c	Thu Mar 24 18:36:37 2016
++++ gst/isomp4/isomp4-plugin.c	Sat Sep 03 01:26:28 2016
+@@ -35,7 +35,14 @@
+ plugin_init (GstPlugin * plugin)
+ {
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 
+--- gst/rtsp/gstrtsp.c	Thu Mar 24 18:36:37 2016
++++ gst/rtsp/gstrtsp.c	Sat Sep 03 01:26:28 2016
+@@ -54,7 +54,14 @@
+ plugin_init (GstPlugin * plugin)
+ {
+ #ifdef ENABLE_NLS
++#ifdef G_OS_WIN32
++  extern gchar *_glib_get_locale_dir (void);
++  gchar *localedir = _glib_get_locale_dir ();
++  bindtextdomain (GETTEXT_PACKAGE, localedir);
++  g_free (localedir);
++#else
+   bindtextdomain (GETTEXT_PACKAGE, LOCALEDIR);
++#endif
+   bind_textdomain_codeset (GETTEXT_PACKAGE, "UTF-8");
+ #endif /* ENABLE_NLS */
+ 
