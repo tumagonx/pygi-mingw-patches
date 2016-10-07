@@ -1,0 +1,352 @@
+--- gi/function.cpp	Wed Sep 21 01:02:39 2016
++++ gi/function.cpp	Sun Sep 25 13:49:27 2016
+@@ -40,7 +40,9 @@
+ #include <util/log.h>
+ 
+ #include <girepository.h>
++#ifndef G_OS_WIN32
+ #include <sys/mman.h>
++#endif
+ #include <unistd.h>
+ #include <errno.h>
+ #include <string.h>
+--- gjs/coverage.cpp	Wed Oct 28 05:08:41 2015
++++ gjs/coverage.cpp	Sun Sep 25 13:49:27 2016
+@@ -27,6 +27,9 @@
+ 
+ #include "util/error.h"
+ 
++#ifdef G_OS_WIN32
++typedef uint32_t u_int32_t;
++#endif
+ struct _GjsCoveragePrivate {
+     gchar **prefixes;
+     GjsContext *context;
+--- gjs/jsapi-util-string.cpp	Wed Oct 28 05:08:41 2015
++++ gjs/jsapi-util-string.cpp	Sun Sep 25 13:49:28 2016
+@@ -24,7 +24,9 @@
+ #include <config.h>
+ 
+ #include <string.h>
+-
++#ifdef _WIN32
++#include <windows.h>
++#endif
+ #include "jsapi-util.h"
+ #include "compat.h"
+ 
+@@ -80,11 +82,19 @@
+     */
+ 
+     error = NULL;
++#ifdef _WIN32
++    u16_string = reinterpret_cast<LPWSTR>(g_utf8_to_utf16(utf8_string,
++                                 n_bytes,
++                                 NULL,
++                                 &u16_string_length,
++                                 &error));
++#else
+     u16_string = g_utf8_to_utf16(utf8_string,
+                                  n_bytes,
+                                  NULL,
+                                  &u16_string_length,
+                                  &error);
++#endif
+     if (!u16_string) {
+         gjs_throw(context,
+                   "Failed to convert UTF-8 string to "
+--- util/crash.cpp	Fri Jun 12 06:26:38 2015
++++ util/crash.cpp	Sun Sep 25 13:49:28 2016
+@@ -32,12 +32,200 @@
+ #include <stdio.h>
+ #include <signal.h>
+ #include <stdlib.h>
++#ifndef G_OS_WIN32
+ #include <sys/select.h>
++#endif
+ #include <sys/time.h>
+ #include <unistd.h>
+ #include <string.h>
+ #include <fcntl.h>
+ #include <errno.h>
++
++#ifdef G_OS_WIN32
++
++#include <sys/locking.h>
++#include <setjmp.h>
++#include <process.h>
++
++#include <winsock2.h>
++#include <windows.h>
++
++#define FD_CLOEXEC 1
++#define O_NONBLOCK 04000
++#define F_GETFD    1
++#define F_SETFD    2
++#define F_GETFL    3
++#define F_SETFL    4
++#define F_SETLK    6
++#define F_SETLKW   7
++
++
++#define F_RDLCK     0
++#define F_WRLCK     1
++#define F_UNLCK     2
++
++#ifdef __cplusplus
++extern "C"
++{
++#endif
++
++struct flock
++{
++   short int l_type;   /**< lock type: read, write, ... */
++   short int l_whence; /**< type of l_start */
++   off_t     l_start;  /**< starting offset */
++   off_t     l_len;    /**< 0 means end of the file */
++   pid_t     l_pid;    /**< lock owner */
++};
++
++#define pipe(a) _pipe(a,4096,_O_BINARY)
++#define kill(a,b) TerminateProcess(OpenProcess(PROCESS_TERMINATE,FALSE,a),3)
++
++/*
++ * Copyright notice for the EFL:
++ * 
++ * Copyright (C) 2002-2012 Carsten Haitzler, Dan Sinclair, Mike Blumenkrantz,
++ * Samsung Electronics and various contributors (see AUTHORS)
++ * 
++ * All rights reserved.
++ * 
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions are met:
++ * 
++ *    1. Redistributions of source code must retain the above copyright
++ *       notice, this list of conditions and the following disclaimer.
++ *    2. Redistributions in binary form must reproduce the above copyright 
++ *       notice, this list of conditions and the following disclaimer in the
++ *       documentation and/or other materials provided with the distribution.
++ * 
++ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
++ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND
++ * FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
++ * COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
++ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
++ * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
++ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
++ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
++ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++static int fcntl(int fd, int cmd, ...)
++{
++   va_list va;
++   HANDLE  h;
++   int     res = -1;
++
++   va_start (va, cmd);
++
++   h = (HANDLE)_get_osfhandle(fd);
++   if (h == INVALID_HANDLE_VALUE)
++     return -1;
++
++   if (cmd == F_GETFD)
++     {
++        DWORD flag;
++
++	if (!GetHandleInformation(h, &flag))
++	  return -1;
++
++	res = 0;
++     }
++
++   if (cmd == F_SETFD)
++     {
++        long flag;
++
++        flag = va_arg(va, long);
++        if (flag == FD_CLOEXEC)
++          {
++             if (SetHandleInformation(h, HANDLE_FLAG_INHERIT, 0))
++               res = 0;
++          }
++     }
++   else if (cmd == F_GETFL)
++     {
++        /* does nothing*/
++     }
++   else if (cmd == F_SETFL)
++     {
++        long flag;
++
++        flag = va_arg(va, long);
++        if (flag & O_NONBLOCK)
++          {
++             u_long arg = 1;
++             int    type;
++             int    len;
++             int    ret;
++
++             len = (int)sizeof(int);
++             ret = getsockopt((SOCKET)fd, SOL_SOCKET, SO_TYPE, (char *)&type, &len);
++             if (!ret && (type == SOCK_STREAM))
++               {
++                  if (!ioctlsocket((SOCKET)fd, FIONBIO, &arg) == SOCKET_ERROR)
++                    res = 0;
++               }
++          } else
++          {
++             u_long arg = 0;
++             int    type;
++             int    len;
++             int    ret;
++
++             len = (int)sizeof(int);
++             ret = getsockopt((SOCKET)fd, SOL_SOCKET, SO_TYPE, (char *)&type, &len);
++             if (!ret && (type == SOCK_STREAM))
++               {
++                  if (!ioctlsocket((SOCKET)fd, FIONBIO, &arg) == SOCKET_ERROR)
++                    res = 0;
++               }
++          }
++     }
++
++   else if ((cmd == F_SETLK) || (cmd == F_SETLKW))
++     {
++        struct flock *fl;
++        off_t        length = 0;
++        long         pos;
++
++        fl = va_arg(va, struct flock *);
++
++        if (fl->l_len == 0)
++          {
++             length = _lseek(fd, 0L, SEEK_END);
++             if (length != -1L)
++               res = 0;
++          }
++        fl->l_len = length - fl->l_start - 1;
++
++        pos = _lseek(fd, fl->l_start, fl->l_whence);
++        if (pos != -1L)
++          res = 0;
++
++        if ((fl->l_type == F_RDLCK) || (fl->l_type == F_WRLCK))
++          {
++             if (cmd == F_SETLK)
++               res = _locking(fd, _LK_NBLCK, fl->l_len); /* if cannot be locked, we return immediatly */
++             else /* F_SETLKW */
++               res = _locking(fd, _LK_LOCK, fl->l_len); /* otherwise, we try several times */
++          }
++
++        if (fl->l_type == F_UNLCK)
++          res = _locking(fd, _LK_UNLCK, fl->l_len);
++     }
++
++   va_end(va);
++
++   return res;
++}
++
++int fork(void);
++
++#ifdef __cplusplus
++}
++#endif
++#endif
+ 
+ #ifdef HAVE_BACKTRACE
+ static void
+--- configure	Wed Sep 21 01:08:53 2016
++++ configure	Sun Sep 25 13:49:28 2016
+@@ -16796,7 +16796,7 @@
+ gjs_gdbus_packages="gobject-2.0 >= 2.42.0 gio-2.0"
+ gjs_gtk_packages="gtk+-3.0"
+ # gjs-tests links against everything
+-gjstests_packages="gio-unix-2.0 $gjs_packages"
++gjstests_packages="gio-windows-2.0 $gjs_packages"
+ 
+ 
+ pkg_failed=no
+--- Makefile.in	Wed Sep 21 01:08:53 2016
++++ Makefile.in	Sun Sep 25 13:51:09 2016
+@@ -90,7 +90,7 @@
+ POST_UNINSTALL = :
+ build_triplet = @build@
+ host_triplet = @host@
+-bin_PROGRAMS = gjs-console$(EXEEXT)
++bin_PROGRAMS = gjs-console$(EXEEXT) gjsw$(EXEEXT)
+ check_PROGRAMS = $(am__EXEEXT_1)
+ @ENABLE_GTK_TRUE@am__append_1 = $(GJS_GTK_CFLAGS)
+ @ENABLE_GTK_TRUE@am__append_2 = $(GJS_GTK_LIBS)
+@@ -337,6 +337,9 @@
+ gjs_console_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
+ 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
+ 	$(CXXFLAGS) $(gjs_console_LDFLAGS) $(LDFLAGS) -o $@
++gjsw_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
++	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
++	$(CXXFLAGS) $(gjs_console_LDFLAGS) $(LDFLAGS) -mwindows -o $@
+ am_gjs_tests_OBJECTS = gjs_tests-gjs-tests.$(OBJEXT) \
+ 	gjs_tests-gjs-test-coverage.$(OBJEXT) \
+ 	gjs_tests-mock-js-resources.$(OBJEXT)
+@@ -758,8 +761,7 @@
+ libgjs_la_LDFLAGS = \
+ 	$(EXTRA_LINK_FLAGS)	\
+ 	-export-symbols-regex "^[^_]" -version-info 0:0:0	\
+-	-no-undefined \
+-	-rdynamic
++	-no-undefined
+ 
+ libgjs_la_LIBADD = $(GJS_LIBS) $(am__append_2) $(am__append_6) \
+ 	$(NATIVE_MODULES)
+@@ -844,7 +846,7 @@
+ 	$(GOBJECT_LIBS)		\
+ 	libgjs.la
+ 
+-gjs_console_LDFLAGS = -rdynamic
++gjs_console_LDFLAGS = 
+ gjs_console_SOURCES = gjs/console.cpp
+ TEST_PROGS_OPTIONS = $(am__append_8)
+ @XVFB_TESTS_TRUE@XVFB_INVOCATION = $(XVFB) -ac -noreset -screen 0 1024x768x16
+@@ -891,7 +893,7 @@
+ 	$(mock_js_invalidation_after_resources_files)	\
+ 	$(NULL)
+ 
+-gjs_tests_LDFLAGS = -rdynamic
++gjs_tests_LDFLAGS = 
+ gjs_tests_LDADD = \
+ 	libgjs.la		\
+ 	$(GJSTESTS_LIBS)
+@@ -947,17 +949,17 @@
+ nodist_libregress_la_SOURCES = $(GI_DATADIR)/tests/regress.c $(GI_DATADIR)/tests/regress.h
+ libregress_la_CPPFLAGS = $(AM_CPPFLAGS) $(GJS_CFLAGS) \
+ 	$(GJS_GDBUS_CFLAGS) $(am__append_15) $(am__append_18)
+-libregress_la_LDFLAGS = $(common_test_ldflags) $(GJS_GDBUS_LIBS) \
++libregress_la_LDFLAGS = -no-undefined $(common_test_ldflags) $(GJS_GDBUS_LIBS) \
+ 	$(am__append_16)
+ libregress_la_LIBADD = $(common_test_libadd)
+ libregress_scannerflags_includes = --include=Gio-2.0 $(am__append_17)
+ nodist_libwarnlib_la_SOURCES = $(GI_DATADIR)/tests/warnlib.c $(GI_DATADIR)/tests/warnlib.h
+ libwarnlib_la_CPPFLAGS = $(AM_CPPFLAGS) $(GJS_CFLAGS)
+-libwarnlib_la_LDFLAGS = $(common_test_ldflags)
++libwarnlib_la_LDFLAGS = -no-undefined $(common_test_ldflags)
+ libwarnlib_la_LIBADD = $(common_test_libadd)
+ nodist_libgimarshallingtests_la_SOURCES = $(GI_DATADIR)/tests/gimarshallingtests.c $(GI_DATADIR)/tests/gimarshallingtests.h
+ libgimarshallingtests_la_CPPFLAGS = $(AM_CPPFLAGS) $(GJS_CFLAGS)
+-libgimarshallingtests_la_LDFLAGS = $(common_test_ldflags)
++libgimarshallingtests_la_LDFLAGS = -no-undefined $(common_test_ldflags)
+ libgimarshallingtests_la_LIBADD = $(common_test_libadd)
+ Regress_1_0_gir_LIBS = libregress.la
+ Regress_1_0_gir_FILES = $(nodist_libregress_la_SOURCES)
+@@ -1278,7 +1280,9 @@
+ gjs-console$(EXEEXT): $(gjs_console_OBJECTS) $(gjs_console_DEPENDENCIES) $(EXTRA_gjs_console_DEPENDENCIES) 
+ 	@rm -f gjs-console$(EXEEXT)
+ 	$(AM_V_CXXLD)$(gjs_console_LINK) $(gjs_console_OBJECTS) $(gjs_console_LDADD) $(LIBS)
+-
++gjsw$(EXEEXT): $(gjs_console_OBJECTS) $(gjs_console_DEPENDENCIES) $(EXTRA_gjs_console_DEPENDENCIES) 
++	@rm -f gjsw$(EXEEXT)
++	$(AM_V_CXXLD)$(gjsw_LINK) $(gjs_console_OBJECTS) $(gjs_console_LDADD) $(LIBS)
+ gjs-tests$(EXEEXT): $(gjs_tests_OBJECTS) $(gjs_tests_DEPENDENCIES) $(EXTRA_gjs_tests_DEPENDENCIES) 
+ 	@rm -f gjs-tests$(EXEEXT)
+ 	$(AM_V_CXXLD)$(gjs_tests_LINK) $(gjs_tests_OBJECTS) $(gjs_tests_LDADD) $(LIBS)
