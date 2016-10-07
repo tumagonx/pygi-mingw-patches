@@ -1,0 +1,128 @@
+--- libvips/colour/colour.c	Thu Sep 15 03:43:56 2016
++++ libvips/colour/colour.c	Mon Sep 26 07:00:50 2016
+@@ -256,14 +256,45 @@
+ 	return( 0 );
+ }
+ 
++#ifdef G_OS_WIN32
++#include <windows.h>
++/* From glib get_windows_directory_root()
++ */
++gchar *
++_get_icc_folder (void)
++{
++  wchar_t wwindowsdir[MAX_PATH];
++  gchar *retval = NULL;
++
++  if (GetWindowsDirectoryW (wwindowsdir, G_N_ELEMENTS (wwindowsdir)))
++    {
++      /* Usually X:\Windows, but in terminal server environments
++       * might be an UNC path, AFAIK.
++       */
++      char *windowsdir = g_utf16_to_utf8 (wwindowsdir, -1, NULL, NULL, NULL);
++
++      if (windowsdir == NULL)
++	return g_strdup (VIPS_ICC_DIR);
++
++      retval = g_build_filename( windowsdir, "system32", "spool", "drivers", "color", NULL );
++      g_free (windowsdir);
++      return retval;
++    }
++  else
++    return g_strdup (VIPS_ICC_DIR);
++}
++#endif
++
+ static int
+ vips_colour_attach_profile( VipsImage *im, const char *filename )
+ {
+ 	char *data;
+ 	size_t data_length;
+-
+-	if( !(data = vips__file_read_name( filename, VIPS_ICC_DIR, 
+-		&data_length )) ) 
++#ifdef G_OS_WIN32
++	if( !(data = vips__file_read_name( filename, _get_icc_folder(), &data_length )) )
++#else
++	if( !(data = vips__file_read_name( filename, VIPS_ICC_DIR, &data_length )) )
++#endif
+ 		return( -1 );
+ 	vips_image_set_blob( im, VIPS_META_ICC_NAME, 
+ 		(VipsCallbackFn) g_free, data, data_length );
+--- libvips/foreign/vips2jpeg.c	Thu Sep 15 03:43:56 2016
++++ libvips/foreign/vips2jpeg.c	Mon Sep 26 07:00:50 2016
+@@ -942,6 +942,13 @@
+ static int
+ write_profile_file( Write *write, const char *profile )
+ {
++#ifdef G_OS_WIN32
++#undef VIPS_ICC_DIR
++	gchar *VIPS_ICC_DIR;
++	extern gchar *_get_icc_folder (void);
++
++	VIPS_ICC_DIR = _get_icc_folder();
++#endif
+ 	if( !(write->profile_bytes = 
+ 		vips__file_read_name( profile, VIPS_ICC_DIR, 
+ 		&write->profile_length )) ) 
+--- libvips/foreign/vips2tiff.c	Thu Sep 15 03:43:56 2016
++++ libvips/foreign/vips2tiff.c	Mon Sep 26 07:00:50 2016
+@@ -435,7 +435,13 @@
+ {
+ 	char *buffer;
+ 	size_t length;
++#ifdef G_OS_WIN32
++#undef VIPS_ICC_DIR
++	gchar *VIPS_ICC_DIR;
++	extern gchar *_get_icc_folder (void);
+ 
++	VIPS_ICC_DIR = _get_icc_folder();
++#endif
+ 	if( !(buffer = vips__file_read_name( profile, VIPS_ICC_DIR, &length )) )
+ 		return( -1 );
+ 	TIFFSetField( tif, TIFFTAG_ICCPROFILE, length, buffer );
+--- libvips/foreign/vipspng.c	Thu Sep 15 03:43:56 2016
++++ libvips/foreign/vipspng.c	Mon Sep 26 07:00:50 2016
+@@ -821,7 +821,13 @@
+ 	int color_type;
+ 	int interlace_type;
+ 	int i, nb_passes;
++#ifdef G_OS_WIN32
++#undef VIPS_ICC_DIR
++	gchar *VIPS_ICC_DIR;
++	extern gchar *_get_icc_folder (void);
+ 
++	VIPS_ICC_DIR = _get_icc_folder();
++#endif
+         g_assert( in->BandFmt == VIPS_FORMAT_UCHAR || 
+ 		in->BandFmt == VIPS_FORMAT_USHORT );
+ 	g_assert( in->Coding == VIPS_CODING_NONE );
+--- libvips/iofuncs/init.c	Sun Sep 18 18:46:04 2016
++++ libvips/iofuncs/init.c	Mon Sep 26 07:00:50 2016
+@@ -337,7 +337,15 @@
+ 	vips_snprintf( name, 256,
+ 		"%s" G_DIR_SEPARATOR_S "share" G_DIR_SEPARATOR_S "locale",
+ 		prefix );
++#ifdef G_OS_WIN32
++	/* vips_guess* might not reliable and no libdir usage at the moment */
++	extern gchar *_glib_get_locale_dir (void);
++	gchar *localedir = _glib_get_locale_dir ();
++	bindtextdomain (GETTEXT_PACKAGE, localedir);
++	g_free (localedir);
++#else
+ 	bindtextdomain( GETTEXT_PACKAGE, name );
++#endif
+ 	bind_textdomain_codeset( GETTEXT_PACKAGE, "UTF-8" );
+ 
+ 	/* Default various settings from env.
+--- libvips/Makefile.in	Fri Sep 23 18:12:44 2016
++++ libvips/Makefile.in	Mon Sep 26 07:18:12 2016
+@@ -629,7 +629,7 @@
+ #   --warn-all --verbose 
+ # too annoying
+ @HAVE_INTROSPECTION_TRUE@Vips_8_0_gir_SCANNERFLAGS = \
+-@HAVE_INTROSPECTION_TRUE@	--program=./introspect \
++@HAVE_INTROSPECTION_TRUE@	--program=./introspect$(EXEEXT) \
+ @HAVE_INTROSPECTION_TRUE@	--identifier-prefix=Vips \
+ @HAVE_INTROSPECTION_TRUE@	--identifier-prefix=vips \
+ @HAVE_INTROSPECTION_TRUE@	--symbol-prefix=vips 
