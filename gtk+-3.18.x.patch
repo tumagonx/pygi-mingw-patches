@@ -1,0 +1,210 @@
+--- gdk/win32/gdkdisplay-win32.c	Thu Jan 07 10:26:06 2016
++++ gdk/win32/gdkdisplay-win32.c	Thu Jul 28 21:26:01 2016
+@@ -25,6 +25,9 @@
+ #include "gdkwin32screen.h"
+ #include "gdkwin32window.h"
+ #include "gdkwin32.h"
++#ifndef WM_CLIPBOARDUPDATE
++#define WM_CLIPBOARDUPDATE 0x031d
++#endif
+ 
+ static int debug_indent = 0;
+ 
+--- gdk/win32/gdkevents-win32.c	Thu Jan 07 10:25:56 2016
++++ gdk/win32/gdkevents-win32.c	Thu Jul 28 21:14:21 2016
+@@ -85,6 +85,10 @@
+ #define SWP_NOCLIENTSIZE 0x0800
+ #define SWP_NOCLIENTMOVE 0x1000
+ #define SWP_STATECHANGED 0x8000
++#ifndef WM_DWMCOMPOSITIONCHANGED
++#define WM_DWMCOMPOSITIONCHANGED 0x031e
++#endif
++
+ /*
+  * Private function declarations
+  */
+@@ -178,7 +182,9 @@
+ 
+   if (suggested_tick == 0)
+     suggested_tick = GetTickCount ();
+-  if (suggested_tick <= cur_tick)
++  /* Ticks eventually wrap around.
++   * This works as long as the interval between ticks is < 2147483648ms */
++  if (suggested_tick <= cur_tick && ((cur_tick - suggested_tick) < 0x7FFFFFFF))
+     return cur_tick;
+   else
+     return cur_tick = suggested_tick;
+--- gdk/win32/gdkscreen-win32.c	Thu Jan 07 10:25:56 2016
++++ gdk/win32/gdkscreen-win32.c	Wed Apr 13 15:19:20 2016
+@@ -193,14 +193,14 @@
+   g_return_val_if_fail (GDK_IS_SCREEN (screen), FALSE);
+ 
+   /* On Windows 8 and later, DWM (composition) is always enabled */
+-  if (_is_win8_or_later)
+-    return TRUE;
+-  else
+-    {
+-      if (DwmIsCompositionEnabled (&is_composited) != S_OK)
++  //if (_is_win8_or_later)
++  //  return TRUE;
++  //else
++   // {
++   //   if (DwmIsCompositionEnabled (&is_composited) != S_OK)
+         return FALSE;
+-      return is_composited;
+-    }
++   //   return is_composited;
++   // }
+ }
+ 
+ static void
+--- gdk/win32/gdkwindow-win32.c	Thu Jan 07 10:25:56 2016
++++ gdk/win32/gdkwindow-win32.c	Thu Jul 28 21:14:14 2016
+@@ -138,6 +138,8 @@
+ static void
+ gdk_window_impl_win32_init (GdkWindowImplWin32 *impl)
+ {
++  GdkDisplay *display = gdk_display_get_default ();
++
+   impl->toplevel_window_type = -1;
+   impl->cursor = NULL;
+   impl->hicon_big = NULL;
+@@ -148,6 +150,14 @@
+   impl->transient_children = NULL;
+   impl->num_transients = 0;
+   impl->changing_state = FALSE;
++
++  if (display != NULL)
++    /* Replace WM-defined default cursor with the default cursor
++     * from our theme. Otherwise newly-opened windows (such as popup
++     * menus of all kinds) will have WM-default cursor when they are
++     * first shown, which will be replaced by our cursor only later on.
++     */
++    impl->cursor = _gdk_win32_display_get_cursor_for_type (display, GDK_LEFT_PTR);
+ }
+ 
+ static void
+@@ -259,36 +269,36 @@
+ 
+   if (!gdk_screen_is_composited (gdk_window_get_screen (window)))
+     return FALSE;
++  // this break XP, should use loadlibrary 
++  //if (window == _gdk_root)
++  //  return FALSE;
+ 
+-  if (window == _gdk_root)
+-    return FALSE;
+-
+-  thiswindow = GDK_WINDOW_HWND (window);
++  //thiswindow = GDK_WINDOW_HWND (window);
+ 
+   /* Blurbehind only works on toplevel windows */
+-  parent = GetAncestor (thiswindow, GA_PARENT);
+-  if (!(GetWindowLong (thiswindow, GWL_STYLE) & WS_POPUP) &&
+-      (parent == NULL || parent != GetDesktopWindow ()))
+-    return FALSE;
++  //parent = GetAncestor (thiswindow, GA_PARENT);
++  //if (!(GetWindowLong (thiswindow, GWL_STYLE) & WS_POPUP) &&
++  //    (parent == NULL || parent != GetDesktopWindow ()))
++  //  return FALSE;
+ 
+-  empty_region = CreateRectRgn (0, 0, -1, -1);
++  //empty_region = CreateRectRgn (0, 0, -1, -1);
+ 
+-  if (empty_region == NULL)
+-    return FALSE;
++  //if (empty_region == NULL)
++  //  return FALSE;
++
++  //memset (&blur_behind, 0, sizeof (blur_behind));
++  //blur_behind.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
++  //blur_behind.hRgnBlur = empty_region;
++  //blur_behind.fEnable = TRUE;
++  //call_result = DwmEnableBlurBehindWindow (thiswindow, &blur_behind);
+ 
+-  memset (&blur_behind, 0, sizeof (blur_behind));
+-  blur_behind.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+-  blur_behind.hRgnBlur = empty_region;
+-  blur_behind.fEnable = TRUE;
+-  call_result = DwmEnableBlurBehindWindow (thiswindow, &blur_behind);
+-
+-  if (!SUCCEEDED (call_result))
+-    g_warning ("%s: %s (%p) failed: %" G_GINT32_MODIFIER "x",
+-        G_STRLOC, "DwmEnableBlurBehindWindow", thiswindow, (guint32) call_result);
++  //if (!SUCCEEDED (call_result))
++  //  g_warning ("%s: %s (%p) failed: %" G_GINT32_MODIFIER "x",
++  //      G_STRLOC, "DwmEnableBlurBehindWindow", thiswindow, (guint32) call_result);
+ 
+-  DeleteObject (empty_region);
++  //DeleteObject (empty_region);
+ 
+-  return SUCCEEDED (call_result);
++  //return SUCCEEDED (call_result);
+ }
+ 
+ static const gchar *
+@@ -606,8 +616,8 @@
+     {
+       rect.left = window->x;
+       rect.top = window->y;
+-      rect.right = window->width;
+-      rect.bottom = window->height;
++      rect.right = window->width + window->x;
++      rect.bottom = window->height + window->y;
+ 
+       AdjustWindowRectEx (&rect, dwStyle, FALSE, dwExStyle);
+ 
+--- gtk/deprecated/gtkstatusicon.c	Thu Jan 07 10:25:56 2016
++++ gtk/deprecated/gtkstatusicon.c	Wed Jul 27 06:17:53 2016
+@@ -726,6 +726,12 @@
+ 	{
+ 	  GtkStatusIcon *status_icon = GTK_STATUS_ICON (rover->data);
+ 	  GtkStatusIconPrivate *priv = status_icon->priv;
++	  
++	  /* taskbar_created_msg is also fired when DPI changes. Try to delete existing icons if possible. */
++	  if (!Shell_NotifyIconW (NIM_DELETE, &priv->nid))
++	  {
++		g_warning (G_STRLOC ": Shell_NotifyIcon(NIM_DELETE) on existing icon failed");
++	  }
+ 
+ 	  priv->nid.hWnd = hwnd;
+ 	  priv->nid.uID = status_icon_id++;
+--- gtk/gtkiconcache.c	Thu Jan 28 09:19:54 2016
++++ gtk/gtkiconcache.c	Wed Apr 13 15:19:20 2016
+@@ -111,8 +111,10 @@
+ /*             or possibly in the msvcrt.dll linked to by the Windows DDK */
+ /*             (will need to check on the Windows DDK part later) */
+ #if ((_MSC_VER >= 1400 || __MSVCRT_VERSION__ >= 0x0800) || defined (__MINGW64_VERSION_MAJOR)) && !defined(_WIN64)
++#ifdef _USE_32BIT_TIME_T
+ #undef fstat /* Just in case */
+ #define fstat _fstat32  
++#endif
+ #endif
+ #endif
+ 
+--- gtk/gtkplacesview.c	Thu Jan 07 10:25:56 2016
++++ gtk/gtkplacesview.c	Wed Apr 13 15:19:20 2016
+@@ -1119,9 +1119,11 @@
+   populate_servers (view);
+ 
+   /* fetch networks and add them asynchronously */
++  /* is this relevant for windows? fetch_networks use nautilus network:/// */
++#ifndef G_OS_WIN32
+   if (!gtk_places_view_get_local_only (view))
+     fetch_networks (view);
+-
++#endif
+   update_view_mode (view);
+   /* Check whether we still are in a loading state */
+   update_loading (view);
+--- gtk/org.gtk.Settings.FileChooser.gschema.xml	Thu Jan 07 10:25:56 2016
++++ gtk/org.gtk.Settings.FileChooser.gschema.xml	Wed Apr 13 15:19:20 2016
+@@ -69,7 +69,7 @@
+       </description>
+     </key>
+     <key type="b" name="sort-directories-first">
+-      <default>false</default>
++      <default>true</default>
+       <summary>Show folders first</summary>
+       <description>
+         If set to true, then folders are shown before files in the list.
