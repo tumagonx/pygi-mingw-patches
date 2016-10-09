@@ -1,0 +1,782 @@
+--- gdk/win32/gdkglobals-win32.c	Mon Dec 28 22:42:28 2015
++++ gdk/win32/gdkglobals-win32.c	Tue Apr 12 22:20:50 2016
+@@ -39,7 +39,7 @@
+ gint		  _gdk_offset_x, _gdk_offset_y;
+ 
+ HDC		  _gdk_display_hdc;
+-HINSTANCE	  _gdk_dll_hinstance;
++HINSTANCE	  _gdk_dll_hinstance = NULL;
+ HINSTANCE	  _gdk_app_hmodule;
+ 
+ HKL		  _gdk_input_locale;
+--- gdk/win32/gdkmain-win32.c	Wed Jan 20 02:03:55 2016
++++ gdk/win32/gdkmain-win32.c	Tue Apr 12 22:20:50 2016
+@@ -63,7 +63,7 @@
+     /* Placeholder in --max-colors=COLORS in --help output */ N_("COLORS") },
+   { NULL }
+ };
+-
++#ifdef DLL_EXPORT
+ int __stdcall
+ DllMain (HINSTANCE hinstDLL,
+ 	 DWORD     dwReason,
+@@ -73,7 +73,7 @@
+ 
+   return TRUE;
+ }
+-
++#endif
+ void
+ _gdk_windowing_init (void)
+ {
+--- gdk/gdktypes.h	Mon Dec 28 22:42:28 2015
++++ gdk/gdktypes.h	Tue Apr 12 22:20:51 2016
+@@ -41,7 +41,11 @@
+ #  ifdef GDK_COMPILATION
+ #    define GDKVAR __declspec(dllexport)
+ #  else
+-#    define GDKVAR extern __declspec(dllimport)
++#    ifdef GDK_STATIC_COMPILATION
++#      define GDKVAR extern
++#    else
++#      define GDKVAR extern __declspec(dllimport)
++#    endif
+ #  endif
+ #else
+ #  define GDKVAR extern
+--- gtk/gtkdebug.h	Mon Dec 28 22:42:28 2015
++++ gtk/gtkdebug.h	Tue Apr 12 22:20:51 2016
+@@ -66,7 +66,11 @@
+ #  ifdef GTK_COMPILATION
+ #    define GTKVAR __declspec(dllexport)
+ #  else
+-#    define GTKVAR extern __declspec(dllimport)
++#    ifdef GTK_STATIC_COMPILATION
++#      define GTKVAR extern
++#    else
++#      define GTKVAR extern __declspec(dllimport)
++#    endif
+ #  endif
+ #else
+ #  define GTKVAR extern
+--- gtk/gtkmain.c	Wed Jan 20 02:03:55 2016
++++ gtk/gtkmain.c	Tue Apr 12 22:20:51 2016
+@@ -71,8 +71,8 @@
+ 
+ #ifdef G_OS_WIN32
+ 
+-static HMODULE gtk_dll;
+-
++static HMODULE gtk_dll = NULL;
++#ifdef DLL_EXPORT
+ BOOL WINAPI
+ DllMain (HINSTANCE hinstDLL,
+ 	 DWORD     fdwReason,
+@@ -87,7 +87,7 @@
+ 
+   return TRUE;
+ }
+-
++#endif
+ /* These here before inclusion of gtkprivate.h so that the original
+  * GTK_LIBDIR and GTK_LOCALEDIR definitions are seen. Yeah, this is a
+  * bit sucky.
+--- gtk/gtkmain.h	Mon Dec 28 22:42:28 2015
++++ gtk/gtkmain.h	Tue Apr 12 22:20:51 2016
+@@ -69,7 +69,11 @@
+ #ifdef GTK_COMPILATION
+ #define GTKMAIN_C_VAR __declspec(dllexport)
+ #else
+-#define GTKMAIN_C_VAR extern __declspec(dllimport)
++#    ifdef GTK_STATIC_COMPILATION
++#      define GTKMAIN_C_VAR extern
++#    else
++#      define GTKMAIN_C_VAR extern __declspec(dllimport)
++#    endif
+ #endif
+ #else
+ #define GTKMAIN_C_VAR extern
+--- gtk/gtktexttypes.h	Mon Dec 28 22:42:28 2015
++++ gtk/gtktexttypes.h	Tue Apr 12 22:20:51 2016
+@@ -46,7 +46,11 @@
+ #ifdef GTK_COMPILATION
+ #define VARIABLE __declspec(dllexport)
+ #else
+-#define VARIABLE extern __declspec(dllimport)
++#    ifdef GTK_STATIC_COMPILATION
++#      define VARIABLE extern
++#    else
++#      define VARIABLE extern __declspec(dllimport)
++#    endif
+ #endif
+ #else
+ #define VARIABLE extern
+--- gtk/gtktypefuncs.c	Sun Mar 06 00:33:45 2016
++++ gtk/gtktypefuncs.c	Fri Jul 29 02:01:46 2016
+@@ -1,383 +0,0 @@
+-*tp++ = gdk_app_launch_context_get_type();
+-*tp++ = gdk_axis_use_get_type();
+-*tp++ = gdk_byte_order_get_type();
+-*tp++ = gdk_cap_style_get_type();
+-*tp++ = gdk_color_get_type();
+-*tp++ = gdk_colormap_get_type();
+-*tp++ = gdk_colorspace_get_type();
+-*tp++ = gdk_crossing_mode_get_type();
+-*tp++ = gdk_cursor_get_type();
+-*tp++ = gdk_cursor_type_get_type();
+-*tp++ = gdk_device_get_type();
+-*tp++ = gdk_display_get_type();
+-*tp++ = gdk_display_manager_get_type();
+-*tp++ = gdk_drag_action_get_type();
+-*tp++ = gdk_drag_context_get_type();
+-*tp++ = gdk_drag_protocol_get_type();
+-*tp++ = gdk_drawable_get_type();
+-*tp++ = gdk_event_get_type();
+-*tp++ = gdk_event_mask_get_type();
+-*tp++ = gdk_event_type_get_type();
+-*tp++ = gdk_extension_mode_get_type();
+-*tp++ = gdk_fill_get_type();
+-*tp++ = gdk_fill_rule_get_type();
+-*tp++ = gdk_filter_return_get_type();
+-*tp++ = gdk_font_get_type();
+-*tp++ = gdk_font_type_get_type();
+-*tp++ = gdk_function_get_type();
+-*tp++ = gdk_gc_get_type();
+-*tp++ = gdk_gc_values_mask_get_type();
+-*tp++ = gdk_grab_status_get_type();
+-*tp++ = gdk_gravity_get_type();
+-*tp++ = gdk_image_get_type();
+-*tp++ = gdk_image_type_get_type();
+-*tp++ = gdk_input_condition_get_type();
+-*tp++ = gdk_input_mode_get_type();
+-*tp++ = gdk_input_source_get_type();
+-*tp++ = gdk_interp_type_get_type();
+-*tp++ = gdk_join_style_get_type();
+-*tp++ = gdk_keymap_get_type();
+-*tp++ = gdk_line_style_get_type();
+-*tp++ = gdk_modifier_type_get_type();
+-*tp++ = gdk_notify_type_get_type();
+-*tp++ = gdk_overlap_type_get_type();
+-*tp++ = gdk_owner_change_get_type();
+-*tp++ = gdk_pango_renderer_get_type();
+-*tp++ = gdk_pixbuf_alpha_mode_get_type();
+-*tp++ = gdk_pixbuf_animation_get_type();
+-*tp++ = gdk_pixbuf_animation_iter_get_type();
+-*tp++ = gdk_pixbuf_error_get_type();
+-*tp++ = gdk_pixbuf_format_get_type();
+-*tp++ = gdk_pixbuf_get_type();
+-*tp++ = gdk_pixbuf_loader_get_type();
+-*tp++ = gdk_pixbuf_rotation_get_type();
+-*tp++ = gdk_pixbuf_simple_anim_get_type();
+-*tp++ = gdk_pixbuf_simple_anim_iter_get_type();
+-*tp++ = gdk_pixmap_get_type();
+-*tp++ = gdk_property_state_get_type();
+-*tp++ = gdk_prop_mode_get_type();
+-*tp++ = gdk_rectangle_get_type();
+-*tp++ = gdk_rgb_dither_get_type();
+-*tp++ = gdk_screen_get_type();
+-*tp++ = gdk_scroll_direction_get_type();
+-*tp++ = gdk_setting_action_get_type();
+-*tp++ = gdk_status_get_type();
+-*tp++ = gdk_subwindow_mode_get_type();
+-*tp++ = gdk_visibility_state_get_type();
+-*tp++ = gdk_visual_get_type();
+-*tp++ = gdk_visual_type_get_type();
+-*tp++ = gdk_window_attributes_type_get_type();
+-*tp++ = gdk_window_class_get_type();
+-*tp++ = gdk_window_edge_get_type();
+-*tp++ = gdk_window_hints_get_type();
+-*tp++ = gdk_window_object_get_type();
+-*tp++ = gdk_window_state_get_type();
+-*tp++ = gdk_window_type_get_type();
+-*tp++ = gdk_window_type_hint_get_type();
+-*tp++ = gdk_wm_decoration_get_type();
+-*tp++ = gdk_wm_function_get_type();
+-*tp++ = gtk_about_dialog_get_type();
+-*tp++ = gtk_accel_flags_get_type();
+-*tp++ = gtk_accel_group_get_type();
+-*tp++ = gtk_accel_label_get_type();
+-*tp++ = gtk_accel_map_get_type();
+-*tp++ = gtk_accessible_get_type();
+-*tp++ = gtk_action_get_type();
+-*tp++ = gtk_action_group_get_type();
+-*tp++ = gtk_activatable_get_type();
+-*tp++ = gtk_adjustment_get_type();
+-*tp++ = gtk_alignment_get_type();
+-*tp++ = gtk_anchor_type_get_type();
+-*tp++ = gtk_arg_flags_get_type();
+-*tp++ = gtk_arrow_get_type();
+-*tp++ = gtk_arrow_placement_get_type();
+-*tp++ = gtk_arrow_type_get_type();
+-*tp++ = gtk_aspect_frame_get_type();
+-*tp++ = gtk_assistant_get_type();
+-*tp++ = gtk_assistant_page_type_get_type();
+-*tp++ = gtk_attach_options_get_type();
+-*tp++ = gtk_bin_get_type();
+-*tp++ = gtk_border_get_type();
+-*tp++ = gtk_box_get_type();
+-*tp++ = gtk_buildable_get_type();
+-*tp++ = gtk_builder_error_get_type();
+-*tp++ = gtk_builder_get_type();
+-*tp++ = gtk_button_action_get_type();
+-*tp++ = gtk_button_box_get_type();
+-*tp++ = gtk_button_box_style_get_type();
+-*tp++ = gtk_button_get_type();
+-*tp++ = gtk_buttons_type_get_type();
+-*tp++ = gtk_calendar_display_options_get_type();
+-*tp++ = gtk_calendar_get_type();
+-*tp++ = gtk_cell_editable_get_type();
+-*tp++ = gtk_cell_layout_get_type();
+-*tp++ = gtk_cell_renderer_accel_get_type();
+-*tp++ = gtk_cell_renderer_accel_mode_get_type();
+-*tp++ = gtk_cell_renderer_combo_get_type();
+-*tp++ = gtk_cell_renderer_get_type();
+-*tp++ = gtk_cell_renderer_mode_get_type();
+-*tp++ = gtk_cell_renderer_pixbuf_get_type();
+-*tp++ = gtk_cell_renderer_progress_get_type();
+-*tp++ = gtk_cell_renderer_spin_get_type();
+-*tp++ = gtk_cell_renderer_spinner_get_type();
+-*tp++ = gtk_cell_renderer_state_get_type();
+-*tp++ = gtk_cell_renderer_text_get_type();
+-*tp++ = gtk_cell_renderer_toggle_get_type();
+-*tp++ = gtk_cell_type_get_type();
+-*tp++ = gtk_cell_view_get_type();
+-*tp++ = gtk_check_button_get_type();
+-*tp++ = gtk_check_menu_item_get_type();
+-*tp++ = gtk_clipboard_get_type();
+-*tp++ = gtk_clist_drag_pos_get_type();
+-*tp++ = gtk_color_button_get_type();
+-*tp++ = gtk_color_selection_dialog_get_type();
+-*tp++ = gtk_color_selection_get_type();
+-*tp++ = gtk_combo_box_get_type();
+-*tp++ = gtk_combo_box_text_get_type();
+-*tp++ = gtk_container_get_type();
+-*tp++ = gtk_corner_type_get_type();
+-*tp++ = gtk_ctree_expander_style_get_type();
+-*tp++ = gtk_ctree_expansion_type_get_type();
+-*tp++ = gtk_ctree_line_style_get_type();
+-*tp++ = gtk_ctree_pos_get_type();
+-*tp++ = gtk_curve_type_get_type();
+-*tp++ = gtk_debug_flag_get_type();
+-*tp++ = gtk_delete_type_get_type();
+-*tp++ = gtk_dest_defaults_get_type();
+-*tp++ = gtk_dialog_flags_get_type();
+-*tp++ = gtk_dialog_get_type();
+-*tp++ = gtk_direction_type_get_type();
+-*tp++ = gtk_drag_result_get_type();
+-*tp++ = gtk_drawing_area_get_type();
+-*tp++ = gtk_editable_get_type();
+-*tp++ = gtk_entry_buffer_get_type();
+-*tp++ = gtk_entry_completion_get_type();
+-*tp++ = gtk_entry_get_type();
+-*tp++ = gtk_entry_icon_position_get_type();
+-*tp++ = gtk_event_box_get_type();
+-*tp++ = gtk_expander_get_type();
+-*tp++ = gtk_expander_style_get_type();
+-*tp++ = gtk_file_chooser_action_get_type();
+-*tp++ = gtk_file_chooser_button_get_type();
+-*tp++ = gtk_file_chooser_confirmation_get_type();
+-*tp++ = gtk_file_chooser_dialog_get_type();
+-*tp++ = gtk_file_chooser_error_get_type();
+-*tp++ = gtk_file_chooser_get_type();
+-*tp++ = gtk_file_chooser_widget_get_type();
+-*tp++ = gtk_file_filter_flags_get_type();
+-*tp++ = gtk_file_filter_get_type();
+-*tp++ = gtk_fixed_get_type();
+-*tp++ = gtk_font_button_get_type();
+-*tp++ = gtk_font_selection_dialog_get_type();
+-*tp++ = gtk_font_selection_get_type();
+-*tp++ = gtk_frame_get_type();
+-*tp++ = gtk_handle_box_get_type();
+-*tp++ = gtk_hbox_get_type();
+-*tp++ = gtk_hbutton_box_get_type();
+-*tp++ = gtk_hpaned_get_type();
+-*tp++ = gtk_hscale_get_type();
+-*tp++ = gtk_hscrollbar_get_type();
+-*tp++ = gtk_hseparator_get_type();
+-*tp++ = gtk_hsv_get_type();
+-*tp++ = gtk_icon_factory_get_type();
+-*tp++ = gtk_icon_info_get_type();
+-*tp++ = gtk_icon_lookup_flags_get_type();
+-*tp++ = gtk_icon_set_get_type();
+-*tp++ = gtk_icon_size_get_type();
+-*tp++ = gtk_icon_source_get_type();
+-*tp++ = gtk_icon_theme_error_get_type();
+-*tp++ = gtk_icon_theme_get_type();
+-*tp++ = gtk_icon_view_drop_position_get_type();
+-*tp++ = gtk_icon_view_get_type();
+-*tp++ = gtk_identifier_get_type();
+-*tp++ = gtk_image_get_type();
+-*tp++ = gtk_image_menu_item_get_type();
+-*tp++ = gtk_image_type_get_type();
+-*tp++ = gtk_im_context_get_type();
+-*tp++ = gtk_im_context_simple_get_type();
+-*tp++ = gtk_im_multicontext_get_type();
+-*tp++ = gtk_im_preedit_style_get_type();
+-*tp++ = gtk_im_status_style_get_type();
+-*tp++ = gtk_info_bar_get_type();
+-*tp++ = gtk_invisible_get_type();
+-*tp++ = gtk_item_get_type();
+-*tp++ = gtk_justification_get_type();
+-*tp++ = gtk_label_get_type();
+-*tp++ = gtk_layout_get_type();
+-*tp++ = gtk_link_button_get_type();
+-*tp++ = gtk_list_store_get_type();
+-*tp++ = gtk_match_type_get_type();
+-*tp++ = gtk_menu_bar_get_type();
+-*tp++ = gtk_menu_direction_type_get_type();
+-*tp++ = gtk_menu_get_type();
+-*tp++ = gtk_menu_item_get_type();
+-*tp++ = gtk_menu_shell_get_type();
+-*tp++ = gtk_menu_tool_button_get_type();
+-*tp++ = gtk_message_dialog_get_type();
+-*tp++ = gtk_message_type_get_type();
+-*tp++ = gtk_metric_type_get_type();
+-*tp++ = gtk_misc_get_type();
+-*tp++ = gtk_mount_operation_get_type();
+-*tp++ = gtk_movement_step_get_type();
+-*tp++ = gtk_notebook_get_type();
+-*tp++ = gtk_notebook_tab_get_type();
+-*tp++ = gtk_number_up_layout_get_type();
+-*tp++ = gtk_object_flags_get_type();
+-*tp++ = gtk_object_get_type();
+-*tp++ = gtk_offscreen_window_get_type();
+-*tp++ = gtk_orientable_get_type();
+-*tp++ = gtk_orientation_get_type();
+-*tp++ = gtk_pack_direction_get_type();
+-*tp++ = gtk_pack_type_get_type();
+-*tp++ = gtk_page_orientation_get_type();
+-*tp++ = gtk_page_set_get_type();
+-*tp++ = gtk_page_setup_get_type();
+-*tp++ = gtk_paned_get_type();
+-*tp++ = gtk_paper_size_get_type();
+-*tp++ = gtk_path_priority_type_get_type();
+-*tp++ = gtk_path_type_get_type();
+-*tp++ = gtk_plug_get_type();
+-*tp++ = gtk_policy_type_get_type();
+-*tp++ = gtk_position_type_get_type();
+-*tp++ = gtk_preview_type_get_type();
+-*tp++ = gtk_print_context_get_type();
+-*tp++ = gtk_print_duplex_get_type();
+-*tp++ = gtk_print_error_get_type();
+-*tp++ = gtk_print_operation_action_get_type();
+-*tp++ = gtk_print_operation_get_type();
+-*tp++ = gtk_print_operation_preview_get_type();
+-*tp++ = gtk_print_operation_result_get_type();
+-*tp++ = gtk_print_pages_get_type();
+-*tp++ = gtk_print_quality_get_type();
+-*tp++ = gtk_print_settings_get_type();
+-*tp++ = gtk_print_status_get_type();
+-*tp++ = gtk_private_flags_get_type();
+-*tp++ = gtk_progress_bar_get_type();
+-*tp++ = gtk_progress_bar_orientation_get_type();
+-*tp++ = gtk_progress_bar_style_get_type();
+-*tp++ = gtk_radio_action_get_type();
+-*tp++ = gtk_radio_button_get_type();
+-*tp++ = gtk_radio_menu_item_get_type();
+-*tp++ = gtk_radio_tool_button_get_type();
+-*tp++ = gtk_range_get_type();
+-*tp++ = gtk_rc_flags_get_type();
+-*tp++ = gtk_rc_style_get_type();
+-*tp++ = gtk_rc_token_type_get_type();
+-*tp++ = gtk_recent_action_get_type();
+-*tp++ = gtk_recent_chooser_dialog_get_type();
+-*tp++ = gtk_recent_chooser_error_get_type();
+-*tp++ = gtk_recent_chooser_get_type();
+-*tp++ = gtk_recent_chooser_menu_get_type();
+-*tp++ = gtk_recent_chooser_widget_get_type();
+-*tp++ = gtk_recent_filter_flags_get_type();
+-*tp++ = gtk_recent_filter_get_type();
+-*tp++ = gtk_recent_info_get_type();
+-*tp++ = gtk_recent_manager_error_get_type();
+-*tp++ = gtk_recent_manager_get_type();
+-*tp++ = gtk_recent_sort_type_get_type();
+-*tp++ = gtk_relief_style_get_type();
+-*tp++ = gtk_requisition_get_type();
+-*tp++ = gtk_resize_mode_get_type();
+-*tp++ = gtk_response_type_get_type();
+-*tp++ = gtk_scale_button_get_type();
+-*tp++ = gtk_scale_get_type();
+-*tp++ = gtk_scrollbar_get_type();
+-*tp++ = gtk_scrolled_window_get_type();
+-*tp++ = gtk_scroll_step_get_type();
+-*tp++ = gtk_scroll_type_get_type();
+-*tp++ = gtk_selection_data_get_type();
+-*tp++ = gtk_selection_mode_get_type();
+-*tp++ = gtk_sensitivity_type_get_type();
+-*tp++ = gtk_separator_get_type();
+-*tp++ = gtk_separator_menu_item_get_type();
+-*tp++ = gtk_separator_tool_item_get_type();
+-*tp++ = gtk_settings_get_type();
+-*tp++ = gtk_shadow_type_get_type();
+-*tp++ = gtk_side_type_get_type();
+-*tp++ = gtk_signal_run_type_get_type();
+-*tp++ = gtk_size_group_get_type();
+-*tp++ = gtk_size_group_mode_get_type();
+-*tp++ = gtk_socket_get_type();
+-*tp++ = gtk_sort_type_get_type();
+-*tp++ = gtk_spin_button_get_type();
+-*tp++ = gtk_spin_button_update_policy_get_type();
+-*tp++ = gtk_spinner_get_type();
+-*tp++ = gtk_spin_type_get_type();
+-*tp++ = gtk_state_type_get_type();
+-*tp++ = gtk_statusbar_get_type();
+-*tp++ = gtk_status_icon_get_type();
+-*tp++ = gtk_style_get_type();
+-*tp++ = gtk_submenu_direction_get_type();
+-*tp++ = gtk_submenu_placement_get_type();
+-*tp++ = gtk_table_get_type();
+-*tp++ = gtk_target_flags_get_type();
+-*tp++ = gtk_target_list_get_type();
+-*tp++ = gtk_tearoff_menu_item_get_type();
+-*tp++ = gtk_text_attributes_get_type();
+-*tp++ = gtk_text_buffer_get_type();
+-*tp++ = gtk_text_buffer_target_info_get_type();
+-*tp++ = gtk_text_child_anchor_get_type();
+-*tp++ = gtk_text_direction_get_type();
+-*tp++ = gtk_text_get_type();
+-*tp++ = gtk_text_iter_get_type();
+-*tp++ = gtk_text_mark_get_type();
+-*tp++ = gtk_text_search_flags_get_type();
+-*tp++ = gtk_text_tag_get_type();
+-*tp++ = gtk_text_tag_table_get_type();
+-*tp++ = gtk_text_view_get_type();
+-*tp++ = gtk_text_window_type_get_type();
+-*tp++ = gtk_toggle_action_get_type();
+-*tp++ = gtk_toggle_button_get_type();
+-*tp++ = gtk_toggle_tool_button_get_type();
+-*tp++ = gtk_toolbar_child_type_get_type();
+-*tp++ = gtk_toolbar_get_type();
+-*tp++ = gtk_toolbar_space_style_get_type();
+-*tp++ = gtk_toolbar_style_get_type();
+-*tp++ = gtk_tool_button_get_type();
+-*tp++ = gtk_tool_item_get_type();
+-*tp++ = gtk_tool_item_group_get_type();
+-*tp++ = gtk_tool_palette_drag_targets_get_type();
+-*tp++ = gtk_tool_palette_get_type();
+-*tp++ = gtk_tool_shell_get_type();
+-*tp++ = gtk_tooltip_get_type();
+-*tp++ = gtk_tree_drag_dest_get_type();
+-*tp++ = gtk_tree_drag_source_get_type();
+-*tp++ = gtk_tree_get_type();
+-*tp++ = gtk_tree_item_get_type();
+-*tp++ = gtk_tree_iter_get_type();
+-*tp++ = gtk_tree_model_filter_get_type();
+-*tp++ = gtk_tree_model_flags_get_type();
+-*tp++ = gtk_tree_model_get_type();
+-*tp++ = gtk_tree_model_sort_get_type();
+-*tp++ = gtk_tree_path_get_type();
+-*tp++ = gtk_tree_row_reference_get_type();
+-*tp++ = gtk_tree_selection_get_type();
+-*tp++ = gtk_tree_sortable_get_type();
+-*tp++ = gtk_tree_store_get_type();
+-*tp++ = gtk_tree_view_column_get_type();
+-*tp++ = gtk_tree_view_column_sizing_get_type();
+-*tp++ = gtk_tree_view_drop_position_get_type();
+-*tp++ = gtk_tree_view_get_type();
+-*tp++ = gtk_tree_view_grid_lines_get_type();
+-*tp++ = gtk_tree_view_mode_get_type();
+-*tp++ = gtk_ui_manager_get_type();
+-*tp++ = gtk_ui_manager_item_type_get_type();
+-*tp++ = gtk_unit_get_type();
+-*tp++ = gtk_update_type_get_type();
+-*tp++ = gtk_vbox_get_type();
+-*tp++ = gtk_vbutton_box_get_type();
+-*tp++ = gtk_viewport_get_type();
+-*tp++ = gtk_visibility_get_type();
+-*tp++ = gtk_volume_button_get_type();
+-*tp++ = gtk_vpaned_get_type();
+-*tp++ = gtk_vscale_get_type();
+-*tp++ = gtk_vscrollbar_get_type();
+-*tp++ = gtk_vseparator_get_type();
+-*tp++ = gtk_widget_flags_get_type();
+-*tp++ = gtk_widget_get_type();
+-*tp++ = gtk_widget_help_type_get_type();
+-*tp++ = gtk_window_get_type();
+-*tp++ = gtk_window_group_get_type();
+-*tp++ = gtk_window_position_get_type();
+-*tp++ = gtk_window_type_get_type();
+-*tp++ = gtk_wrap_mode_get_type();
+--- gtk/Makefile.in	Sun Mar 06 00:31:31 2016
++++ gtk/Makefile.in	Wed Apr 20 07:00:24 2016
+@@ -1972,257 +1972,9 @@
+ gtk_update_icon_cache_LDADD = $(GDK_PIXBUF_LIBS) $(GTK_UPDATE_ICON_CACHE_MANIFEST_OBJECT)
+ gtk_update_icon_cache_SOURCES = updateiconcache.c 
+ STOCK_ICONS = \
+-	stock-icons/16/application-exit.png		\
+-	stock-icons/16/dialog-information.png		\
+-	stock-icons/16/document-new.png			\
+-	stock-icons/16/document-open.png		\
+-	stock-icons/16/document-open-recent.png		\
+-	stock-icons/16/document-print.png		\
+-	stock-icons/16/document-print-preview.png	\
+-	stock-icons/16/document-properties.png		\
+-	stock-icons/16/document-revert-ltr.png		\
+-	stock-icons/16/document-revert-rtl.png		\
+-	stock-icons/16/document-save-as.png		\
+-	stock-icons/16/drive-harddisk.png		\
+-	stock-icons/16/edit-clear.png			\
+-	stock-icons/16/edit-copy.png			\
+-	stock-icons/16/edit-cut.png			\
+-	stock-icons/16/edit-delete.png			\
+-	stock-icons/16/edit-find.png			\
+-	stock-icons/16/edit-find-replace.png		\
+-	stock-icons/16/edit-paste.png			\
+-	stock-icons/16/edit-redo-ltr.png		\
+-	stock-icons/16/edit-redo-rtl.png		\
+-	stock-icons/16/edit-select-all.png		\
+-	stock-icons/16/edit-undo-ltr.png		\
+-	stock-icons/16/edit-undo-rtl.png		\
+-	stock-icons/16/folder.png			\
+-	stock-icons/16/format-indent-less-ltr.png	\
+-	stock-icons/16/format-indent-less-rtl.png	\
+-	stock-icons/16/format-indent-more-ltr.png	\
+-	stock-icons/16/format-indent-more-rtl.png	\
+-	stock-icons/16/format-justify-center.png	\
+-	stock-icons/16/format-justify-fill.png		\
+-	stock-icons/16/format-justify-left.png		\
+-	stock-icons/16/format-justify-right.png		\
+-	stock-icons/16/format-text-bold.png		\
+-	stock-icons/16/format-text-italic.png		\
+-	stock-icons/16/format-text-strikethrough.png	\
+-	stock-icons/16/format-text-underline.png	\
+-	stock-icons/16/go-previous-ltr.png		\
+-	stock-icons/16/go-bottom.png			\
+-	stock-icons/16/go-down.png			\
+-	stock-icons/16/go-first-ltr.png			\
+-	stock-icons/16/go-home.png			\
+-	stock-icons/16/go-jump-ltr.png			\
+-	stock-icons/16/go-jump-rtl.png			\
+-	stock-icons/16/go-last-ltr.png			\
+-	stock-icons/16/go-next-ltr.png			\
+-	stock-icons/16/go-previous-ltr.png		\
+-	stock-icons/16/go-top.png			\
+-	stock-icons/16/go-up.png			\
+-	stock-icons/16/gtk-caps-lock-warning.png	\
+-	stock-icons/16/gtk-color-picker.png		\
+-	stock-icons/16/gtk-connect.png			\
+-	stock-icons/16/gtk-convert.png			\
+-	stock-icons/16/gtk-disconnect.png		\
+-	stock-icons/16/gtk-edit.png			\
+-	stock-icons/16/gtk-font.png			\
+-	stock-icons/16/gtk-index.png			\
+-	stock-icons/16/gtk-orientation-landscape.png	\
+-	stock-icons/16/gtk-orientation-portrait.png	\
+-	stock-icons/16/gtk-orientation-reverse-landscape.png \
+-	stock-icons/16/gtk-orientation-reverse-portrait.png \
+-	stock-icons/16/gtk-page-setup.png		\
+-	stock-icons/16/gtk-preferences.png		\
+-	stock-icons/16/gtk-select-color.png		\
+-	stock-icons/16/gtk-select-font.png		\
+-	stock-icons/16/gtk-undelete-ltr.png		\
+-	stock-icons/16/gtk-undelete-rtl.png		\
+-	stock-icons/16/help-about.png			\
+-	stock-icons/16/help-contents.png		\
+-	stock-icons/16/image-missing.png		\
+-	stock-icons/16/list-add.png			\
+-	stock-icons/16/list-remove.png			\
+-	stock-icons/16/media-floppy.png			\
+-	stock-icons/16/media-optical.png		\
+-	stock-icons/16/media-playback-pause.png		\
+-	stock-icons/16/media-playback-start-ltr.png	\
+-	stock-icons/16/media-playback-start-rtl.png	\
+-	stock-icons/16/media-playback-stop.png		\
+-	stock-icons/16/media-record.png			\
+-	stock-icons/16/media-seek-backward-ltr.png	\
+-	stock-icons/16/media-seek-forward-ltr.png	\
+-	stock-icons/16/media-skip-backward-ltr.png	\
+-	stock-icons/16/media-skip-forward-ltr.png	\
+-	stock-icons/16/network-idle.png			\
+-	stock-icons/16/printer-error.png		\
+-	stock-icons/16/printer-info.png			\
+-	stock-icons/16/printer-paused.png		\
+-	stock-icons/16/printer-warning.png		\
+-	stock-icons/16/process-stop.png			\
+-	stock-icons/16/system-run.png			\
+-	stock-icons/16/text-x-generic.png		\
+-	stock-icons/16/tools-check-spelling.png		\
+-	stock-icons/16/view-fullscreen.png		\
+-	stock-icons/16/view-refresh.png			\
+-	stock-icons/16/view-restore.png			\
+-	stock-icons/16/view-sort-ascending.png		\
+-	stock-icons/16/view-sort-descending.png		\
+-	stock-icons/16/window-close.png			\
+-	stock-icons/16/zoom-fit-best.png		\
+-	stock-icons/16/zoom-in.png			\
+-	stock-icons/16/zoom-original.png		\
+-	stock-icons/16/zoom-out.png			\
+-	\
+-	stock-icons/20/gtk-apply.png			\
+-	stock-icons/20/gtk-cancel.png			\
+-	stock-icons/20/gtk-no.png			\
+-	stock-icons/20/gtk-ok.png			\
+-	stock-icons/20/gtk-yes.png			\
+-	stock-icons/20/window-close.png			\
+-	\
+-	stock-icons/24/application-exit.png		\
+-	stock-icons/24/audio-volume-high.png		\
+-	stock-icons/24/audio-volume-low.png		\
+-	stock-icons/24/audio-volume-medium.png		\
+-	stock-icons/24/audio-volume-muted.png		\
+-	stock-icons/24/dialog-information.png		\
+-	stock-icons/24/document-new.png			\
+-	stock-icons/24/document-open.png		\
+-	stock-icons/24/document-open-recent.png		\
+-	stock-icons/24/document-print.png		\
+-	stock-icons/24/document-print-preview.png	\
+-	stock-icons/24/document-properties.png		\
+-	stock-icons/24/document-revert-ltr.png		\
+-	stock-icons/24/document-revert-rtl.png		\
+-	stock-icons/24/document-save-as.png		\
+-	stock-icons/24/drive-harddisk.png		\
+-	stock-icons/24/edit-clear.png			\
+-	stock-icons/24/edit-copy.png			\
+-	stock-icons/24/edit-cut.png			\
+-	stock-icons/24/edit-delete.png			\
+-	stock-icons/24/edit-find.png			\
+-	stock-icons/24/edit-find-replace.png		\
+-	stock-icons/24/edit-paste.png			\
+-	stock-icons/24/edit-redo-ltr.png		\
+-	stock-icons/24/edit-redo-rtl.png		\
+-	stock-icons/24/edit-select-all.png		\
+-	stock-icons/24/edit-undo-ltr.png		\
+-	stock-icons/24/edit-undo-rtl.png		\
+-	stock-icons/24/folder.png			\
+-	stock-icons/24/format-indent-less-ltr.png	\
+-	stock-icons/24/format-indent-less-rtl.png	\
+-	stock-icons/24/format-indent-more-ltr.png	\
+-	stock-icons/24/format-indent-more-rtl.png	\
+-	stock-icons/24/format-justify-center.png	\
+-	stock-icons/24/format-justify-fill.png		\
+-	stock-icons/24/format-justify-left.png		\
+-	stock-icons/24/format-justify-right.png		\
+-	stock-icons/24/format-text-bold.png		\
+-	stock-icons/24/format-text-italic.png		\
+-	stock-icons/24/format-text-strikethrough.png	\
+-	stock-icons/24/format-text-underline.png	\
+-	stock-icons/24/go-bottom.png			\
+-	stock-icons/24/go-down.png			\
+-	stock-icons/24/go-first-ltr.png			\
+-	stock-icons/24/go-home.png			\
+-	stock-icons/24/go-jump-ltr.png			\
+-	stock-icons/24/go-jump-rtl.png			\
+-	stock-icons/24/go-last-ltr.png			\
+-	stock-icons/24/go-next-ltr.png			\
+-	stock-icons/24/go-previous-ltr.png		\
+-	stock-icons/24/go-top.png			\
+-	stock-icons/24/go-up.png			\
+-	stock-icons/24/gtk-caps-lock-warning.png	\
+-	stock-icons/24/gtk-color-picker.png		\
+-	stock-icons/24/gtk-connect.png			\
+-	stock-icons/24/gtk-convert.png			\
+-	stock-icons/24/gtk-disconnect.png		\
+-	stock-icons/24/gtk-edit.png			\
+-	stock-icons/24/gtk-font.png			\
+-	stock-icons/24/gtk-index.png			\
+-	stock-icons/24/gtk-orientation-landscape.png	\
+-	stock-icons/24/gtk-orientation-portrait.png	\
+-	stock-icons/24/gtk-orientation-reverse-landscape.png \
+-	stock-icons/24/gtk-orientation-reverse-portrait.png \
+-	stock-icons/24/gtk-page-setup.png		\
+-	stock-icons/24/gtk-preferences.png		\
+-	stock-icons/24/gtk-select-color.png		\
+-	stock-icons/24/gtk-select-font.png		\
+-	stock-icons/24/gtk-undelete-ltr.png		\
+-	stock-icons/24/gtk-undelete-rtl.png		\
+-	stock-icons/24/help-about.png			\
+-	stock-icons/24/help-contents.png		\
+-	stock-icons/24/image-missing.png		\
+-	stock-icons/24/list-add.png			\
+-	stock-icons/24/list-remove.png			\
+-	stock-icons/24/media-floppy.png			\
+-	stock-icons/24/media-optical.png		\
+-	stock-icons/24/media-playback-pause.png		\
+-	stock-icons/24/media-playback-start-ltr.png	\
+-	stock-icons/24/media-playback-start-rtl.png	\
+-	stock-icons/24/media-playback-stop.png		\
+-	stock-icons/24/media-record.png			\
+-	stock-icons/24/media-seek-backward-ltr.png	\
+-	stock-icons/24/media-seek-forward-ltr.png	\
+-	stock-icons/24/media-skip-backward-ltr.png	\
+-	stock-icons/24/media-skip-forward-ltr.png	\
+-	stock-icons/24/network-idle.png			\
+-	stock-icons/24/printer-error.png		\
+-	stock-icons/24/printer-info.png			\
+-	stock-icons/24/printer-paused.png		\
+-	stock-icons/24/printer-warning.png		\
+-	stock-icons/24/process-stop.png			\
+-	stock-icons/24/system-run.png			\
+-	stock-icons/24/text-x-generic.png		\
+-	stock-icons/24/tools-check-spelling.png		\
+-	stock-icons/24/view-fullscreen.png		\
+-	stock-icons/24/view-refresh.png			\
+-	stock-icons/24/view-restore.png			\
+-	stock-icons/24/view-sort-ascending.png		\
+-	stock-icons/24/view-sort-descending.png		\
+-	stock-icons/24/window-close.png			\
+-	stock-icons/24/zoom-fit-best.png		\
+-	stock-icons/24/zoom-in.png			\
+-	stock-icons/24/zoom-original.png		\
+-	stock-icons/24/zoom-out.png			\
+-	\
+-	stock-icons/32/gtk-dnd-multiple.png		\
+-	stock-icons/32/gtk-dnd.png			\
+-	\
+-	stock-icons/48/dialog-error.png			\
+-	stock-icons/48/dialog-information.png		\
+-	stock-icons/48/dialog-password.png		\
+-	stock-icons/48/dialog-question.png		\
+-	stock-icons/48/dialog-warning.png
+-
++	
+ GENERATED_ICONS = \
+-	stock-icons/16/go-previous-rtl.png 		\
+-	stock-icons/16/go-next-rtl.png 			\
+-	stock-icons/16/go-first-rtl.png 		\
+-	stock-icons/16/go-last-rtl.png 			\
+-	stock-icons/16/media-seek-forward-rtl.png 	\
+-	stock-icons/16/media-skip-forward-rtl.png 	\
+-	stock-icons/16/media-skip-backward-rtl.png 	\
+-	stock-icons/16/media-seek-backward-rtl.png 	\
+-	stock-icons/16/document-save.png 		\
+-	stock-icons/16/folder-remote.png 		\
+-	stock-icons/16/user-home.png 			\
+-	stock-icons/16/user-desktop.png 		\
+-	stock-icons/24/go-previous-rtl.png 		\
+-	stock-icons/24/go-next-rtl.png 			\
+-	stock-icons/24/go-first-rtl.png 		\
+-	stock-icons/24/go-last-rtl.png 			\
+-	stock-icons/24/media-seek-forward-rtl.png 	\
+-	stock-icons/24/media-skip-forward-rtl.png 	\
+-	stock-icons/24/media-skip-backward-rtl.png 	\
+-	stock-icons/24/media-seek-backward-rtl.png 	\
+-	stock-icons/24/document-save.png 		\
+-	stock-icons/24/folder-remote.png 		\
+-	stock-icons/24/user-home.png 			\
+-	stock-icons/24/user-desktop.png
+-
++	
+ @CROSS_COMPILING_FALSE@gtk_update_icon_cache_program = \
+ @CROSS_COMPILING_FALSE@	   ./gtk-update-icon-cache
+ 
+--- modules/input/Makefile.in	Sun Mar 06 00:31:32 2016
++++ modules/input/Makefile.in	Tue Apr 12 22:26:09 2016
+@@ -1406,6 +1406,7 @@
+ 	  echo $(mkinstalldirs) $(DESTDIR)$(sysconfdir)/gtk-2.0 ; \
+ 	  $(mkinstalldirs) $(DESTDIR)$(sysconfdir)/gtk-2.0 ; \
+ 	  echo "$(DESTDOR)$(bindir)/gtk-query-immodules-2.0 > $(DESTDIR)$(libdir)/gtk-2.0/$(GTK_BINARY_VERSION)/immodules.cache" ; \
++	  $(MKDIR_P) $(DESTDIR)$(libdir)/gtk-2.0/2.10.0 ; \
+ 	  $(DESTDIR)$(bindir)/gtk-query-immodules-2.0 > $(DESTDIR)$(libdir)/gtk-2.0/$(GTK_BINARY_VERSION)/immodules.cache ; \
+ 	else \
+ 	  echo "***" ; \
+--- configure	Sun Mar 06 00:31:33 2016
++++ configure	Tue Apr 12 20:52:06 2016
+@@ -5231,7 +5231,7 @@
+ ac_compiler_gnu=$ac_cv_c_compiler_gnu
+ 
+ 
+-if test "$os_win32" = "yes"; then
++if test "$os_win32" = "no"; then
+   if test x$enable_static = xyes -o x$enable_static = x; then
+     { $as_echo "$as_me:${as_lineno-$LINENO}: WARNING: Disabling static library build, must build as DLL on Windows." >&5
+ $as_echo "$as_me: WARNING: Disabling static library build, must build as DLL on Windows." >&2;}
